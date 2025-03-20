@@ -7,7 +7,7 @@ from python.postprocessing.examples.MuonHLTWeightProducer import muonHLTWeightMo
 from python.postprocessing.examples.bTaggingWeights import bTaggingWeightModule
 
 # Define input and output files
-input_files = ["/mnt/disk1/skimmed_Run2/UL2016preVFP/MC_mu/ttbar_SemiLeptonic/tree_1_Skim.root"]  # Your input NanoAOD file
+input_files = ["/mnt/disk1/skimmed_Run2/UL2016preVFP/MC_mu/ttbar_FullyLeptonic/tree_13_Skim.root"]  # Your input NanoAOD file
 output_dir = "outputs/"  # Where the processed file will be saved
 
 # NanoAODTools PostProcessor

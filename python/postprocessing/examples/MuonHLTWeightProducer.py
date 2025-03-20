@@ -20,7 +20,6 @@ class MuonHLTWeightProducer(Module):
         """Process each event and compute highest muon pt"""
         # Select leading (highest pT) muon
         muons = Collection(event, "Muon")
-        muons = [muon for muon in muons if muon.pt > 35 and abs(muon.eta) < 2.4 and muon.tightId]
         leading_muon_pt = 0.0
         for muon in muons:
             if muon.pt > leading_muon_pt:
@@ -30,6 +29,10 @@ class MuonHLTWeightProducer(Module):
         if leading_muon_pt > 200.0:
             leading_muon_pt = 199.9
 
+        if leading_muon_pt < 26.0:
+            leading_muon_pt = 26.01
+        if abs(leading_muon_eta) > 2.4:
+            leading_muon_eta = 2.39
         if self.era == "UL2016preVFP" or self.era == "UL2016postVFP":
             sfString = "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
         elif self.era == "UL2017":
