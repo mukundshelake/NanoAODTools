@@ -48,9 +48,7 @@ if __name__ == "__main__":
     for DataMC in dicti:
         if 'mu' in DataMC:
             for key in dicti[DataMC]:
-                if 'SemiLep' not in key:
-                    continue
-                outDir = f'outputs/UL2016preVFP/{DataMC}/{key}'
+                outDir = f'/mnt/disk1/skimmed_Run2/preselection/March282025/UL2016preVFP/{DataMC}/{key}'
                 # outDir = 'outputs'
                 input_files = dicti[DataMC][key]
                 dataset_list.append((DataMC, key, input_files, outDir, cut_string))

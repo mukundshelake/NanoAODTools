@@ -1,5 +1,8 @@
 # this is a comment
 drop * # start with all
+keep run
+keep event
+keep luminosityBlock
 keep nJet 
 keep Jet_area
 keep Jet_btagDeepFlavB 
