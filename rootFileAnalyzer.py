@@ -4,7 +4,8 @@ import os
 import glob
 import argparse
 
-def analyze_root_file(input_file, output_file, checkcuts):
+def analyze_root_file(input_file, output_file, checkpreselection, checkselection):
+    isData = "Data" in input_file
     # Open the ROOT file using uproot
     try:
         root_file = uproot.open(input_file)
@@ -46,7 +47,7 @@ def analyze_root_file(input_file, output_file, checkcuts):
         print(f"Error: {e} branch not found in file: {input_file}")
         return False
 
-    if checkcuts:
+    if checkpreselection:
         # Find the minimum Jet_pt for events where nJet == nJet_min
         try:
             Jet_pt = tree["Jet_pt"].array()
@@ -96,6 +97,16 @@ def analyze_root_file(input_file, output_file, checkcuts):
             print(f"Error: {e} branch not found in file: {input_file}")
             return False
 
+    if checkselection and not isData:
+        # Check min and max values of LHEWeightSign
+        try:
+            LHEWeightSign = tree["LHEWeightSign"].array()
+            min_lhe_weight_sign = np.min(LHEWeightSign)
+            max_lhe_weight_sign = np.max(LHEWeightSign)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
     # Write the details to the output file
     with open(output_file, 'w') as f:
         f.write(f"Sample ROOT file used: {input_file}\n")
@@ -105,17 +116,20 @@ def analyze_root_file(input_file, output_file, checkcuts):
             f.write(f"{name}\n")
         f.write(f"\nnJet min: {nJet_min}, nJet max: {nJet_max}\n")
         f.write(f"nMuon min: {nMuon_min}, nMuon max: {nMuon_max}\n")
-        if checkcuts:
+        if checkpreselection:
             f.write(f"Minimum Jet_pt for events with nJet == {nJet_min}: {min_jet_pt}\n")
             f.write(f"Maximum abs(Jet_eta) for events with nJet == {nJet_min}: {max_jet_eta}\n")
             f.write(f"Minimum Muon_pt for events with nMuon == {nMuon_min}: {min_muon_pt}\n")
             f.write(f"Maximum abs(Muon_eta) for events with nMuon == {nMuon_min}: {max_muon_eta}\n")
             f.write(f"Unique Muon_tightId for events with nMuon == {nMuon_min}: {unique_muon_tightId}\n")
             f.write(f"HLT_IsoMu24 or HLT_IsoTkMu24 satisfied: {trigger_satisfied}\n")
+        if checkselection and not isData:
+            f.write(f"Minimum LHEWeightSign: {min_lhe_weight_sign}\n")
+            f.write(f"Maximum LHEWeightSign: {max_lhe_weight_sign}\n")
     
     return True
 
-def analyze_folder(root_folder, checkcuts):
+def analyze_folder(root_folder, checkpreselection, checkselection):
     print(f"Analyzing ROOT files in folder: {root_folder}")
     for dirpath, dirnames, filenames in os.walk(root_folder):
         root_files = glob.glob(os.path.join(dirpath, "*.root"))
@@ -124,8 +138,7 @@ def analyze_folder(root_folder, checkcuts):
             print(f"Analyzing a sample file from...{root_files}")
             for sample_file in root_files:
                 output_file = os.path.join(dirpath, "rootFileHealth.txt")
-                # output_file = "rootFileHealth.txt"
-                if analyze_root_file(sample_file, output_file, checkcuts):
+                if analyze_root_file(sample_file, output_file, checkpreselection, checkselection):
                     break
             else:
                 with open(output_file, 'w') as f:
@@ -134,7 +147,8 @@ def analyze_folder(root_folder, checkcuts):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze ROOT files in a folder.")
     parser.add_argument("-d", "--root_folder", type=str, required=True, help="Path to the root folder containing ROOT files.")
-    parser.add_argument("--checkcuts", action="store_true", help="Check additional cuts in the ROOT files.")
+    parser.add_argument("--checkpreselection", action="store_true", default=False, help="Check additional cuts in the ROOT files.")
+    parser.add_argument("--checkselection", action="store_true", default=False, help="Check selection criteria in the ROOT files (e.g., min/max LHEWeightSign).")
     args = parser.parse_args()
 
-    analyze_folder(args.root_folder, args.checkcuts)
+    analyze_folder(args.root_folder, args.checkpreselection, args.checkselection)
