@@ -1,4 +1,4 @@
-import os, json
+import os, json, argparse, logging
 import sys, ROOT
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
 from multiprocessing import Pool
@@ -7,7 +7,7 @@ def process_dataset(data):
     """Function to process a single dataset."""
     DataMC, key, files, outDir, cut_string = data
 
-    print(f"Processing {key} in {DataMC}")
+    logging.info(f"Processing {key} in {DataMC}")
 
     if not os.path.exists(outDir):
         os.makedirs(outDir)
@@ -25,30 +25,67 @@ def process_dataset(data):
 
     # Run the PostProcessor
     post_processor.run()
-    print(f"Finished processing {key} in {DataMC}")
+    logging.info(f"Finished processing {key} in {DataMC}")
 
 if __name__ == "__main__":
     import sys
+    
+    # --- Configure Logging ---
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    logging.info("Starting pre-selection processing script.")
 
-    # Load the dataset configuration
-    with open('/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/dataFiles_UL2016preVFP.json', 'r') as json_file:
-        dicti = json.load(json_file)
+    # --- Argument Parser ---
+    parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era.")
+    parser.add_argument('--era', required=True, help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
+    parser.add_argument('--outputTag', required=True, help='Tag for the output directory (e.g., April142025)')
+    args = parser.parse_args()
+    era = args.era
+    outputTag = args.outputTag
+    logging.info(f"Using era: {era}")
+    logging.info(f"Using output tag: {outputTag}")
+    # --- Load the dataset configuration ---
+    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/dataFiles_{era}.json'
+    logging.info(f"Loading dataset configuration from: {json_file_path}")
+    try:
+        with open(json_file_path, 'r') as json_file:
+            dicti = json.load(json_file)
+    except FileNotFoundError:
+        logging.error(f"JSON file not found at {json_file_path}")
+        sys.exit(1)
+    # --- Define cut strings based on era ---
+    cut_strings = {
+        "UL2016preVFP": (
+            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
+            "(HLT_IsoMu24 || HLT_IsoTkMu24)"
+        ),
+        "UL2016postVFP": (
+            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2489) >= 2 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
+            "(HLT_IsoMu24 || HLT_IsoTkMu24)"
+        ),
+        # Add other eras and their cuts here as needed
+        # "UL2017": ( ... ),
+        # "UL2018": ( ... ),
+    }
 
-    cut_string = (
-        "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
-        "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
-        "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
-        "(HLT_IsoMu24 || HLT_IsoTkMu24)"
-    )
+    if era not in cut_strings:
+        logging.error(f"Cut string not defined for era '{era}'. Please add it to the script.")
+        sys.exit(1)
 
-    print("Cut string being applied:", cut_string)
+    cut_string = cut_strings[era]
+    logging.info(f"Cut string being applied for {era}: {cut_string}")
     # exit(0)
     # Prepare datasets for parallel processing
     dataset_list = []
     for DataMC in dicti:
         if 'mu' in DataMC:
             for key in dicti[DataMC]:
-                outDir = f'/mnt/disk1/skimmed_Run2/preselection/March282025/UL2016preVFP/{DataMC}/{key}'
+                outDir = f'/mnt/disk1/skimmed_Run2/preselection/{outputTag}/{era}/{DataMC}/{key}'
                 # outDir = 'outputs'
                 input_files = dicti[DataMC][key]
                 dataset_list.append((DataMC, key, input_files, outDir, cut_string))
@@ -57,49 +94,5 @@ if __name__ == "__main__":
     num_cores = 20
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
-
-'''
-# Define the input and output files
-# input_files = ["UL2016_preVFP_ttbarSemileptonic.root"]
-with open(f'/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/dataFiles_UL2016preVFP.json', 'r') as json_file:
-    dicti = json.load(json_file)
-
-
-
-cut_string = (
-    "Sum$(Muon_pt > 35 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && "
-    "Sum$(Jet_pt > 30 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
-    "Sum$(Jet_pt > 30 && abs(Jet_eta) < 2.4) > 3 && "
-    "HLT_IsoMu24 || HLT_IsoTkMu24"
-)
-
-
-for DataMC in dicti:
-    if 'mu' in DataMC:
-        for key in dicti[DataMC]:
-            outDir = 'outputs/UL2016preVFP/'+DataMC+'/'+key
-            print(outDir)
-            if not os.path.exists(outDir):
-                os.makedirs(outDir)
-            input_files = []
-            for file in dicti[DataMC][key]:
-                input_files.append(file)
-                # print(file)
-                # print('\n')
-            # print(input_files)
-            # Set up the PostProcessor
-            print(f"Processing {key} in {DataMC}")
-            post_processor = PostProcessor(
-                outDir,
-                input_files,
-                cut= cut_string,  # You can specify a cut string here if needed
-                branchsel="python/postprocessing/examples/keep_and_drop.txt",  # You can specify a branch selection file here if needed
-                # modules= [exampleModuleConstr()],
-                modules=[],   # You can specify a list of modules here if needed
-                noOut=False,  # Set to True if you don't want to write output files
-                justcount=False,  # Set to True if you just want to count events
-            )
-
-            # Run the PostProcessor
-            post_processor.run()
-'''
+    
+    logging.info("Finished all processing.")

@@ -22,15 +22,12 @@ class MuonIDWeightProducer(Module):
         """Process each event and compute highest muon pt"""
         # Select leading (highest pT) muon
         muons = Collection(event, "Muon")
+        muons = [muon for muon in muons if muon.pt > 26 and abs(muon.eta) < 2.4 and muon.tightId]
         leading_muon_pt = 0.0
-        leading_muon_eta = 0.0  # Initialize with a default value
         for muon in muons:
             if muon.pt > leading_muon_pt:
                 leading_muon_pt = muon.pt
                 leading_muon_eta = muon.eta
-                # Cap the absolute value of leading_muon_eta to 2.39 if it exceeds 2.4
-                if abs(leading_muon_eta) > 2.4:
-                    leading_muon_eta = 2.39
         if leading_muon_pt > 0:  # Ensure at least one muon was selected
             IDSF = self.IDeval["NUM_TightID_DEN_TrackerMuons"].evaluate(f"{self.era[2:]}_UL", abs(leading_muon_eta), leading_muon_pt, 'sf')
             IDSFUp = self.IDeval["NUM_TightID_DEN_TrackerMuons"].evaluate(f"{self.era[2:]}_UL", abs(leading_muon_eta), leading_muon_pt, 'systup')

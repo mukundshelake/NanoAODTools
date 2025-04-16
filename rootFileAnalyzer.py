@@ -47,7 +47,7 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
         print(f"Error: {e} branch not found in file: {input_file}")
         return False
 
-    if checkpreselection:
+    if checkpreselection or checkselection:
         # Find the minimum Jet_pt for events where nJet == nJet_min
         try:
             Jet_pt = tree["Jet_pt"].array()
@@ -107,7 +107,115 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
             print(f"Error: {e} branch not found in file: {input_file}")
             return False
 
-    # Write the details to the output file
+        # Check min and max values of MuonIDWeight
+        try:
+            MuonIDWeight = tree["MuonIDWeight"].array()
+            min_muon_id_weight = np.min(MuonIDWeight)
+            max_muon_id_weight = np.max(MuonIDWeight)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of MuonIDWeightUp
+        try:
+            MuonIDWeightUp = tree["MuonIDWeightUp"].array()
+            min_muon_id_weight_up = np.min(MuonIDWeightUp)
+            max_muon_id_weight_up = np.max(MuonIDWeightUp)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of MuonIDWeightDown
+        try:
+            MuonIDWeightDown = tree["MuonIDWeightDown"].array()
+            min_muon_id_weight_down = np.min(MuonIDWeightDown)
+            max_muon_id_weight_down = np.max(MuonIDWeightDown)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of MuonHLTWeight
+        try:
+            MuonHLTWeight = tree["MuonHLTWeight"].array()
+            min_muon_hlt_weight = np.min(MuonHLTWeight)
+            max_muon_hlt_weight = np.max(MuonHLTWeight)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of MuonHLTWeightStat
+        try:
+            MuonHLTWeightStat = tree["MuonHLTWeightStat"].array()
+            min_muon_hlt_weight_stat = np.min(MuonHLTWeightStat)
+            max_muon_hlt_weight_stat = np.max(MuonHLTWeightStat)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of MuonHLTWeightSyst
+        try:
+            MuonHLTWeightSyst = tree["MuonHLTWeightSyst"].array()
+            min_muon_hlt_weight_syst = np.min(MuonHLTWeightSyst)
+            max_muon_hlt_weight_syst = np.max(MuonHLTWeightSyst)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of bTaggingWeight
+        try:
+            bTaggingWeight = tree["bTaggingWeight"].array()
+            min_btagging_weight = np.min(bTaggingWeight)
+            max_btagging_weight = np.max(bTaggingWeight)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of bTaggingWeightUp
+        try:
+            bTaggingWeightUp = tree["bTaggingWeightUp"].array()
+            min_btagging_weight_up = np.min(bTaggingWeightUp)
+            max_btagging_weight_up = np.max(bTaggingWeightUp)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of bTaggingWeightDown
+        try:
+            bTaggingWeightDown = tree["bTaggingWeightDown"].array()
+            min_btagging_weight_down = np.min(bTaggingWeightDown)
+            max_btagging_weight_down = np.max(bTaggingWeightDown)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of jetPUIdWeight
+        try:
+            jetPUIdWeight = tree["jetPUIdWeight"].array()
+            min_jet_pu_id_weight = np.min(jetPUIdWeight)
+            max_jet_pu_id_weight = np.max(jetPUIdWeight)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of jetPUIdWeightUp
+        try:
+            jetPUIdWeightUp = tree["jetPUIdWeightUp"].array()
+            min_jet_pu_id_weight_up = np.min(jetPUIdWeightUp)
+            max_jet_pu_id_weight_up = np.max(jetPUIdWeightUp)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+        # Check min and max values of jetPUIdWeightDown
+        try:
+            jetPUIdWeightDown = tree["jetPUIdWeightDown"].array()
+            min_jet_pu_id_weight_down = np.min(jetPUIdWeightDown)
+            max_jet_pu_id_weight_down = np.max(jetPUIdWeightDown)
+        except KeyError as e:
+            print(f"Error: {e} branch not found in file: {input_file}")
+            return False
+
+            # Write the details to the output file
     with open(output_file, 'w') as f:
         f.write(f"Sample ROOT file used: {input_file}\n")
         f.write(f"Number of events: {num_events}\n")
@@ -116,7 +224,7 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
             f.write(f"{name}\n")
         f.write(f"\nnJet min: {nJet_min}, nJet max: {nJet_max}\n")
         f.write(f"nMuon min: {nMuon_min}, nMuon max: {nMuon_max}\n")
-        if checkpreselection:
+        if checkpreselection or checkselection:
             f.write(f"Minimum Jet_pt for events with nJet == {nJet_min}: {min_jet_pt}\n")
             f.write(f"Maximum abs(Jet_eta) for events with nJet == {nJet_min}: {max_jet_eta}\n")
             f.write(f"Minimum Muon_pt for events with nMuon == {nMuon_min}: {min_muon_pt}\n")
@@ -126,7 +234,31 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
         if checkselection and not isData:
             f.write(f"Minimum LHEWeightSign: {min_lhe_weight_sign}\n")
             f.write(f"Maximum LHEWeightSign: {max_lhe_weight_sign}\n")
-    
+            f.write(f"Minimum MuonIDWeight: {min_muon_id_weight}\n")
+            f.write(f"Maximum MuonIDWeight: {max_muon_id_weight}\n")
+            f.write(f"Minimum MuonIDWeightUp: {min_muon_id_weight_up}\n")
+            f.write(f"Maximum MuonIDWeightUp: {max_muon_id_weight_up}\n")
+            f.write(f"Minimum MuonIDWeightDown: {min_muon_id_weight_down}\n")
+            f.write(f"Maximum MuonIDWeightDown: {max_muon_id_weight_down}\n")
+            f.write(f"Minimum MuonHLTWeight: {min_muon_hlt_weight}\n")
+            f.write(f"Maximum MuonHLTWeight: {max_muon_hlt_weight}\n")
+            f.write(f"Minimum MuonHLTWeightStat: {min_muon_hlt_weight_stat}\n")
+            f.write(f"Maximum MuonHLTWeightStat: {max_muon_hlt_weight_stat}\n")
+            f.write(f"Minimum MuonHLTWeightSyst: {min_muon_hlt_weight_syst}\n")
+            f.write(f"Maximum MuonHLTWeightSyst: {max_muon_hlt_weight_syst}\n")
+            f.write(f"Minimum bTaggingWeight: {min_btagging_weight}\n")
+            f.write(f"Maximum bTaggingWeight: {max_btagging_weight}\n")
+            f.write(f"Minimum bTaggingWeightUp: {min_btagging_weight_up}\n")
+            f.write(f"Maximum bTaggingWeightUp: {max_btagging_weight_up}\n")
+            f.write(f"Minimum bTaggingWeightDown: {min_btagging_weight_down}\n")
+            f.write(f"Maximum bTaggingWeightDown: {max_btagging_weight_down}\n")
+            f.write(f"Minimum jetPUIdWeight: {min_jet_pu_id_weight}\n")
+            f.write(f"Maximum jetPUIdWeight: {max_jet_pu_id_weight}\n")
+            f.write(f"Minimum jetPUIdWeightUp: {min_jet_pu_id_weight_up}\n")
+            f.write(f"Maximum jetPUIdWeightUp: {max_jet_pu_id_weight_up}\n")
+            f.write(f"Minimum jetPUIdWeightDown: {min_jet_pu_id_weight_down}\n")
+            f.write(f"Maximum jetPUIdWeightDown: {max_jet_pu_id_weight_down}\n")
+                
     return True
 
 def analyze_folder(root_folder, checkpreselection, checkselection):
