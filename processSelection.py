@@ -137,7 +137,7 @@ if __name__ == "__main__":
                 dataset_list.append((DataMC, key, input_files, outDir, cut_string, era)) # Add era to tuple
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 20
+    num_cores = 3
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     
