@@ -68,9 +68,18 @@ if __name__ == "__main__":
             "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
             "(HLT_IsoMu24 || HLT_IsoTkMu24)"
         ),
-        # Add other eras and their cuts here as needed
-        # "UL2017": ( ... ),
-        # "UL2018": ( ... ),
+        "UL2017": (
+            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.3040) >= 2 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
+            "HLT_IsoMu27"
+        ),
+        "UL2018": (
+            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2783) >= 2 && "
+            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
+            "HLT_IsoMu24"
+        ),
     }
 
     if era not in cut_strings:
@@ -91,7 +100,7 @@ if __name__ == "__main__":
                 dataset_list.append((DataMC, key, input_files, outDir, cut_string))
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 20
+    num_cores = 4
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     
