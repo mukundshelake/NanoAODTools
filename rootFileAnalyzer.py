@@ -90,9 +90,16 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
 
         # Check if HLT_IsoMu24 or HLT_IsoTkMu24 is satisfied
         try:
-            HLT_IsoMu24 = tree["HLT_IsoMu24"].array()
-            HLT_IsoTkMu24 = tree["HLT_IsoTkMu24"].array()
-            trigger_satisfied = np.any(HLT_IsoMu24 | HLT_IsoTkMu24)
+            if "UL2016" in input_file:
+                HLT_IsoMu24 = tree["HLT_IsoMu24"].array()
+                HLT_IsoTkMu24 = tree["HLT_IsoTkMu24"].array()
+                trigger_satisfied = np.any(HLT_IsoMu24 | HLT_IsoTkMu24)
+            elif "UL2017" in input_file:
+                HLT_IsoMu27 = tree["HLT_IsoMu27"].array()
+                trigger_satisfied = np.any(HLT_IsoMu27)
+            elif "UL2018" in input_file:
+                HLT_IsoMu24 = tree["HLT_IsoMu24"].array()
+                trigger_satisfied = np.any(HLT_IsoMu24)
         except KeyError as e:
             print(f"Error: {e} branch not found in file: {input_file}")
             return False

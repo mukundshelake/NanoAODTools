@@ -6,16 +6,12 @@ try:
 except ImportError:
     HAS_ROOT = False
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
-from python.postprocessing.examples.lheWeightSignModule import lheWeightSignModule
-from python.postprocessing.examples.MuonIDWeightProducer import muonIDWeightModule
-from python.postprocessing.examples.MuonHLTWeightProducer import muonHLTWeightModule
-from python.postprocessing.examples.bTaggingWeights import bTaggingWeightModule
-from python.postprocessing.examples.JetPUIdWeightModule import jetPUIdWeightModule
+from python.postprocessing.examples.RecoModule import RecoModule
 from multiprocessing import Pool
 
 def process_dataset(data):
     """Function to process a single dataset."""
-    DataMC, key, files, outDir, cut_string, era = data
+    DataMC, key, files, outDir, era = data
 
     logging.info(f"Processing {key} in {DataMC}")
 
@@ -64,36 +60,20 @@ def process_dataset(data):
                 return
             logging.info(f"Processing {len(files)} remaining files out of {len(input_basenames)} for {key} in {DataMC}")
 
-    # Define JSON files for each era
-    json_files = {
-        "UL2016preVFP": "python/postprocessing/examples/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json",
-        "UL2016postVFP": "python/postprocessing/examples/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json",
-        "UL2017": "python/postprocessing/examples/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json",
-        "UL2018": "python/postprocessing/examples/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
-    }
-
     # Determine if the dataset is Data or MC
     if "Data" in DataMC:
-        # For Data, apply the JSON file for luminosity masking
-        json_input = json_files[era]
-        modules = []  # Add any Data-specific modules if needed
-    else:
-        # For MC, do not apply the JSON file
-        json_input = None
         modules = [
-            lheWeightSignModule(), # Era independent
-            muonIDWeightModule(era), # Use era argument
-            muonHLTWeightModule(era), # Use era argument
-            bTaggingWeightModule(era, key), # Use era argument
-            jetPUIdWeightModule(era, key) # Use era argument
+            RecoModule(era),  # Add BDT variable module
+        ] 
+    else:
+        modules = [
+            RecoModule(era),  # Add BDT variable module
         ]  # Add MC-specific modules
 
     # Set up the PostProcessor
     post_processor = PostProcessor(
         outDir,
         files,
-        jsonInput=json_input,
-        cut=cut_string,
         modules=modules,
         noOut=False,
         justcount=False,
@@ -123,7 +103,7 @@ if __name__ == "__main__":
     logging.info(f"Using output tag: {outputTag}")
 
     # --- Load the dataset configuration ---
-    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/skimmed_dataFiles_{era}.json'
+    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/selected_sampleFiles_{era}.json'
     logging.info(f"Loading dataset configuration from: {json_file_path}")
     try:
         with open(json_file_path, 'r') as json_file:
@@ -131,65 +111,14 @@ if __name__ == "__main__":
     except FileNotFoundError:
         logging.error(f"JSON file not found at {json_file_path}")
         sys.exit(1)
-
-    # --- Define cut strings based on era ---
-    # Using b-tag value for UL2016preVFP: 0.2598
-    # Using b-tag value for UL2016postVFP: 0.2489
-    # Using b-tag value for UL2017: 
-    # Using b-tag value for UL2018: 
-    common_flags = (
-        "Flag_goodVertices && "
-        "Flag_globalSuperTightHalo2016Filter && "
-        "Flag_HBHENoiseFilter && "
-        "Flag_HBHENoiseIsoFilter && "
-        "Flag_EcalDeadCellTriggerPrimitiveFilter && "
-        "Flag_BadPFMuonFilter && "
-        "Flag_BadPFMuonDzFilter && "
-        "Flag_eeBadScFilter" # Common flags for all eras
-    )
-    
-    cut_strings = {
-        "UL2016preVFP": (
-            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
-            "(HLT_IsoMu24 || HLT_IsoTkMu24) && " + common_flags
-        ),
-        "UL2016postVFP": (
-            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489) >= 2 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
-            "(HLT_IsoMu24 || HLT_IsoTkMu24) && " + common_flags
-        ),
-         "UL2017": (
-            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && " # Muon pT > 29 for 2017/18
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2589) >= 2 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
-            "(HLT_IsoMu27) && Flag_ecalBadCalibFilter && " + common_flags # HLT_IsoMu27 for 2017/18, added Flag_ecalBadCalibFilter
-        ),
-         "UL2018": (
-            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && " # Muon pT > 29 for 2017/18
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2432) >= 2 && "
-            "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
-            "(HLT_IsoMu24) && Flag_ecalBadCalibFilter && " + common_flags # HLT_IsoMu24 for 2018, added Flag_ecalBadCalibFilter
-        ),
-    }
-
-    if era not in cut_strings:
-        logging.error(f"Cut string not defined for era '{era}'. Please add it to the script.")
-        sys.exit(1)
-
-    cut_string = cut_strings[era]
-    logging.info(f"Cut string being applied for {era}: {cut_string}")
     # exit(0)
     # Prepare datasets for parallel processing
     dataset_list = []
     for DataMC in dicti:
-        if "MC" not in DataMC:
-            for key in dicti[DataMC]:
-                outDir = f'/mnt/disk1/skimmed_Run2/selection/{outputTag}/{era}/{DataMC}/{key}' # Use outputTag and era
-                input_files = dicti[DataMC][key]
-                dataset_list.append((DataMC, key, input_files, outDir, cut_string, era)) # Add era to tuple
+        for key in dicti[DataMC]:
+            outDir = f'/mnt/disk1/skimmed_Run2/Reco/{outputTag}/{era}/{DataMC}/{key}' # Use outputTag and era
+            input_files = dicti[DataMC][key]
+            dataset_list.append((DataMC, key, input_files, outDir, era)) # Add era to tuple
 
     # Use multiprocessing to process datasets in parallel
     num_cores = 3
