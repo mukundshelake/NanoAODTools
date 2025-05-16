@@ -4,7 +4,7 @@ import os
 import glob
 import argparse
 
-def analyze_root_file(input_file, output_file, checkpreselection, checkselection):
+def analyze_root_file(input_file, output_file, checkpreselection, checkselection, checkreco):
     isData = "Data" in input_file
     # Open the ROOT file using uproot
     try:
@@ -223,6 +223,19 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
             return False
 
             # Write the details to the output file
+    if checkreco:
+            # Check and count chi2_status if it exists
+        if "chi2_status" in branch_names:
+            try:
+                chi2_status = tree["chi2_status"].array()
+                unique, counts = np.unique(chi2_status, return_counts=True)
+                chi2_summary = dict(zip(unique.tolist(), counts.tolist()))
+            except Exception as e:
+                print(f"Error accessing chi2_status: {e}")
+                chi2_summary = {"error": str(e)}
+        else:
+            chi2_summary = {"message": "chi2_status branch not found"}
+
     with open(output_file, 'w') as f:
         f.write(f"Sample ROOT file used: {input_file}\n")
         f.write(f"Number of events: {num_events}\n")
@@ -265,10 +278,15 @@ def analyze_root_file(input_file, output_file, checkpreselection, checkselection
             f.write(f"Maximum jetPUIdWeightUp: {max_jet_pu_id_weight_up}\n")
             f.write(f"Minimum jetPUIdWeightDown: {min_jet_pu_id_weight_down}\n")
             f.write(f"Maximum jetPUIdWeightDown: {max_jet_pu_id_weight_down}\n")
+        if checkreco:
+            f.write("\nchi2_status summary:\n")
+            for key, value in chi2_summary.items():
+                f.write(f"  {key}: {value}\n")
+
                 
     return True
 
-def analyze_folder(root_folder, checkpreselection, checkselection):
+def analyze_folder(root_folder, checkpreselection, checkselection, checkreco):
     print(f"Analyzing ROOT files in folder: {root_folder}")
     for dirpath, dirnames, filenames in os.walk(root_folder):
         root_files = glob.glob(os.path.join(dirpath, "*.root"))
@@ -277,7 +295,7 @@ def analyze_folder(root_folder, checkpreselection, checkselection):
             print(f"Analyzing a sample file from...{root_files}")
             for sample_file in root_files:
                 output_file = os.path.join(dirpath, "rootFileHealth.txt")
-                if analyze_root_file(sample_file, output_file, checkpreselection, checkselection):
+                if analyze_root_file(sample_file, output_file, checkpreselection, checkselection, checkreco):
                     break
             else:
                 with open(output_file, 'w') as f:
@@ -288,6 +306,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--root_folder", type=str, required=True, help="Path to the root folder containing ROOT files.")
     parser.add_argument("--checkpreselection", action="store_true", default=False, help="Check additional cuts in the ROOT files.")
     parser.add_argument("--checkselection", action="store_true", default=False, help="Check selection criteria in the ROOT files (e.g., min/max LHEWeightSign).")
+    parser.add_argument("--checkreco", action="store_true", default=False, help="Check reco variables in the ROOT files.")
     args = parser.parse_args()
 
-    analyze_folder(args.root_folder, args.checkpreselection, args.checkselection)
+    analyze_folder(args.root_folder, args.checkpreselection, args.checkselection, args.checkreco)
