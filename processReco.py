@@ -26,31 +26,34 @@ def process_dataset(data):
             # Find which input files don't have good output
             files_to_process = []
             for f in files:
+                # if 'tree_2' not in f:
+                #     continue
                 output_name = os.path.basename(f).replace('.root', '_Skim.root')
                 output_path = os.path.join(outDir, output_name)
                 
                 # Check if output exists and is healthy
                 if os.path.exists(output_path):
-                    try:
-                        # Basic health checks
-                        if os.path.getsize(output_path) == 0:
-                            logging.warning(f"Empty output file found: {output_path}")
-                            files_to_process.append(f)
-                            continue
+                    continue
+                    # try:
+                    #     # Basic health checks
+                    #     if os.path.getsize(output_path) == 0:
+                    #         logging.warning(f"Empty output file found: {output_path}")
+                    #         files_to_process.append(f)
+                    #         continue
                             
-                        # Try to open the file to verify it's valid
-                        import ROOT
-                        root_file = ROOT.TFile(output_path)
-                        if not root_file or root_file.IsZombie():
-                            logging.warning(f"Corrupted ROOT file found: {output_path}")
-                            files_to_process.append(f)
-                            root_file.Close()
-                            continue
-                        root_file.Close()
-                    except Exception as e:
-                        logging.warning(f"Error checking {output_path}: {str(e)}")
-                        files_to_process.append(f)
-                        continue
+                    #     # Try to open the file to verify it's valid
+                    #     import ROOT
+                    #     root_file = ROOT.TFile(output_path)
+                    #     if not root_file or root_file.IsZombie():
+                    #         logging.warning(f"Corrupted ROOT file found: {output_path}")
+                    #         files_to_process.append(f)
+                    #         root_file.Close()
+                    #         continue
+                    #     root_file.Close()
+                    # except Exception as e:
+                    #     logging.warning(f"Error checking {output_path}: {str(e)}")
+                    #     files_to_process.append(f)
+                    #     continue
                 else:
                     files_to_process.append(f)
             
@@ -103,7 +106,7 @@ if __name__ == "__main__":
     logging.info(f"Using output tag: {outputTag}")
 
     # --- Load the dataset configuration ---
-    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/selected_sampleFiles_{era}.json'
+    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/selected_dataFiles_{era}.json'
     logging.info(f"Loading dataset configuration from: {json_file_path}")
     try:
         with open(json_file_path, 'r') as json_file:
@@ -121,7 +124,7 @@ if __name__ == "__main__":
             dataset_list.append((DataMC, key, input_files, outDir, era)) # Add era to tuple
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 3
+    num_cores = 2
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     

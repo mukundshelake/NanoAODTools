@@ -1,0 +1,7 @@
+{
+    "MC_mu": {
+        "ttbar_SemiLeptonic": {
+            "/home/mukund/Projects/SkimandSlim/NanoAODTools/selected_SemiLeptonic_10k.root": "Events"
+        }
+    }
+}
