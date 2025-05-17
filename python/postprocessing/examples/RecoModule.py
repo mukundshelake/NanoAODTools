@@ -42,7 +42,7 @@ class TTbarSemilepReconstructor(Module):
 
         # Muon
         mu = max(muons, key=lambda m: m.pt)
-        mu_p4 = self.make_p4(mu)
+        mu_p4 = self.make_lep_p4(mu)
 
         # Jet selection
         selected_jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4]
@@ -88,10 +88,10 @@ class TTbarSemilepReconstructor(Module):
 
         for br, bh in [(bjets[0], bjets[1]), (bjets[1], bjets[0])]:
             for q1, q2 in [(ljets[0], ljets[1])]:
-                br_p4 = self.make_p4(br)
-                bh_p4 = self.make_p4(bh)
-                q1_p4 = self.make_p4(q1)
-                q2_p4 = self.make_p4(q2)
+                br_p4 = self.make_jet_p4(br)
+                bh_p4 = self.make_jet_p4(bh)
+                q1_p4 = self.make_jet_p4(q1)
+                q2_p4 = self.make_jet_p4(q2)
 
                 w_had_p4 = q1_p4 + q2_p4
                 top_had_p4 = w_had_p4 + bh_p4
@@ -131,7 +131,7 @@ class TTbarSemilepReconstructor(Module):
                 self.out.fillBranch(f"{prefix}_mass", -1)
             return True
 
-        res = self.full_chi2_fit_hard_constraints(best_perm)
+        res = self.full_chi2_fit_soft_constraints(best_perm)
         if not res["success"]:
             # Use prefit best guess instead
             chi2_status = 3  # New status code to indicate fallback
@@ -179,8 +179,7 @@ class TTbarSemilepReconstructor(Module):
         self.out.fillBranch("chi2_status", chi2_status)
         return True
 
-    def full_chi2_fit_hard_constraints(self, best_perm):
-        # Extract TLorentzVectors from dict
+    def full_chi2_fit_soft_constraints(self, best_perm):
         mu_p4 = best_perm["mu_p4"]
         br_p4 = best_perm["br_p4"]
         bh_p4 = best_perm["bh_p4"]
@@ -188,22 +187,20 @@ class TTbarSemilepReconstructor(Module):
         q2_p4 = best_perm["q2_p4"]
         nu_p4 = best_perm["nu_p4"]
 
-        # Pack particles and MET neutrino in order to build measurement array
         particles = [mu_p4, nu_p4, br_p4, bh_p4, q1_p4, q2_p4]
 
         p_meas = []
-        for i, vec in enumerate(particles):
+        for vec in particles:
             p_meas.extend([vec.Px(), vec.Py(), vec.Pz()])
         p_meas = np.array(p_meas)
 
         def get_sigma(idx, val):
-            # Indices 0..2 = muon, 3..5 = nu (MET), 6..17 = jets
-            if idx in range(0, 3):      # muon
+            if idx < 3:        # muon
                 return 0.05 * abs(val)
-            elif idx in range(3, 6):    # neutrino (MET)
+            elif idx < 6:      # neutrino
                 return 0.05 * abs(val)
-            else:                      # jets
-                return 0.10 * abs(val)
+            else:              # jets
+                return 0.15 * abs(val)
 
         sigma = np.array([get_sigma(i, p_meas[i]) for i in range(len(p_meas))])
 
@@ -214,38 +211,29 @@ class TTbarSemilepReconstructor(Module):
             return vec
 
         def chi2_fn(p):
-            return np.sum(((p - p_meas) / sigma) ** 2)
+            chi2 = np.sum(((p - p_meas) / sigma) ** 2)
 
-        def constraint_mjj(p):
-            q1_vec = get_p4(*p[12:15], q1_p4.M())
-            q2_vec = get_p4(*p[15:18], q2_p4.M())
-            return (q1_vec + q2_vec).M() - self.mW
-
-        def constraint_mlnu(p):
-            mu_vec = get_p4(*p[0:3], mu_p4.M())
-            nu_vec = get_p4(*p[3:6], 0.0)
-            return (mu_vec + nu_vec).M() - self.mW
-
-        def constraint_mtops_equal(p):
+            # Reconstruct TLorentzVectors
             mu_vec = get_p4(*p[0:3], mu_p4.M())
             nu_vec = get_p4(*p[3:6], 0.0)
             br_vec = get_p4(*p[6:9], br_p4.M())
             bh_vec = get_p4(*p[9:12], bh_p4.M())
             q1_vec = get_p4(*p[12:15], q1_p4.M())
             q2_vec = get_p4(*p[15:18], q2_p4.M())
-            return (mu_vec + nu_vec + br_vec).M() - (q1_vec + q2_vec + bh_vec).M()
 
-        constraints = [
-            {'type': 'eq', 'fun': constraint_mjj},
-            {'type': 'eq', 'fun': constraint_mlnu},
-            {'type': 'eq', 'fun': constraint_mtops_equal}
-        ]
+            chi2 += (( (mu_vec + nu_vec).M() - self.mW ) / self.sigmaW) ** 2
+            chi2 += (( (q1_vec + q2_vec).M() - self.mW ) / self.sigmaW) ** 2
 
+            chi2 += (( (mu_vec + nu_vec + br_vec).M() - self.mt ) / self.sigmatt) ** 2
+            chi2 += (( (q1_vec + q2_vec + bh_vec).M() - self.mt ) / self.sigmatt) ** 2
+
+            return chi2
+
+        # Run optimization without constraints
         result = minimize(
             chi2_fn,
             p_meas,
             method='SLSQP',
-            constraints=constraints,
             options={'maxiter': 1000, 'ftol': 1e-6}
         )
 
@@ -267,10 +255,18 @@ class TTbarSemilepReconstructor(Module):
             'chi2': float(result.fun)
         }
 
-    def make_p4(self, obj):
+
+    def make_jet_p4(self, jet):
         p4 = ROOT.TLorentzVector()
-        p4.SetPtEtaPhiM(obj.pt, obj.eta, obj.phi, obj.mass)
+        p4.SetPtEtaPhiM(jet.pt, jet.eta, jet.phi, 0.0)  # Assume jets are massless or assign fixed mass if needed
         return p4
+
+    def make_lep_p4(self, lep):
+        p4 = ROOT.TLorentzVector()
+        p4.SetPtEtaPhiM(lep.pt, lep.eta, lep.phi, lep.mass)
+        return p4
+
+
 
 
 def RecoModule(era):
