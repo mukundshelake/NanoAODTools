@@ -6,7 +6,7 @@ try:
 except ImportError:
     HAS_ROOT = False
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
-from python.postprocessing.examples.BDTvariableModule import BDTvariableModule
+from python.postprocessing.examples.applyBDTModule import applyBDTModule
 from multiprocessing import Pool
 
 def process_dataset(data):
@@ -31,6 +31,7 @@ def process_dataset(data):
                 
                 # Check if output exists and is healthy
                 if os.path.exists(output_path):
+                    # continue
                     try:
                         # Basic health checks
                         if os.path.getsize(output_path) == 0:
@@ -85,15 +86,27 @@ def process_dataset(data):
         logging.warning(f"No valid files left to process for {key} in {DataMC}")
         return
 
-        
+
+    branch_map = {
+        "ttbarpz": "computed",  # Will be computed
+        "FW1": "FW1",
+        "nJet": "nJet",
+        "pT_sum": "pTSum",
+        "P": "P",
+        "A": "A",
+        "p2in": "p2in",
+        "Syy": "Syy",
+        "Sxy": "Sxy"
+    }
+    model_path = '/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Scripts/BDTImplementation/Binary/QQ_vs_GG/outputs/Feb10_7/xgb_model_binary.pkl'
     # Determine if the dataset is Data or MC
     if "Data" in DataMC:
         modules = [
-            BDTvariableModule(),  # Add BDT variable module
+            applyBDTModule(model_path, branch_map),  # Add BDT variable module
         ] 
     else:
         modules = [
-            BDTvariableModule(),  # Add BDT variable module
+            applyBDTModule(model_path, branch_map),  # Add BDT variable module
         ]  # Add MC-specific modules
 
     # Set up the PostProcessor
@@ -118,7 +131,6 @@ if __name__ == "__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
     logging.info("Starting selection processing script.")
 
-    # --- Argument Parser ---
     # --- Argument Parser ---
     parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era and output tag.")
     parser.add_argument('--era', required=True, help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
@@ -145,7 +157,7 @@ if __name__ == "__main__":
     if exclude_tree_pattern:
         logging.info(f"Excluding files matching: {args.excludeTrees}")
     # --- Load the dataset configuration ---
-    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/Reco_dataFiles_{era}.json'
+    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/RecoBDT_dataFiles_{era}.json'
     logging.info(f"Loading dataset configuration from: {json_file_path}")
     try:
         with open(json_file_path, 'r') as json_file:
@@ -157,8 +169,8 @@ if __name__ == "__main__":
     # Prepare datasets for parallel processing
     dataset_list = []
     for DataMC in dicti:
-        if 'Data' in DataMC:
-            continue  # Skip Data for now
+        if "Data" in DataMC:
+            continue
         for key in dicti[DataMC]:
             if include_key_pattern and not include_key_pattern.search(key):
                 continue
@@ -176,11 +188,11 @@ if __name__ == "__main__":
             if not filtered_input_files:
                 continue  # Skip if all files were filtered out
 
-            outDir = f'/mnt/disk1/skimmed_Run2/RecoBDT/{outputTag}/{era}/{DataMC}/{key}'
+            outDir = f'/mnt/disk1/skimmed_Run2/BDTScore/{outputTag}/{era}/{DataMC}/{key}'
             dataset_list.append((DataMC, key, filtered_input_files, outDir, era))
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 6
+    num_cores = 4
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     

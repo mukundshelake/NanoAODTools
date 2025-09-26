@@ -24,11 +24,7 @@ keep MET_phi
 keep RawMET_pt
 keep RawMET_phi
 keep Flag*
-keep GenPart_eta
-keep GenPart_mass
-keep GenPart_phi
-keep GenPart_pt
-keep GenPart_pdgId
+keep GenPart*
 keep Generator_x1
 keep Generator_x2
 keep Generator_weight
@@ -51,3 +47,7 @@ keep Muon_mediumId
 keep Muon_pfRelIso04_all
 keep puWeight*
 keep LHEWeight_originalXWGTUP
+keep PSWeight
+keep LHEScaleWeight
+keep LHEPdfWeight
+keep LHEWeight

@@ -36,9 +36,9 @@ class MuonHLTWeightProducer(Module):
             sfString = "NUM_IsoMu27_DEN_CutBasedIdTight_and_PFIsoTight"
         else:
             sfString = "NUM_IsoMu24_DEN_CutBasedIdTight_and_PFIsoTight"
-        HLTSF = self.HLTeval[sfString].evaluate(leading_muon_eta, leading_muon_pt, 'nominal')
-        HLTSF_stat = self.HLTeval[sfString].evaluate(leading_muon_eta, leading_muon_pt, 'stat')
-        HLTSF_syst = self.HLTeval[sfString].evaluate(leading_muon_eta, leading_muon_pt, 'syst')
+        HLTSF = self.HLTeval[sfString].evaluate(abs(leading_muon_eta), leading_muon_pt, 'nominal')
+        HLTSF_stat = self.HLTeval[sfString].evaluate(abs(leading_muon_eta), leading_muon_pt, 'stat')
+        HLTSF_syst = self.HLTeval[sfString].evaluate(abs(leading_muon_eta), leading_muon_pt, 'syst')
         self.out.fillBranch("MuonHLTWeight", HLTSF)
         self.out.fillBranch("MuonHLTWeightStat", HLTSF_stat)
         self.out.fillBranch("MuonHLTWeightSyst", HLTSF_syst)

@@ -1,0 +1,4 @@
+era: 'UL2016preVFP'
+outputTag: 'May31_met_0p1'
+configPaths:
+  reco: '/home/mukund/Projects/SkimandSlim/NanoAODTools/configs/reco.yaml'

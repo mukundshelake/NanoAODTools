@@ -6,18 +6,21 @@ from PhysicsTools.NanoAODTools.postprocessing.framework.eventloop import Module
 from scipy.optimize import minimize
 import yaml
 class TTbarSemilepReconstructor(Module):
-    def __init__(self, era):
-        era_thresholds = {
-            'UL2016preVFP': 0.2598,
-            'UL2016postVFP': 0.2489,
-            'UL2017': 0.3040,
-            'UL2018': 0.2783
-        }
-        self.btagWP = era_thresholds.get(era, 0.2598)
-        self.mW = 80.4
-        self.mt = 172.5
-        self.sigmaW = 10.0
-        self.sigmatt = 13.0
+    def __init__(self, era, config_path='config.yaml'):
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        btag_thresholds = config.get('era_thresholds', {})
+        mass_values = config.get('defaults', {})
+        resolutions = config.get('resolutions', {})
+        self.btagWP = btag_thresholds.get(era, 0.2598)
+        self.mW = mass_values.get('mW', 80.4)
+        self.mt = mass_values.get('mt', 172.5)
+        self.sigmaW = mass_values.get('sigmaW', 10.0)
+        self.sigmatt = mass_values.get('sigmatt', 13.0)
+        self.met_res = resolutions.get('met', 0.10)
+        self.jet_res = resolutions.get('jet', 0.10)
+        self.muon_res = resolutions.get('muon', 0.05)
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         self.out = wrappedOutputTree
@@ -196,11 +199,11 @@ class TTbarSemilepReconstructor(Module):
 
         def get_sigma(idx, val):
             if idx < 3:        # muon
-                return 0.05 * abs(val)
+                return self.muon_res * abs(val)
             elif idx < 6:      # neutrino
-                return 0.10 * abs(val)
+                return self.met_res * abs(val)
             else:              # jets
-                return 0.15 * abs(val)
+                return self.jet_res * abs(val)
 
         sigma = np.array([get_sigma(i, p_meas[i]) for i in range(len(p_meas))])
 
@@ -266,5 +269,5 @@ class TTbarSemilepReconstructor(Module):
         p4.SetPtEtaPhiM(lep.pt, lep.eta, lep.phi, lep.mass)
         return p4
 
-def RecoModule(era):
-    return TTbarSemilepReconstructor(era)
+def RecoModule(era, config_path="config.yaml"):
+    return TTbarSemilepReconstructor(era, config_path)

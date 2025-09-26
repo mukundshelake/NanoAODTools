@@ -30,11 +30,14 @@ def process_dataset(data):
             # Find which input files don't have good output
             files_to_process = []
             for f in files:
+                if "tree_1" not in f:
+                    continue
                 output_name = os.path.basename(f).replace('.root', '_Skim.root')
                 output_path = os.path.join(outDir, output_name)
                 
                 # Check if output exists and is healthy
                 if os.path.exists(output_path):
+                    # continue
                     try:
                         # Basic health checks
                         if os.path.getsize(output_path) == 0:
@@ -150,25 +153,25 @@ if __name__ == "__main__":
     
     cut_strings = {
         "UL2016preVFP": (
-            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && "
+            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
             "(HLT_IsoMu24 || HLT_IsoTkMu24) && " + common_flags
         ),
         "UL2016postVFP": (
-            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && "
+            "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489) >= 2 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
             "(HLT_IsoMu24 || HLT_IsoTkMu24) && " + common_flags
         ),
          "UL2017": (
-            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && " # Muon pT > 29 for 2017/18
+            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0 && " # Muon pT > 29 for 2017/18
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2589) >= 2 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
             "(HLT_IsoMu27) && Flag_ecalBadCalibFilter && " + common_flags # HLT_IsoMu27 for 2017/18, added Flag_ecalBadCalibFilter
         ),
          "UL2018": (
-            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId) > 0 && " # Muon pT > 29 for 2017/18
+            "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0 && " # Muon pT > 29 for 2017/18
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2432) >= 2 && "
             "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3 && "
             "(HLT_IsoMu24) && Flag_ecalBadCalibFilter && " + common_flags # HLT_IsoMu24 for 2018, added Flag_ecalBadCalibFilter
@@ -185,14 +188,20 @@ if __name__ == "__main__":
     # Prepare datasets for parallel processing
     dataset_list = []
     for DataMC in dicti:
-        if "MC" not in DataMC:
+        if 'mu' in DataMC:
+            if "Data" in DataMC:
+                continue
             for key in dicti[DataMC]:
+                if 'Semi' in key:
+                    continue
+                if "Fully" not in key:
+                    continue
                 outDir = f'/mnt/disk1/skimmed_Run2/selection/{outputTag}/{era}/{DataMC}/{key}' # Use outputTag and era
                 input_files = dicti[DataMC][key]
                 dataset_list.append((DataMC, key, input_files, outDir, cut_string, era)) # Add era to tuple
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 3
+    num_cores = 5
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     

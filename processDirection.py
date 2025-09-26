@@ -1,11 +1,17 @@
+#!/usr/bin/env python3
 import os, json, argparse, logging
-import sys, ROOT
+try:
+    import ROOT
+    HAS_ROOT = True
+except ImportError:
+    HAS_ROOT = False
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
+from python.postprocessing.examples.assignDirectionModule import assignDirectionModule
 from multiprocessing import Pool
 
 def process_dataset(data):
     """Function to process a single dataset."""
-    DataMC, key, files, outDir, cut_string = data
+    DataMC, key, files, outDir, era = data
 
     logging.info(f"Processing {key} in {DataMC}")
 
@@ -25,7 +31,6 @@ def process_dataset(data):
                 
                 # Check if output exists and is healthy
                 if os.path.exists(output_path):
-                    # continue
                     try:
                         # Basic health checks
                         if os.path.getsize(output_path) == 0:
@@ -55,13 +60,21 @@ def process_dataset(data):
                 return
             logging.info(f"Processing {len(files)} remaining files out of {len(input_basenames)} for {key} in {DataMC}")
 
+    # Determine if the dataset is Data or MC
+    if "Data" in DataMC:
+        modules = [
+            assignDirectionModule(),  # Add BDT variable module
+        ] 
+    else:
+        modules = [
+            assignDirectionModule(),  # Add BDT variable module
+        ]  # Add MC-specific modules
+
     # Set up the PostProcessor
     post_processor = PostProcessor(
         outDir,
         files,
-        cut=cut_string,
-        branchsel="python/postprocessing/examples/keep_and_drop.txt",  # Adjust this if needed
-        modules=[],  # Add your custom modules if needed
+        modules=modules,
         noOut=False,
         justcount=False,
     )
@@ -72,24 +85,41 @@ def process_dataset(data):
 
 if __name__ == "__main__":
     import sys
-    
+
     # --- Configure Logging ---
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
-    logging.info("Starting pre-selection processing script.")
+    logging.info("Starting selection processing script.")
 
     # --- Argument Parser ---
-    parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era.")
+    # --- Argument Parser ---
+    parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era and output tag.")
     parser.add_argument('--era', required=True, help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
-    parser.add_argument('--outputTag', required=True, help='Tag for the output directory (e.g., April142025)')
+    parser.add_argument('--outputTag', required=True, help='Tag for the output directory (e.g., April152025)')
+    parser.add_argument('--includeKeys', help='Regex pattern: only include keys that match this pattern')
+    parser.add_argument('--excludeKeys', help='Regex pattern: exclude keys that match this pattern')
+    parser.add_argument('--includeTrees', help='Regex pattern to include file paths')
+    parser.add_argument('--excludeTrees', help='Regex pattern to exclude file paths')
     args = parser.parse_args()
+    include_key_pattern = re.compile(args.includeKeys) if args.includeKeys else None
+    exclude_key_pattern = re.compile(args.excludeKeys) if args.excludeKeys else None
+    include_tree_pattern = re.compile(args.includeTrees) if args.includeTrees else None
+    exclude_tree_pattern = re.compile(args.excludeTrees) if args.excludeTrees else None
     era = args.era
     outputTag = args.outputTag
     logging.info(f"Using era: {era}")
     logging.info(f"Using output tag: {outputTag}")
+    if include_key_pattern:
+        logging.info(f"Including keys matching: {args.includeKeys}")
+    if exclude_key_pattern:
+        logging.info(f"Excluding keys matching: {args.excludeKeys}")
+    if include_tree_pattern:
+        logging.info(f"Including files matching: {args.includeTrees}")
+    if exclude_tree_pattern:
+        logging.info(f"Excluding files matching: {args.excludeTrees}")
     # --- Load the dataset configuration ---
-    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/dataFiles_{era}.json'
+    json_file_path = f'/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/Datasets/.json'
     logging.info(f"Loading dataset configuration from: {json_file_path}")
     try:
         with open(json_file_path, 'r') as json_file:
@@ -97,54 +127,34 @@ if __name__ == "__main__":
     except FileNotFoundError:
         logging.error(f"JSON file not found at {json_file_path}")
         sys.exit(1)
-    # --- Define cut strings based on era ---
-    cut_strings = {
-        "UL2016preVFP": (
-            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2598) >= 2 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
-            "(HLT_IsoMu24 || HLT_IsoTkMu24)"
-        ),
-        "UL2016postVFP": (
-            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2489) >= 2 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
-            "(HLT_IsoMu24 || HLT_IsoTkMu24)"
-        ),
-        "UL2017": (
-            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.3040) >= 2 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
-            "HLT_IsoMu27"
-        ),
-        "UL2018": (
-            "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2783) >= 2 && "
-            "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3 && "
-            "HLT_IsoMu24"
-        ),
-    }
-
-    if era not in cut_strings:
-        logging.error(f"Cut string not defined for era '{era}'. Please add it to the script.")
-        sys.exit(1)
-
-    cut_string = cut_strings[era]
-    logging.info(f"Cut string being applied for {era}: {cut_string}")
     # exit(0)
     # Prepare datasets for parallel processing
     dataset_list = []
     for DataMC in dicti:
-        if 'mu' in DataMC:
-            for key in dicti[DataMC]:
-                outDir = f'/mnt/disk1/skimmed_Run2/preselection/{outputTag}/{era}/{DataMC}/{key}'
-                # outDir = 'outputs'
-                input_files = dicti[DataMC][key]
-                dataset_list.append((DataMC, key, input_files, outDir, cut_string))
+        for key in dicti[DataMC]:
+            if include_key_pattern and not include_key_pattern.search(key):
+                continue
+            if exclude_key_pattern and exclude_key_pattern.search(key):
+                continue
+            raw_input_files = dicti[DataMC][key]
+            filtered_input_files = []
+            for file in raw_input_files:
+                if include_tree_pattern and not include_tree_pattern.search(file):
+                    continue
+                if exclude_tree_pattern and exclude_tree_pattern.search(file):
+                    continue
+                filtered_input_files.append(file)
+
+            if not filtered_input_files:
+                continue  # Skip if all files were filtered out
+
+            outDir = f'/mnt/disk1/skimmed_Run2/Directions/{outputTag}/{era}/{DataMC}/{key}'
+            dataset_list.append((DataMC, key, filtered_input_files, outDir, era))
 
     # Use multiprocessing to process datasets in parallel
-    num_cores = 4
+    num_cores = 6
     with Pool(num_cores) as pool:
         pool.map(process_dataset, dataset_list)
     
     logging.info("Finished all processing.")
+    # print(dataset_list)

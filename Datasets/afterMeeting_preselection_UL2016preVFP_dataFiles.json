@@ -1,0 +1,410 @@
+{
+    "MC_mu": {
+        "QCD_Pt-30To50_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-30To50_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-30To50_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-30To50_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-30To50_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-30To50_MuEnriched/tree_20_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_SemiLeptonic/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_SemiLeptonic/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_SemiLeptonic/tree_65_Skim.root": "Events"
+        },
+        "DYJetsToLL": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/DYJetsToLL/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/DYJetsToLL/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/DYJetsToLL/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/DYJetsToLL/tree_20_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/DYJetsToLL/tree_65_Skim.root": "Events"
+        },
+        "Tchannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tchannel/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tchannel/tree_47_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tchannel/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tchannel/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tchannel/tree_20_Skim.root": "Events"
+        },
+        "QCD_Pt-80To120_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-80To120_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-80To120_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-80To120_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-80To120_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-80To120_MuEnriched/tree_23_Skim.root": "Events"
+        },
+        "QCD_Pt-1000_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-1000_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-1000_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-1000_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-1000_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-1000_MuEnriched/tree_20_Skim.root": "Events"
+        },
+        "QCD_Pt-600To800_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-600To800_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-600To800_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-600To800_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-600To800_MuEnriched/tree_20_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-600To800_MuEnriched/tree_6_Skim.root": "Events"
+        },
+        "QCD_Pt-470To600_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-470To600_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-470To600_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-470To600_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-470To600_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-470To600_MuEnriched/tree_20_Skim.root": "Events"
+        },
+        "WJetsToLNu_1J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_1J/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_1J/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_1J/tree_65_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_1J/tree_78_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_1J/tree_99_Skim.root": "Events"
+        },
+        "tw_top": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_top/tree_4_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_top/tree_3_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_top/tree_2_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_top/tree_1_Skim.root": "Events"
+        },
+        "ZZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2Q2L/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2Q2L/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2Q2L/tree_14_Skim.root": "Events"
+        },
+        "Schannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Schannel/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Schannel/tree_2_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Schannel/tree_8_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Schannel/tree_1_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Schannel/tree_6_Skim.root": "Events"
+        },
+        "WZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WZTo2Q2L/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WZTo2Q2L/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WZTo2Q2L/tree_6_Skim.root": "Events"
+        },
+        "WJetsToLNu_2J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_2J/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_2J/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_2J/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_2J/tree_65_Skim.root": "Events"
+        },
+        "QCD_Pt-800To1000_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_24_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_55_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_78_Skim.root": "Events"
+        },
+        "QCD_Pt-15To20_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-15To20_MuEnriched/tree_28_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-15To20_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-15To20_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-15To20_MuEnriched/tree_8_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-15To20_MuEnriched/tree_20_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_FullyLeptonic/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_FullyLeptonic/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ttbar_FullyLeptonic/tree_20_Skim.root": "Events"
+        },
+        "Tbarchannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tbarchannel/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tbarchannel/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tbarchannel/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/Tbarchannel/tree_20_Skim.root": "Events"
+        },
+        "QCD_Pt-50To80_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-50To80_MuEnriched/tree_28_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-50To80_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-50To80_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-50To80_MuEnriched/tree_20_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-50To80_MuEnriched/tree_6_Skim.root": "Events"
+        },
+        "WWTolnulnu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTolnulnu/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTolnulnu/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTolnulnu/tree_8_Skim.root": "Events"
+        },
+        "QCD_Pt-170To300_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-170To300_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-170To300_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-170To300_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-170To300_MuEnriched/tree_20_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-170To300_MuEnriched/tree_6_Skim.root": "Events"
+        },
+        "ZZTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2L2Nu/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2L2Nu/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2L2Nu/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2L2Nu/tree_8_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/ZZTo2L2Nu/tree_20_Skim.root": "Events"
+        },
+        "WWTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTo2L2Nu/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTo2L2Nu/tree_2_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTo2L2Nu/tree_8_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTo2L2Nu/tree_1_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WWTo2L2Nu/tree_6_Skim.root": "Events"
+        },
+        "WJetsToLNu_0J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_0J/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_0J/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_0J/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_0J/tree_65_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/WJetsToLNu_0J/tree_99_Skim.root": "Events"
+        },
+        "QCD_Pt-120To170_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-120To170_MuEnriched/tree_28_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-120To170_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-120To170_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-120To170_MuEnriched/tree_20_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-120To170_MuEnriched/tree_6_Skim.root": "Events"
+        },
+        "tw_antitop": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_antitop/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_antitop/tree_8_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_antitop/tree_1_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/tw_antitop/tree_6_Skim.root": "Events"
+        },
+        "QCD_Pt-300To470_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-300To470_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-300To470_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-300To470_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-300To470_MuEnriched/tree_20_Skim.root": "Events"
+        },
+        "QCD_Pt-20To30_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-20To30_MuEnriched/tree_42_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-20To30_MuEnriched/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-20To30_MuEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-20To30_MuEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_mu/QCD_Pt-20To30_MuEnriched/tree_20_Skim.root": "Events"
+        }
+    },
+    "Data_el": {
+        "Run2016B_ver1_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016B_ver1_el/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016B_ver1_el/tree_1_Skim.root": "Events"
+        },
+        "Run2016D_HIPM_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016D_HIPM_el/tree_139_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016D_HIPM_el/tree_134_Skim.root": "Events"
+        },
+        "Run2016B_ver2_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016B_ver2_el/tree_131_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016B_ver2_el/tree_137_Skim.root": "Events"
+        },
+        "Run2016E_HIPM_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016E_HIPM_el/tree_139_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016E_HIPM_el/tree_141_Skim.root": "Events"
+        },
+        "Run2016C_HIPM_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016C_HIPM_el/tree_29_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016C_HIPM_el/tree_27_Skim.root": "Events"
+        },
+        "Run2016F_HIPM_el": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016F_HIPM_el/tree_66_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_el/Run2016F_HIPM_el/tree_38_Skim.root": "Events"
+        }
+    },
+    "MC_alt": {
+        "Tchannel_QCDinspired": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_QCDinspired/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_QCDinspired/tree_1_Skim.root": "Events"
+        },
+        "Tchannel_Gluonmove": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_Gluonmove/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_Gluonmove/tree_1_Skim.root": "Events"
+        },
+        "Tchannel_TuneCP5down": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_TuneCP5down/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_TuneCP5down/tree_1_Skim.root": "Events"
+        },
+        "Tbarchannel_TuneCP5down": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_TuneCP5down/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_TuneCP5down/tree_1_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic_QCDinspired": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_SemiLeptonic_QCDinspired/tree_1_Skim.root": "Events"
+        },
+        "Tbarchannel_QCDinspired": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_QCDinspired/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_QCDinspired/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic_TuneCPdown": {},
+        "Tchannel_erdON": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_erdON/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_erdON/tree_1_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic_erdON": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_SemiLeptonic_erdON/tree_1_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic_Gluonmove": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_SemiLeptonic_Gluonmove/tree_1_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic_TuneCP5up": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_SemiLeptonic_TuneCP5up/tree_1_Skim.root": "Events"
+        },
+        "Tbarchannel_TuneCP5up": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_TuneCP5up/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_TuneCP5up/tree_1_Skim.root": "Events"
+        },
+        "Tchannel_TuneCP5up": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_TuneCP5up/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tchannel_TuneCP5up/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic_QCDinspired": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_FullyLeptonic_QCDinspired/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic_TuneCPup": {},
+        "Tbarchannel_erdON": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_erdON/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_erdON/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic_Gluonmove": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_FullyLeptonic_Gluonmove/tree_1_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic_TuneCP5down": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_SemiLeptonic_TuneCP5down/tree_1_Skim.root": "Events"
+        },
+        "Tbarchannel_Gluonmove": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_Gluonmove/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/Tbarchannel_Gluonmove/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic_erdON": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_alt/ttbar_FullyLeptonic_erdON/tree_1_Skim.root": "Events"
+        }
+    },
+    "MC_el": {
+        "QCD_Pt-30to50_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-30to50_EMEnriched/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-30to50_EMEnriched/tree_14_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ttbar_SemiLeptonic/tree_14_Skim.root": "Events"
+        },
+        "DYJetsToLL": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/DYJetsToLL/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/DYJetsToLL/tree_14_Skim.root": "Events"
+        },
+        "Tchannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Tchannel/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Tchannel/tree_14_Skim.root": "Events"
+        },
+        "QCD_Pt-50to80_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-50to80_EMEnriched/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-50to80_EMEnriched/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-300toInf_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-300toInf_EMEnriched/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-300toInf_EMEnriched/tree_8_Skim.root": "Events"
+        },
+        "WJetsToLNu_1J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_1J/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_1J/tree_99_Skim.root": "Events"
+        },
+        "tw_top": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/tw_top/tree_3_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/tw_top/tree_1_Skim.root": "Events"
+        },
+        "ZZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ZZTo2Q2L/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ZZTo2Q2L/tree_14_Skim.root": "Events"
+        },
+        "Schannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Schannel/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Schannel/tree_8_Skim.root": "Events"
+        },
+        "WZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WZTo2Q2L/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WZTo2Q2L/tree_14_Skim.root": "Events"
+        },
+        "QCD_Pt-120to170_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-120to170_EMEnriched/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-120to170_EMEnriched/tree_8_Skim.root": "Events"
+        },
+        "WJetsToLNu_2J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_2J/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_2J/tree_14_Skim.root": "Events"
+        },
+        "QCD_Pt-80to120_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-80to120_EMEnriched/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-80to120_EMEnriched/tree_8_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ttbar_FullyLeptonic/tree_14_Skim.root": "Events"
+        },
+        "Tbarchannel": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Tbarchannel/tree_34_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/Tbarchannel/tree_14_Skim.root": "Events"
+        },
+        "WWTolnulnu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WWTolnulnu/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WWTolnulnu/tree_8_Skim.root": "Events"
+        },
+        "ZZTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ZZTo2L2Nu/tree_16_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/ZZTo2L2Nu/tree_14_Skim.root": "Events"
+        },
+        "WWTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WWTo2L2Nu/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WWTo2L2Nu/tree_8_Skim.root": "Events"
+        },
+        "QCD_Pt-170to300_EMEnriched": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-170to300_EMEnriched/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/QCD_Pt-170to300_EMEnriched/tree_1_Skim.root": "Events"
+        },
+        "WJetsToLNu_0J": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_0J/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/WJetsToLNu_0J/tree_99_Skim.root": "Events"
+        },
+        "tw_antitop": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/tw_antitop/tree_7_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/MC_el/tw_antitop/tree_8_Skim.root": "Events"
+        }
+    },
+    "Data_mu": {
+        "Run2016E_HIPM_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016E_HIPM_mu/tree_136_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016E_HIPM_mu/tree_98_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016E_HIPM_mu/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016E_HIPM_mu/tree_27_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016E_HIPM_mu/tree_99_Skim.root": "Events"
+        },
+        "Run2016C_HIPM_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016C_HIPM_mu/tree_45_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016C_HIPM_mu/tree_32_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016C_HIPM_mu/tree_66_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016C_HIPM_mu/tree_67_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016C_HIPM_mu/tree_99_Skim.root": "Events"
+        },
+        "Run2016B_ver2_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver2_mu/tree_136_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver2_mu/tree_14_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver2_mu/tree_2_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver2_mu/tree_99_Skim.root": "Events"
+        },
+        "Run2016B_ver1_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver1_mu/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver1_mu/tree_11_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver1_mu/tree_12_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver1_mu/tree_1_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016B_ver1_mu/tree_9_Skim.root": "Events"
+        },
+        "Run2016D_HIPM_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016D_HIPM_mu/tree_10_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016D_HIPM_mu/tree_194_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016D_HIPM_mu/tree_195_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016D_HIPM_mu/tree_1_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016D_HIPM_mu/tree_99_Skim.root": "Events"
+        },
+        "Run2016F_HIPM_mu": {
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016F_HIPM_mu/tree_66_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016F_HIPM_mu/tree_38_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016F_HIPM_mu/tree_35_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016F_HIPM_mu/tree_99_Skim.root": "Events",
+            "/mnt/disk1/skimmed_Run2/preselection/afterMeeting/UL2016preVFP/Data_mu/Run2016F_HIPM_mu/tree_48_Skim.root": "Events"
+        }
+    }
+}

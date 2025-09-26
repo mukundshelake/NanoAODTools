@@ -1,0 +1,162 @@
+tag: "afterMeeting"
+DatasetJSONFolder: "/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets"
+outputDirBase: "/mnt/disk1/skimmed_Run2/"
+processFlow:
+    preselection:
+        UL2016preVFP: 
+            inputTag: "nfs"
+            inputStage: "skimmed"
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "skimmed"
+        UL2017:
+            inputTag: null
+            inputStage: "skimmed"
+        UL2018:
+            inputTag: null
+            inputStage: "skimmed"
+    selection:
+        UL2016preVFP:
+            inputTag: "afterMeeting"  
+            inputStage: "preselection"
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "preselection"
+        UL2017:
+            inputTag: null
+            inputStage: "preselection"
+        UL2018:
+            inputTag: null
+            inputStage: "preselection"
+    reco:
+        UL2016preVFP: 
+            inputTag: "afterMeeting"  
+            inputStage: "selection"
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "selection"
+        UL2017:
+            inputTag: null
+            inputStage: "selection"
+        UL2018: 
+            inputTag: null
+            inputStage: "selection"
+    recoBDT:
+        UL2016preVFP: 
+            inputTag: null
+            inputStage: "reco"  
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "reco" 
+        UL2017:
+            inputTag: null
+            inputStage: "reco" 
+        UL2018: 
+            inputTag: null
+            inputStage: "reco" 
+    BDTScore:
+        UL2016preVFP:
+            inputTag: null  
+            inputStage: "recoBDT" 
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "recoBDT" 
+        UL2017:
+            inputTag: null
+            inputStage: "recoBDT" 
+        UL2018:
+            inputTag: null        
+            inputStage: "recoBDT"   
+preselection:
+    UL2016preVFP:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+        cuts:
+            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2598) >= 2"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
+            - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
+        modules:
+            Data: null
+            MC: null
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
+    UL2016postVFP:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+        cuts:
+            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2489) >= 2"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
+            - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
+        modules:
+            Data: null
+            MC: null
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
+    UL2017:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
+        cuts:
+            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.3040) >= 2"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
+            - "(HLT_IsoMu27)"
+        modules:
+            Data: null
+            MC: null
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
+    UL2018:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
+        cuts:
+            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2783) >= 2"
+            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
+            - "(HLT_IsoMu24)"
+        modules:
+            Data: null
+            MC: null
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
+      
+selection: 
+    UL2016preVFP:
+        cuts:
+            - "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598) >= 2"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3"
+            - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
+            - "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
+        modules:
+            Data: null
+            MC: 
+                - lheWeightSign
+                - muonID
+                - muonHLT
+                - bTagging
+                - jetPUID
+        moduleConfigs:
+            MuonIDWeight:
+                IDSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_ID.json"
+                kinematics:
+                    Muon: 
+                        lohi:
+                            pt:
+                                low: 26.0
+                                high: 3000.0
+                            eta:
+                                low: -2.4
+                                high: 2.4
+                            pfRelIso04_all:
+                                low: -1.0
+                                high: 0.06
+                        value:
+                            tightId: 1
+
+                correctionLib:
+                    weightName: "NUM_TightID_DEN_TrackerMuons"
+                    eraName: "2016preVFP_UL"
+                branchNames:
+                    sf: "MuonIDWeight"
+                    sfup: "MuonIDWeightUp"
+                    sfdown: "MuonIDWeightDown"
+reco:
+    UL2016preVFP:
+        modules:
+            Data: null
+            MC: 
+                - Reco

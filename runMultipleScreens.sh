@@ -1,0 +1,1 @@
+screen -dmS "mySession3" bash -c "bash runScreens.sh; exec bash" 

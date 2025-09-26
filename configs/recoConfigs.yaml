@@ -1,0 +1,16 @@
+btag_thresholds:
+  UL2016preVFP: 0.2598
+  UL2016postVFP: 0.2489
+  UL2017: 0.3040
+  UL2018: 0.2783
+
+mass_values:
+  mW: 80.4
+  mt: 172.5
+  sigmaW: 10.0
+  sigmatt: 13.0
+
+resolutions:
+  jet: 0.10
+  muon: 0.05
+  met: 0.10
