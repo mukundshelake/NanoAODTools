@@ -4,7 +4,7 @@ outputDirBase: "/mnt/disk1/skimmed_Run2/"
 processFlow:
     preselection:
         UL2016preVFP: 
-            inputTag: null
+            inputTag: "nfs"
             inputStage: "skimmed"
         UL2016postVFP:
             inputTag: null
@@ -30,7 +30,7 @@ processFlow:
             inputStage: "preselection"
     reco:
         UL2016preVFP: 
-            inputTag: null 
+            inputTag: "testing" 
             inputStage: "selection"
         UL2016postVFP:
             inputTag: null
@@ -117,8 +117,8 @@ selection:
     UL2016preVFP:
         cuts:
             - "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0"
-            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598) >= 2"
-            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4) > 3"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 || Jet_puId > 0)) > 3"
             - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
             - "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
         modules:
@@ -176,9 +176,45 @@ selection:
                     sf: "MuonHLTWeight"
                     sfstat: "MuonHLTWeightStat"
                     sfsyst: "MuonHLTWeightSyst"
+            bTagging:
+                btagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
+                algo: "DeepFlav"
+                threshold: 0.2598
+                wp: "Medium"
+                year: "2016preVFP"
+                kinematics:
+                    Jet:
+                        lohi:
+                            pt:
+                                low: 25.0
+                                high: 3000.0
+                            eta:
+                                low: -2.4
+                                high: 2.4
+                            btagDeepFlavB:
+                                low: 0.2598
+                                high: 1.0
+                        value:
+                            jetId: 6
+                        orcondition:
+                            pt:
+                                low: 50.0
+                                high: 3000.0
+                            puId:
+                                low: 4
+                                high: 7
+                branchNames:
+                    sf: "bTaggingWeight"
+                    sfup: "bTaggingWeightUp"
+                    sfdown: "bTaggingWeightDown"
+                correctionLib:
+                    weightName: "deepjet_comb"
+                    eraName: "2016preVFP_UL"
+
 reco:
     UL2016preVFP:
         modules:
-            Data: null
+            Data: 
+                - Reco
             MC: 
                 - Reco

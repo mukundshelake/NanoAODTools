@@ -35,7 +35,7 @@ class bTaggingWeightProducer(Module):
         }
         """Process each event and compute highest muon pt"""
         jets = Collection(event, "Jet")
-        jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4]
+        jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4 and jet.jetId ==6 and (jet.puId > 0 or jet.pt > 50)]
 
         bTagWeight = 1.0
         bTagWeightUp = 1.0
