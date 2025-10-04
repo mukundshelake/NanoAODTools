@@ -47,6 +47,9 @@ def load_module(module_name, era, key=None, config=None):
     elif module_name == "Reco":
         from python.postprocessing.examples.RecoModule import RecoModule
         loaded = RecoModule(era)
+    elif module_name == "BDTvariable":
+        from python.postprocessing.examples.BDTvariableModule import BDTvariableModule
+        loaded = BDTvariableModule()
     return loaded
 
 def is_root_file_healthy(filepath: str) -> bool:
