@@ -50,6 +50,9 @@ def load_module(module_name, era, key=None, config=None):
     elif module_name == "BDTvariable":
         from python.postprocessing.examples.BDTvariableModule import BDTvariableModule
         loaded = BDTvariableModule()
+    elif module_name == "Observables":
+        from python.postprocessing.modules.custom.observables import ObservablesProducer
+        loaded = ObservablesProducer()
     return loaded
 
 def is_root_file_healthy(filepath: str) -> bool:
@@ -232,6 +235,12 @@ if __name__ == "__main__":
                         else:
                             logging.warning(f"Skipping unhealthy input file: {file}")
             processFolder(tag, stage, era)
+    logging.info(f"Total files to process: {len(process_list)}")
+    if len(process_list) == 0:
+        logging.info("No files to process. Exiting.")
+        sys.exit(0)
+    logging.info("Starting parallel processing of datasets...")
+
     
     # Use multiprocessing to process datasets in parallel
     num_cores = 15

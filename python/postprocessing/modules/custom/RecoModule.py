@@ -41,11 +41,12 @@ class TTbarSemilepReconstructor(Module):
         best_perm = None
 
         # Muon
-        mu = max(muons, key=lambda m: m.pt)
+        selected_muons = [mu for mu in muons if mu.pt > 27 and abs(mu.eta) < 2.4 and mu.tightId and mu.pfRelIso04_all < 0.06]
+        mu = max(selected_muons, key=lambda m: m.pt)
         mu_p4 = self.make_lep_p4(mu)
 
         # Jet selection
-        selected_jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4]
+        selected_jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4 and jet.jetId == 6 and (jet.pt > 50.0 or jet.puId > 0)]
         sorted_jets = sorted(selected_jets, key=lambda jet: jet.pt, reverse=True)
         bjets = []
         remaining_jets = []

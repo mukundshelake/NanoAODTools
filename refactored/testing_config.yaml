@@ -4,7 +4,7 @@ outputDirBase: "/mnt/disk1/skimmed_Run2/"
 processFlow:
     preselection:
         UL2016preVFP: 
-            inputTag: "nfs"
+            inputTag: null
             inputStage: "skimmed"
         UL2016postVFP:
             inputTag: null
@@ -13,11 +13,11 @@ processFlow:
             inputTag: null
             inputStage: "skimmed"
         UL2018:
-            inputTag: "nfs"
+            inputTag: null
             inputStage: "skimmed"
     selection:
         UL2016preVFP:
-            inputTag: "testing"  
+            inputTag: null  
             inputStage: "preselection"
         UL2016postVFP:
             inputTag: null
@@ -26,11 +26,11 @@ processFlow:
             inputTag: null
             inputStage: "preselection"
         UL2018:
-            inputTag: "testing"
+            inputTag: null
             inputStage: "preselection"
     reco:
         UL2016preVFP: 
-            inputTag: "testing" 
+            inputTag: null
             inputStage: "selection"
         UL2016postVFP:
             inputTag: null
@@ -41,9 +41,22 @@ processFlow:
         UL2018: 
             inputTag: "testing"
             inputStage: "selection"
+    observables:
+        UL2016preVFP: 
+            inputTag: "testing" 
+            inputStage: "reco"
+        UL2016postVFP:
+            inputTag: null
+            inputStage: "selection"
+        UL2017:
+            inputTag: null
+            inputStage: "selection"
+        UL2018: 
+            inputTag: null
+            inputStage: "selection"
     recoBDT:
         UL2016preVFP: 
-            inputTag: 'testing'
+            inputTag: null
             inputStage: "reco"  
         UL2016postVFP:
             inputTag: null
@@ -318,6 +331,19 @@ reco:
                 - Reco
             MC: 
                 - Reco
+observables:
+    UL2016preVFP:
+        modules:
+            Data: 
+                - Observables
+            MC: 
+                - Observables
+    UL2018:
+        modules:
+            Data: 
+                - Observables
+            MC: 
+                - Observables
 recoBDT: 
     UL2016preVFP:
         modules:
