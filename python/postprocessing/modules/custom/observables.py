@@ -11,6 +11,8 @@ class ObservablesProducer(Module):
         """Initialize output branches before event loop starts"""
         self.out = wrappedOutputTree
         self.out.branch("cosTheta", "F")
+        self.out.branch("LabcosTheta", "F")
+        self.out.branch("anticosTheta", "F")
         self.out.branch("yt", "F")
         self.out.branch("ytbar", "F")
         self.out.branch("ttbar_pz", "F")
@@ -48,16 +50,22 @@ class ObservablesProducer(Module):
 
         ttbar = top + antitop
         ttbar_mass = ttbar.M()
+        cosTheta_lab = top.CosTheta()
         # Boost to ttbar rest frame
         boost_vector = -ttbar.BoostVector()
         top.Boost(boost_vector)
         antitop.Boost(boost_vector)
+
         # Compute cosTheta in ttbar rest frame: angle between top and beam axis (z-axis)
         cosTheta = top.CosTheta()
+        # Compute anticosTheta in ttbar rest frame: angle between antitop and beam axis (z-axis)
+        anticosTheta = antitop.CosTheta()
+
 
         # Decide sign of cosTheta based on ttbar z momentum in lab frame
         if ttbar.Pz() < 0:
             cosTheta = -cosTheta
+            cosTheta_lab = -cosTheta_lab
 
         # Compute rapidities
         yt = 0.5 * np.log((top.E() + top.Pz()) / (top.E() - top.Pz())) if (top.E() - top.Pz()) != 0 else 0.0
@@ -67,6 +75,8 @@ class ObservablesProducer(Module):
 
         # Fill branches
         self.out.fillBranch("cosTheta", cosTheta)
+        self.out.fillBranch("anticosTheta", anticosTheta)
+        self.out.fillBranch("LabcosTheta", cosTheta_lab)
         self.out.fillBranch("yt", yt)
         self.out.fillBranch("ytbar", ytbar)
         self.out.fillBranch("ttbar_pz", ttbar_pz)
