@@ -1,0 +1,25 @@
+gJSON: "{{gJSON}}"
+branchsel: "{{branchFile}}"
+cuts:
+    - "Sum$(Muon_pt > {{ muon_pt_lo }} && abs(Muon_eta) < {{ muon_abs_eta_hi }} && Muon_tightId && Muon_pfRelIso04_all <= {{ muon_iso_hi}}) >= {{ atleast_n_muons }}"
+    - "Sum$(Jet_pt > {{ jet_pt_lo }} && abs(Jet_eta) < {{ jet_abs_eta_hi }} && Jet_btagDeepFlavB > {{btag_threshold}} && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= {{ atleast_n_btagged_jets }}"
+    - "Sum$(Jet_pt > {{ jet_pt_lo }} && abs(Jet_eta) < {{ jet_abs_eta_hi }} && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= {{ atleast_n_jets }}"
+    - "{{ hltFlag }}"
+    - "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
+modules:
+    {% if DataModules is defined and DataModules %}
+    Data:
+    {% for x in DataModules %}
+    - {{ x }}
+    {% endfor %}
+    {% else %}
+    Data: null
+    {% endif %}
+    {% if MCModules is defined and MCModules %}
+    MC:
+    {% for x in MCModules %}
+    - {{ x }}
+    {% endfor %}
+    {% else %}
+    MC: null
+    {% endif %}

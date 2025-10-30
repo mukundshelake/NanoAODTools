@@ -1,0 +1,20 @@
+tag: "{{ tag }}"
+DatasetJSONFolder: "{{ DatasetJSONFolder }}"
+outputDirBase: "{{ outputDirBase }}"
+
+processFlow:
+  {% for s in stages %}
+    {% if not loop.first %}
+    {{ s }}:
+      {% set stage_loop = loop %}
+      {% for y in eras %}
+      {{ y }}:
+        inputStage: "{{ stage_loop.previtem }}"
+        {% if s != "selection" %}
+        inputTag : "{{ tag }}"
+        {% else %}
+        inputTag : "nfs"
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endfor %}

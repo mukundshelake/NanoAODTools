@@ -1,0 +1,23 @@
+IDSFFile: "{{ IDSFFile }}"
+kinematics: 
+    Muon:
+        lohi:
+            pt:
+                low: {{muon_pt_lo}}
+                high: {{muon_pt_hi}}
+            eta:
+                low: {{muon_eta_lo}}
+                high: {{muon_eta_hi}}
+            pfRelIso04_all:
+                low: {{muon_iso_lo}}
+                high: {{muon_iso_hi}}
+        value: 
+            tightId: 1
+        correctionLib:
+            weightName: "{{ weightName }}"
+            eraName: "{{ eraName }}"
+        branchNames:
+            sf: "{{ nominalBranch }}"
+            sfup: "{{ upBranch }}"
+            sfdown: "{{ downBranch }}"
+        

@@ -6,6 +6,18 @@ from multiprocessing import Pool
 import importlib
 from tqdm import tqdm
 
+# 🧠 --- Global correctionlib cache ---
+import correctionlib
+_GLOBAL_CORRECTION_CACHE = {}
+
+def preload_correctionlib(file_path):
+    """Load a correctionlib file only once in the parent process."""
+    if file_path not in _GLOBAL_CORRECTION_CACHE:
+        logging.info(f"[preload] Loading correctionlib file: {file_path}")
+        _GLOBAL_CORRECTION_CACHE[file_path] = correctionlib.CorrectionSet.from_file(file_path)
+    return _GLOBAL_CORRECTION_CACHE[file_path]
+
+
 
 def processFolder(tag, stage, era):
     baseD = os.path.join("/mnt/disk1/skimmed_Run2", stage, tag, era)
@@ -29,6 +41,16 @@ def processFolder(tag, stage, era):
     logging.info(f"Wrote JSON file: {jsonFile}")
 
 def load_module(module_name, era, key=None, config=None):
+    # --- Preload all correctionlib files once before forking ---
+    # This prevents "Duplicate Correction name" error in multiprocessing
+
+    if "moduleConfigs" in config:
+        if "MuonHLTWeight" in config["moduleConfigs"]:
+            HLT_json = config["moduleConfigs"]["MuonHLTWeight"]["HLTSFFile"]
+            preload_correctionlib(HLT_json)
+        if "MuonIDWeight" in config["moduleConfigs"]:
+            ID_json = config["moduleConfigs"]["MuonIDWeight"]["IDSFFile"]
+            preload_correctionlib(ID_json)
     if module_name == "lheWeightSign":
         from python.postprocessing.modules.custom.LHEWeightSign import lheWeightSignModule
         loaded = lheWeightSignModule()
@@ -53,6 +75,9 @@ def load_module(module_name, era, key=None, config=None):
     elif module_name == "Observables":
         from python.postprocessing.modules.custom.observables import ObservablesProducer
         loaded = ObservablesProducer()
+    elif module_name == "yCalculator":
+        from python.postprocessing.modules.custom.yCalculator import yCalculator
+        loaded = yCalculator()
     return loaded
 
 def is_root_file_healthy(filepath: str) -> bool:
@@ -151,6 +176,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era and output tag.")
     parser.add_argument('--outputTag','-t', required=True, help='Tag for the output directory (e.g., April152025)')
     parser.add_argument('--era', '-e', help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
+    parser.add_argument('--stage', '-s', help='Stage of the analysis')
     parser.add_argument('--includeKeys', help='Regex pattern: only include keys that match this pattern')
     parser.add_argument('--excludeKeys', help='Regex pattern: exclude keys that match this pattern')
     parser.add_argument('--includeTrees', help='Regex pattern to include file paths')
@@ -162,10 +188,9 @@ if __name__ == "__main__":
     exclude_key_pattern = re.compile(args.excludeKeys) if args.excludeKeys else None
     include_tree_pattern = re.compile(args.includeTrees) if args.includeTrees else None
     exclude_tree_pattern = re.compile(args.excludeTrees) if args.excludeTrees else None
-    era = args.era
     outputTag = args.outputTag
     runSample = args.sample
-    logging.info(f"Using era: {era}")
+    logging.info(f"Using era: {args.era}")
     logging.info(f"Using output tag: {outputTag}")
     if runSample:
         logging.info("Running in sample mode: will process only one file from each dataset")
@@ -179,15 +204,22 @@ if __name__ == "__main__":
         logging.info(f"Excluding files matching: {args.excludeTrees}")
 
     # --- Load yaml configs ---
-    with open(f"/home/mukund/Projects/SkimandSlim/NanoAODTools/refactored/{outputTag}_config.yaml", "r") as f:
+    with open(f"/home/mukund/Projects/SkimandSlim/NanoAODTools/configs/{outputTag}_config.yaml", "r") as f:
         config = yaml.safe_load(f)
+
     datasetsFolder = config["DatasetJSONFolder"]
     outputDirBase = config["outputDirBase"]
     tag = config["tag"]
     process_list = []
     for stage in config["processFlow"]:
+        if args.stage and stage != args.stage:
+            logging.info(f"Skipping stage {stage} as it does not match specified stage {args.stage}")
+            continue
         logging.info(f"Processing stage: {stage}")
         for era in config["processFlow"][stage]:
+            if args.era and era != args.era:
+                logging.info(f"Skipping era {era} as it does not match specified era {args.era}")
+                continue
             inputTag = config["processFlow"][stage][era]["inputTag"]
             inputStage = config["processFlow"][stage][era]["inputStage"]
             if inputTag == None:

@@ -1,45 +1,32 @@
-tag: "testing"
+tag: "lateOctober"
 DatasetJSONFolder: "/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets"
 outputDirBase: "/mnt/disk1/skimmed_Run2/"
 processFlow:
-    preselection:
-        UL2016preVFP: 
-            inputTag: null
-            inputStage: "skimmed"
-        UL2016postVFP:
-            inputTag: null
-            inputStage: "skimmed"
-        UL2017:
-            inputTag: null
-            inputStage: "skimmed"
-        UL2018:
-            inputTag: null
-            inputStage: "skimmed"
     selection:
         UL2016preVFP:
-            inputTag: null  
-            inputStage: "preselection"
+            inputTag: 'nfs'  
+            inputStage: "skimmed"
         UL2016postVFP:
-            inputTag: 'null'
+            inputTag: 'nfs'
             inputStage: "skimmed"
         UL2017:
-            inputTag: null
+            inputTag: 'nfs'
             inputStage: "skimmed"
         UL2018:
-            inputTag: 'testing'
-            inputStage: "preselection"
+            inputTag: 'nfs'
+            inputStage: "skimmed"
     reco:
         UL2016preVFP: 
-            inputTag: null
+            inputTag: 'lateOctober'
             inputStage: "selection"
         UL2016postVFP:
-            inputTag: null
+            inputTag: 'lateOctober'
             inputStage: "selection"
         UL2017:
-            inputTag: null
+            inputTag: 'lateOctober'
             inputStage: "selection"
         UL2018: 
-            inputTag: null
+            inputTag: 'lateOctober'
             inputStage: "selection"
     observables:
         UL2016preVFP: 
@@ -80,53 +67,11 @@ processFlow:
         UL2018:
             inputTag: null        
             inputStage: "recoBDT"   
-preselection:
-    UL2016preVFP:
-        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
-        cuts:
-            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2598) >= 2"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
-            - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
-        modules:
-            Data: null
-            MC: null
-        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
-    UL2016postVFP:
-        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
-        cuts:
-            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2489) >= 2"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
-            - "(HLT_IsoMu24 || HLT_IsoTkMu24)"
-        modules:
-            Data: null
-            MC: null
-        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
-    UL2017:
-        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
-        cuts:
-            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.3040) >= 2"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
-            - "(HLT_IsoMu27)"
-        modules:
-            Data: null
-            MC: null
-        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
-    UL2018:
-        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
-        cuts:
-            - "Sum$(Muon_pt > 20 && abs(Muon_eta) < 3.0 && Muon_tightId) > 0"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0 && Jet_btagDeepFlavB > 0.2783) >= 2"
-            - "Sum$(Jet_pt > 20 && abs(Jet_eta) < 3.0) > 3"
-            - "(HLT_IsoMu24)"
-        modules:
-            Data: null
-            MC: null
-        branchsel: "python/postprocessing/examples/keep_and_drop.txt"     
+
 selection: 
     UL2016preVFP:
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
         cuts:
             - "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0"
             - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
@@ -139,7 +84,7 @@ selection:
                 - lheWeightSign
                 - muonID
                 - muonHLT
-                - bTagging  
+                - bTagging
                 - jetPUID
         moduleConfigs:
             MuonIDWeight:
@@ -188,40 +133,6 @@ selection:
                     sf: "MuonHLTWeight"
                     sfstat: "MuonHLTWeightStat"
                     sfsyst: "MuonHLTWeightSyst"
-            bTagging:
-                btagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
-                algo: "DeepFlav"
-                threshold: 0.2598
-                wp: "Medium"
-                year: "2016preVFP"
-                kinematics:
-                    Jet:
-                        lohi:
-                            pt:
-                                low: 25.0
-                                high: 3000.0
-                            eta:
-                                low: -2.4
-                                high: 2.4
-                            btagDeepFlavB:
-                                low: 0.2598
-                                high: 1.0
-                        value:
-                            jetId: 6
-                        orcondition:
-                            pt:
-                                low: 50.0
-                                high: 3000.0
-                            puId:
-                                low: 4
-                                high: 7
-                branchNames:
-                    sf: "bTaggingWeight"
-                    sfup: "bTaggingWeightUp"
-                    sfdown: "bTaggingWeightDown"
-                correctionLib:
-                    weightName: "deepjet_comb"
-                    eraName: "2016preVFP_UL"
     UL2016postVFP:
         branchsel: "python/postprocessing/examples/keep_and_drop.txt"
         gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
@@ -286,12 +197,76 @@ selection:
                     sf: "MuonHLTWeight"
                     sfstat: "MuonHLTWeightStat"
                     sfsyst: "MuonHLTWeightSyst"
+    UL2017:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"     
+        cuts:
+            - "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2589 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+            - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 || Jet_puId > 0)) > 3"
+            - "HLT_IsoMu27"
+            - "Flag_ecalBadCalibFilter && Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
+        modules:
+            Data: null
+            MC: 
+                - lheWeightSign
+                - muonID
+                - muonHLT
+                - bTagging
+                - jetPUID
+        moduleConfigs:
+            MuonIDWeight:
+                IDSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_ID.json"
+                kinematics:
+                    Muon: 
+                        lohi:
+                            pt:
+                                low: 29.0
+                                high: 3000.0
+                            eta:
+                                low: -2.4
+                                high: 2.4
+                            pfRelIso04_all:
+                                low: -1.0
+                                high: 0.06
+                        value:
+                            tightId: 1
+                correctionLib:
+                    weightName: "NUM_TightID_DEN_TrackerMuons"
+                    eraName: "2017_UL"
+                branchNames:
+                    sf: "MuonIDWeight"
+                    sfup: "MuonIDWeightUp"
+                    sfdown: "MuonIDWeightDown"
+            MuonHLTWeight:
+                HLTSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_HLT.json"
+                kinematics:
+                    Muon: 
+                        lohi:
+                            pt:
+                                low: 29.0
+                                high: 3000.0
+                            eta:
+                                low: -2.4
+                                high: 2.4
+                            pfRelIso04_all:
+                                low: -1.0
+                                high: 0.06
+                        value:
+                            tightId: 1
+                correctionLib:
+                    weightName: "NUM_IsoMu27_DEN_CutBasedIdTight_and_PFIsoTight"
+                    eraName: null
+                branchNames:
+                    sf: "MuonHLTWeight"
+                    sfstat: "MuonHLTWeightStat"
+                    sfsyst: "MuonHLTWeightSyst"
             bTagging:
-                btagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
+                btagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
                 algo: "DeepFlav"
-                threshold: 0.2489
+                threshold: 0.3040
                 wp: "Medium"
-                year: "2016postVFP"
+                year: "2017"
                 kinematics:
                     Jet:
                         lohi:
@@ -302,7 +277,7 @@ selection:
                                 low: -2.4
                                 high: 2.4
                             btagDeepFlavB:
-                                low: 0.2598
+                                low: 0.3040
                                 high: 1.0
                         value:
                             jetId: 6
@@ -319,8 +294,11 @@ selection:
                     sfdown: "bTaggingWeightDown"
                 correctionLib:
                     weightName: "deepjet_comb"
-                    eraName: "2016postVFP_UL"
+                    eraName: "2017_UL"
+
     UL2018:
+        gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
+        branchsel: "python/postprocessing/examples/keep_and_drop.txt"     
         cuts:
             - "Sum$(Muon_pt > 27 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=0.06) > 0"
             - "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2783 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
@@ -416,51 +394,3 @@ selection:
                 correctionLib:
                     weightName: "deepjet_comb"
                     eraName: "2018_UL"
-reco:
-    UL2016preVFP:
-        modules:
-            Data: 
-                - Reco
-            MC: 
-                - Reco
-    UL2016postVFP:
-        modules:
-            Data: 
-                - Reco
-            MC: 
-                - Reco
-    UL2018:
-        modules:
-            Data: 
-                - Reco
-            MC: 
-                - Reco
-observables:
-    UL2016preVFP:
-        modules:
-            Data: 
-                - Observables
-            MC: 
-                - Observables
-                - yCalculator
-    UL2018:
-        modules:
-            Data: 
-                - Observables
-
-            MC: 
-                - Observables
-                - yCalculator
-recoBDT: 
-    UL2016preVFP:
-        modules:
-            Data: 
-                - BDTvariable
-            MC: 
-                - BDTvariable
-    UL2018:
-        modules:
-            Data: 
-                - BDTvariable
-            MC: 
-                - BDTvariable
