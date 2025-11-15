@@ -11,6 +11,7 @@ class MuonIDWeightProducer(Module):
         self.muonCut = config['kinematics']['Muon']
         self.clibConfig = config['correctionLib']
         self.bNames = config['branchNames']
+        # print(f"Initialized MuonIDWeightProducer with config: {self.bNames}")
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         """Initialize output branches before event loop starts"""
@@ -43,6 +44,7 @@ class MuonIDWeightProducer(Module):
             IDSF = self.IDeval[self.clibConfig["weightName"]].evaluate(self.clibConfig["eraName"], abs(leading_muon_eta), leading_muon_pt, 'sf')
             IDSFUp = self.IDeval[self.clibConfig["weightName"]].evaluate(self.clibConfig["eraName"], abs(leading_muon_eta), leading_muon_pt, 'systup')
             IDSFDown = self.IDeval[self.clibConfig["weightName"]].evaluate(self.clibConfig["eraName"], abs(leading_muon_eta), leading_muon_pt, 'systdown')
+            # print(f"Leading muon pt: {leading_muon_pt}, eta: {leading_muon_eta}, IDSF: {IDSF}, IDSFUp: {IDSFUp}, IDSFDown: {IDSFDown}")
         else:  # Handle cases where no muons pass the selection
             IDSF = IDSFUp = IDSFDown = 1.0  # Default scale factor
             print("No muons passed the selection. Default scale factors applied.")
@@ -50,6 +52,7 @@ class MuonIDWeightProducer(Module):
         self.out.fillBranch(self.bNames["sf"], IDSF)
         self.out.fillBranch(self.bNames["sfup"], IDSFUp)
         self.out.fillBranch(self.bNames["sfdown"], IDSFDown)
+        # print(f"Filled branches: {self.bNames['sf']}={IDSF}, {self.bNames['sfup']}={IDSFUp}, {self.bNames['sfdown']}={IDSFDown}")
 
         return True  # Keep event
 

@@ -129,6 +129,7 @@ def process_file(data):
     else:
         cut_string = None
     branchselector = conf.get("branchsel", None)
+    goldenJSON = conf.get("gJSON", None)
     modules = []
     noOut = False
     justcount = False
@@ -153,6 +154,7 @@ def process_file(data):
         outputDir,
         files,
         cut=cut_string,
+        jsonInput = goldenJSON,
         branchsel=branchselector,
         modules=modules,  # Add your custom modules if needed
         noOut=False,
@@ -275,7 +277,7 @@ if __name__ == "__main__":
 
     
     # Use multiprocessing to process datasets in parallel
-    num_cores = 15
+    num_cores = 18
     # with Pool(num_cores) as pool:
     #     pool.map(process_file, process_list)
     

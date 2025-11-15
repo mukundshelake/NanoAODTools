@@ -1,0 +1,21 @@
+HLTSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_HLT.json"
+kinematics: 
+    Muon:
+        lohi:
+            pt:
+                low: 29
+                high: 2000
+            eta:
+                low: -2.4
+                high: 2.4
+            pfRelIso04_all:
+                low: -1.0
+                high: 0.06
+        value: 
+            tightId: 1
+correctionLib:
+    weightName: "NUM_IsoMu27_DEN_CutBasedIdTight_and_PFIsoTight"
+branchNames:
+    sf: "MuonHLTWeight"
+    sfstat: "MuonHLTWeightStat"
+    sfsyst: "MuonHLTWeightSyst"

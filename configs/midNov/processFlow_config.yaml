@@ -1,0 +1,70 @@
+tag: "midNov"
+DatasetJSONFolder: "/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets"
+outputDirBase: "/mnt/disk1/skimmed_Run2/"
+
+processFlow:
+    selection:
+      UL2016preVFP:
+        inputStage: "skimmed"
+        inputTag : "nfs"
+      UL2016postVFP:
+        inputStage: "skimmed"
+        inputTag : "nfs"
+      UL2017:
+        inputStage: "skimmed"
+        inputTag : "nfs"
+      UL2018:
+        inputStage: "skimmed"
+        inputTag : "nfs"
+    reco:
+      UL2016preVFP:
+        inputStage: "selection"
+        inputTag : "midNov"
+      UL2016postVFP:
+        inputStage: "selection"
+        inputTag : "midNov"
+      UL2017:
+        inputStage: "selection"
+        inputTag : "midNov"
+      UL2018:
+        inputStage: "selection"
+        inputTag : "midNov"
+    observables:
+      UL2016preVFP:
+        inputStage: "reco"
+        inputTag : "midNov"
+      UL2016postVFP:
+        inputStage: "reco"
+        inputTag : "midNov"
+      UL2017:
+        inputStage: "reco"
+        inputTag : "midNov"
+      UL2018:
+        inputStage: "reco"
+        inputTag : "midNov"
+    BDTvariables:
+      UL2016preVFP:
+        inputStage: "observables"
+        inputTag : "midNov"
+      UL2016postVFP:
+        inputStage: "observables"
+        inputTag : "midNov"
+      UL2017:
+        inputStage: "observables"
+        inputTag : "midNov"
+      UL2018:
+        inputStage: "observables"
+        inputTag : "midNov"
+    BDTScore:
+      UL2016preVFP:
+        inputStage: "BDTvariables"
+        inputTag : "midNov"
+      UL2016postVFP:
+        inputStage: "BDTvariables"
+        inputTag : "midNov"
+      UL2017:
+        inputStage: "BDTvariables"
+        inputTag : "midNov"
+      UL2018:
+        inputStage: "BDTvariables"
+        inputTag : "midNov"

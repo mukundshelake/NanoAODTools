@@ -50,4 +50,8 @@ keep LHEWeight_originalXWGTUP
 keep PSWeight
 keep LHEScaleWeight
 keep LHEPdfWeight
-keep LHEWeight
+keep LHEWeight*
+keep MuonID*
+keep MuonHLT*
+keep bTaggingWeight*
+keep jetPUId*

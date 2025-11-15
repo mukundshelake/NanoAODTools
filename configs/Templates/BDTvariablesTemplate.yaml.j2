@@ -1,0 +1,17 @@
+modules:
+    {% if DataModules is defined and DataModules %}
+    Data:
+    {% for x in DataModules %}
+    - {{ x }}
+    {% endfor %}
+    {% else %}
+    Data: null
+    {% endif %}
+    {% if MCModules is defined and MCModules %}
+    MC:
+    {% for x in MCModules %}
+    - {{ x }}
+    {% endfor %}
+    {% else %}
+    MC: null
+    {% endif %}
