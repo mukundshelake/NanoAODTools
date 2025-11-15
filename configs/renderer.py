@@ -2,13 +2,14 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 import json
 import os
+import socket
 
 def to_nice_yaml(value, indent=0):
     """Convert Python dicts/lists into indented YAML strings"""
     text = yaml.dump(value, default_flow_style=False)
     return text.strip()
 
-def processBDTScoreConfigs(data, env, era):
+def processBDTScoreConfigs(data, env, era, hostname):
     bdtScoreTemplate = env.get_template("BDTScoreTemplate.yaml.j2")
     bdtScoreData = {
         "DataModules": data["modules"]["Data"]["BDTScore"],
@@ -21,7 +22,7 @@ def processBDTScoreConfigs(data, env, era):
         f.write(renderedBDTScore)
     print(f"Rendered {outputDir}/BDTScore_{era}_config.yaml")
 
-def processBDTvariablesConfigs(data, env, era):
+def processBDTvariablesConfigs(data, env, era, hostname):
     bdtVariablesTemplate = env.get_template("BDTvariablesTemplate.yaml.j2")
     bdtVariablesData = {
         "DataModules": data["modules"]["Data"]["BDTvariables"],
@@ -35,7 +36,7 @@ def processBDTvariablesConfigs(data, env, era):
     print(f"Rendered {outputDir}/BDTvariables_{era}_config.yaml")
 
 
-def processobservablesConfigs(data, env, era):
+def processobservablesConfigs(data, env, era, hostname):
     observablesTemplate = env.get_template("observablesTemplate.yaml.j2")
     observablesData = {
         "DataModules": data["modules"]["Data"]["observables"],
@@ -48,7 +49,7 @@ def processobservablesConfigs(data, env, era):
         f.write(renderedObservables)
     print(f"Rendered {outputDir}/observables_{era}_config.yaml")
 
-def processRecoConfigs(data, env, era):
+def processRecoConfigs(data, env, era, hostname):
     recoTemplate = env.get_template("recoTemplate.yaml.j2")
     recoData = {
         "DataModules": data["modules"]["Data"]["reco"],
@@ -61,10 +62,11 @@ def processRecoConfigs(data, env, era):
         f.write(renderedReco)
     print(f"Rendered {outputDir}/reco_{era}_config.yaml")
 
-def processSelectionConfigs(data, env, era):
+def processSelectionConfigs(data, env, era, hostname):
     selectionTemplate = env.get_template("selectionTemplate.yaml.j2")
+    # print(data["gJSONs"][era][hostname])
     selectionData = {
-        "goldenJSON": data["gJSONs"][era],
+        "gJSON": data["gJSONs"][era][hostname],
         "branchFile": data["branchFile"],
 
         "muon_pt_lo": data["muon"]["pt"]["lo"][era],
@@ -84,6 +86,7 @@ def processSelectionConfigs(data, env, era):
         "DataModules": data["modules"]["Data"]["selection"],
         "MCModules": data["modules"]["MC"]["selection"]
     }
+    print(selectionData)
     renderedSelection = selectionTemplate.render(selectionData)
     outputDir = data.get("tag", "outputs")
     os.makedirs(outputDir, exist_ok=True)
@@ -91,10 +94,10 @@ def processSelectionConfigs(data, env, era):
         f.write(renderedSelection)
     print(f"Rendered {outputDir}/selection_{era}_config.yaml")
 
-def processMuonIDWeightConfigs(data, env, era):
+def processMuonIDWeightConfigs(data, env, era, hostname):
     muonIDWeightTemplate = env.get_template("MuonIDWeightTemplate.yaml.j2")
     muonIDWeightData = {
-        "IDSFFile": data["IDSFParams"]["IDSFFile"][era], 
+        "IDSFFile": data["IDSFParams"]["IDSFFile"][era][hostname], 
         "muon_pt_lo": data["muon"]["pt"]["lo"][era],
         "muon_pt_hi": data["muon"]["pt"]["hi"][era],
         "muon_eta_lo": data["muon"]["eta"]["lo"][era],
@@ -115,7 +118,7 @@ def processMuonIDWeightConfigs(data, env, era):
     print(f"Rendered {outputDir}/muonID_{era}_config.yaml")
 
 
-def processlheWeightConfigs(data, env, era):
+def processlheWeightConfigs(data, env, era, hostname):
     lheSignWeightTemplate = env.get_template("lheWeightSignTemplate.yaml.j2")
     lheSignWeightData = {
         "nominalBranch": data["lheWeightSignParams"]["nominalBranch"]
@@ -128,10 +131,10 @@ def processlheWeightConfigs(data, env, era):
     print(f"Rendered {outputDir}/lheWeightSign_{era}_config.yaml")
 
 
-def processMuonHLTWeightConfigs(data, env, era):
+def processMuonHLTWeightConfigs(data, env, era, hostname):
     muonHLTWeightTemplate = env.get_template("MuonHLTWeightTemplate.yaml.j2")
     muonHLTWeightData = {
-        "HLTSFFile": data["HLTSFParams"]["HLTSFFile"][era], 
+        "HLTSFFile": data["HLTSFParams"]["HLTSFFile"][era][hostname], 
         "muon_pt_lo": data["muon"]["pt"]["lo"][era],
         "muon_pt_hi": data["muon"]["pt"]["hi"][era],
         "muon_eta_lo": data["muon"]["eta"]["lo"][era],
@@ -150,12 +153,12 @@ def processMuonHLTWeightConfigs(data, env, era):
         f.write(renderedMuonHLTWeight)
     print(f"Rendered {outputDir}/muonHLT_{era}_config.yaml")
 
-def processbTagWeightConfig(data, env, era):
+def processbTagWeightConfig(data, env, era, hostname):
     bTagWeightTemplate = env.get_template("bTagWeightTemplate.yaml.j2")
     bTagWeightData = {
-        "efficiencyFolder": data["efficiencyFolder"],
+        "efficiencyFolder": data["efficiencyFolder"][hostname],
         "era": era,
-        "bTagSFFile": data["bTagSFParams"]["bTagSFFile"][era],
+        "bTagSFFile": data["bTagSFParams"]["bTagSFFile"][era][hostname],
         "bTagThreshold": data["btag_threshold"][era],
         "nominalBranch": data["bTagSFParams"]["nominalBranch"],
         "upBranch": data["bTagSFParams"]["upBranch"],
@@ -169,9 +172,16 @@ def processbTagWeightConfig(data, env, era):
     print(f"Rendered {outputDir}/bTagging_{era}_config.yaml")
 
 
-def processProcessFlowConfig(data, env):
+def processProcessFlowConfig(data, env, hostname):
     processFlowTemplate = env.get_template("processFlowTemplate.yaml.j2")
-    renderedProcessFlow = processFlowTemplate.render(data)
+    processFlowData = {
+        "tag": data["tag"],
+        "DatasetJSONFolder": data["DatasetJSONFolder"][hostname],
+        "outputDirBase": data["outputDirBase"][hostname],
+        "stages": data["stages"],
+        "eras": data["eras"]
+    }
+    renderedProcessFlow = processFlowTemplate.render(processFlowData)
     outputDir = data.get("tag", "outputs")
     os.makedirs(outputDir, exist_ok=True)
     with open(os.path.join(outputDir, "processFlow_config.yaml"), "w") as f:
@@ -183,18 +193,19 @@ if __name__ == "__main__":
     env.filters["to_nice_yaml"] = to_nice_yaml
     with open("masterConfig.yaml") as f:
         data = yaml.safe_load(f)
-    processProcessFlowConfig(data, env)
+    hostname = socket.gethostname()
+    processProcessFlowConfig(data, env, hostname)
     for era in data["eras"]:
-        processSelectionConfigs(data, env, era)
-        processRecoConfigs(data, env, era)
-        processobservablesConfigs(data, env, era)
-        processBDTvariablesConfigs(data, env, era)
-        processBDTScoreConfigs(data, env, era)
+        processSelectionConfigs(data, env, era, hostname)
+        processRecoConfigs(data, env, era, hostname)
+        processobservablesConfigs(data, env, era, hostname)
+        processBDTvariablesConfigs(data, env, era, hostname)
+        processBDTScoreConfigs(data, env, era, hostname)
 
-        processMuonIDWeightConfigs(data, env, era)
-        processMuonHLTWeightConfigs(data, env, era)
-        processlheWeightConfigs(data, env, era)
-        processbTagWeightConfig(data, env, era)
+        processMuonIDWeightConfigs(data, env, era, hostname)
+        processMuonHLTWeightConfigs(data, env, era, hostname)
+        processlheWeightConfigs(data, env, era, hostname)
+        processbTagWeightConfig(data, env, era, hostname)
 
         for wt in ['jetPUID', 'Reco']:
             outputDir = data.get("tag", "outputs")

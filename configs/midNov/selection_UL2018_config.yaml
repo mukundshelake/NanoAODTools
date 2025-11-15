@@ -1,4 +1,4 @@
-gJSON: ""
+gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
 branchsel: "python/postprocessing/examples/keep_and_drop.txt"
 cuts:
     - "Sum$(Muon_pt > 27 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.06) >= 1"
@@ -13,4 +13,3 @@ modules:
     - muonID
     - muonHLT
     - bTagging
-    - jetPUID

@@ -1,39 +1,105 @@
 {
     "MC_mu": {
-        "QCD_Pt-30To50_MuEnriched": {},
-        "ttbar_SemiLeptonic": {},
-        "DYJetsToLL": {},
-        "Tchannel": {},
-        "QCD_Pt-80To120_MuEnriched": {},
-        "QCD_Pt-1000_MuEnriched": {},
-        "QCD_Pt-600To800_MuEnriched": {},
-        "QCD_Pt-470To600_MuEnriched": {},
-        "WJetsToLNu_1J": {},
-        "tw_top": {},
-        "ZZTo2Q2L": {},
-        "Schannel": {},
-        "WZTo2Q2L": {},
-        "WJetsToLNu_2J": {},
-        "QCD_Pt-800To1000_MuEnriched": {},
-        "QCD_Pt-15To20_MuEnriched": {},
-        "ttbar_FullyLeptonic": {},
-        "Tbarchannel": {},
-        "QCD_Pt-50To80_MuEnriched": {},
-        "WWTolnulnu": {},
-        "QCD_Pt-170To300_MuEnriched": {},
-        "ZZTo2L2Nu": {},
-        "WWTo2L2Nu": {},
-        "WJetsToLNu_0J": {},
-        "QCD_Pt-120To170_MuEnriched": {},
-        "tw_antitop": {},
-        "QCD_Pt-300To470_MuEnriched": {},
-        "QCD_Pt-20To30_MuEnriched": {}
+        "QCD_Pt-30To50_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-30To50_MuEnriched/tree_70_Skim.root": "Events"
+        },
+        "ttbar_SemiLeptonic": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/ttbar_SemiLeptonic/tree_194_Skim.root": "Events"
+        },
+        "DYJetsToLL": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/DYJetsToLL/tree_56_Skim.root": "Events"
+        },
+        "Tchannel": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/Tchannel/tree_194_Skim.root": "Events"
+        },
+        "QCD_Pt-80To120_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-80To120_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-1000_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-1000_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-600To800_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-600To800_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-470To600_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-470To600_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "WJetsToLNu_1J": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WJetsToLNu_1J/tree_67_Skim.root": "Events"
+        },
+        "tw_top": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/tw_top/tree_1_Skim.root": "Events"
+        },
+        "ZZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/ZZTo2Q2L/tree_1_Skim.root": "Events"
+        },
+        "Schannel": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/Schannel/tree_1_Skim.root": "Events"
+        },
+        "WZTo2Q2L": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WZTo2Q2L/tree_1_Skim.root": "Events"
+        },
+        "WJetsToLNu_2J": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WJetsToLNu_2J/tree_7_Skim.root": "Events"
+        },
+        "QCD_Pt-800To1000_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-800To1000_MuEnriched/tree_64_Skim.root": "Events"
+        },
+        "QCD_Pt-15To20_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-15To20_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "ttbar_FullyLeptonic": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/ttbar_FullyLeptonic/tree_65_Skim.root": "Events"
+        },
+        "Tbarchannel": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/Tbarchannel/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-50To80_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-50To80_MuEnriched/tree_1_Skim.root": "Events"
+        },
+        "WWTolnulnu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WWTolnulnu/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-170To300_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-170To300_MuEnriched/tree_65_Skim.root": "Events"
+        },
+        "ZZTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/ZZTo2L2Nu/tree_1_Skim.root": "Events"
+        },
+        "WWTo2L2Nu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WWTo2L2Nu/tree_1_Skim.root": "Events"
+        },
+        "WJetsToLNu_0J": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/WJetsToLNu_0J/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-120To170_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-120To170_MuEnriched/tree_65_Skim.root": "Events"
+        },
+        "tw_antitop": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/tw_antitop/tree_1_Skim.root": "Events"
+        },
+        "QCD_Pt-300To470_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-300To470_MuEnriched/tree_65_Skim.root": "Events"
+        },
+        "QCD_Pt-20To30_MuEnriched": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/MC_mu/QCD_Pt-20To30_MuEnriched/tree_65_Skim.root": "Events"
+        }
     },
     "Data_mu": {
-        "Run2017D_mu": {},
-        "Run2017B_mu": {},
-        "Run2017E_mu": {},
-        "Run2017C_mu": {},
-        "Run2017F_mu": {}
+        "Run2017D_mu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/Data_mu/Run2017D_mu/tree_156_Skim.root": "Events"
+        },
+        "Run2017B_mu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/Data_mu/Run2017B_mu/tree_95_Skim.root": "Events"
+        },
+        "Run2017E_mu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/Data_mu/Run2017E_mu/tree_220_Skim.root": "Events"
+        },
+        "Run2017C_mu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/Data_mu/Run2017C_mu/tree_145_Skim.root": "Events"
+        },
+        "Run2017F_mu": {
+            "/mnt/disk1/skimmed_Run2/selection/midNov/UL2017/Data_mu/Run2017F_mu/tree_183_Skim.root": "Events"
+        }
     }
 }

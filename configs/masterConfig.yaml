@@ -1,7 +1,16 @@
 tag : 'midNov'
-DatasetJSONFolder : '/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
-outputDirBase : '/mnt/disk1/skimmed_Run2/'
-efficiencyFolder : '/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
+DatasetJSONFolder:
+  ehep154.ehep.tifr.res.in: '/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
+  localhost.localdomain: 'nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
+DatasetJSONFolder : 
+  ehep154.ehep.tifr.res.in: '/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
+  localhost.localdomain: 'nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
+outputDirBase : 
+  ehep154.ehep.tifr.res.in: '/mnt/disk1/skimmed_Run2/'
+  localhost.localdomain: '/mnt/disk1/skimmed_Run2/'
+efficiencyFolder : 
+  ehep154.ehep.tifr.res.in: '/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
+  localhost.localdomain: '/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
 
 eras:
   - UL2016preVFP
@@ -18,10 +27,18 @@ stages:
   - BDTScore
 
 gJSONs:
-  UL2016preVFP: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
-  UL2016postVFP: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
-  UL2017: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
-  UL2018: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
+  UL2016preVFP:
+    ehep154.ehep.tifr.res.in: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+    localhost.localdomain: "/nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+  UL2016postVFP:
+    ehep154.ehep.tifr.res.in: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+    localhost.localdomain: "/nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+  UL2017:
+    ehep154.ehep.tifr.res.in: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
+    localhost.localdomain: "/nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.json"
+  UL2018:
+    ehep154.ehep.tifr.res.in: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
+    localhost.localdomain: "/nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.json"
 
 branchFile: "python/postprocessing/examples/keep_and_drop.txt"
 
@@ -139,10 +156,18 @@ modules:
 
 IDSFParams:
   IDSFFile:
-    UL2016preVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_ID.json"
-    UL2016postVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_ID.json"
-    UL2017: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_ID.json"
-    UL2018: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_ID.json"
+    UL2016preVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_ID.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_ID.json"
+    UL2016postVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_ID.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_ID.json"
+    UL2017:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_ID.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_ID.json"
+    UL2018:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_ID.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_ID.json"
   weightName: "NUM_TightID_DEN_TrackerMuons"
   eraName:
     UL2016preVFP: "2016preVFP_UL"
@@ -155,10 +180,18 @@ IDSFParams:
 
 HLTSFParams:
   HLTSFFile:
-    UL2016preVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_HLT.json"
-    UL2016postVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_HLT.json"
-    UL2017: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_HLT.json"
-    UL2018: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_HLT.json"
+    UL2016preVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_HLT.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_HLT.json"
+    UL2016postVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_HLT.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_HLT.json"
+    UL2017:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_HLT.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_mu_HLT.json"
+    UL2018:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_HLT.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_mu_HLT.json"
   weightName: 
     UL2016preVFP: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
     UL2016postVFP: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -173,10 +206,18 @@ lheWeightSignParams:
 
 bTagSFParams:
   bTagSFFile: 
-    UL2016preVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
-    UL2016postVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
-    UL2017: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
-    UL2018: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_jet_Btagging.json"
+    UL2016preVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
+    UL2016postVFP:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
+    UL2017:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
+    UL2018:
+      ehep154.ehep.tifr.res.in: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_jet_Btagging.json"
+      localhost.localdomain: "/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_jet_Btagging.json"
   nominalBranch: "bTaggingWeight"
   upBranch: "bTaggingWeightUp"
   downBranch: "bTaggingWeightDown"
