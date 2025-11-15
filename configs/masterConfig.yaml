@@ -7,7 +7,7 @@ DatasetJSONFolder :
   localhost.localdomain: '/nfs/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
 outputDirBase : 
   ehep154.ehep.tifr.res.in: '/mnt/disk1/skimmed_Run2/'
-  localhost.localdomain: '/mnt/disk1/skimmed_Run2/'
+  localhost.localdomain: '/home/mukund/outputs'
 efficiencyFolder : 
   ehep154.ehep.tifr.res.in: '/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
   localhost.localdomain: '/nfs/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
