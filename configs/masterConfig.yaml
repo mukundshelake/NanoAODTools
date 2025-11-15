@@ -1,6 +1,8 @@
 tag : 'midNov'
 DatasetJSONFolder : '/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets'
 outputDirBase : '/mnt/disk1/skimmed_Run2/'
+efficiencyFolder : '/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency'
+
 eras:
   - UL2016preVFP
   - UL2016postVFP
@@ -114,7 +116,6 @@ modules:
       - muonID
       - muonHLT
       - bTagging
-      - jetPUID
     reco:
       - Reco
     observables:
@@ -169,3 +170,13 @@ HLTSFParams:
 
 lheWeightSignParams:
   nominalBranch: "LHEWeightSign"
+
+bTagSFParams:
+  bTagSFFile: 
+    UL2016preVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_jet_Btagging.json"
+    UL2016postVFP: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
+    UL2017: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
+    UL2018: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2018_jet_Btagging.json"
+  nominalBranch: "bTaggingWeight"
+  upBranch: "bTaggingWeightUp"
+  downBranch: "bTaggingWeightDown"

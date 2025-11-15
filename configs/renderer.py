@@ -150,6 +150,25 @@ def processMuonHLTWeightConfigs(data, env, era):
         f.write(renderedMuonHLTWeight)
     print(f"Rendered {outputDir}/muonHLT_{era}_config.yaml")
 
+def processbTagWeightConfig(data, env, era):
+    bTagWeightTemplate = env.get_template("bTagWeightTemplate.yaml.j2")
+    bTagWeightData = {
+        "efficiencyFolder": data["efficiencyFolder"],
+        "era": era,
+        "bTagSFFile": data["bTagSFParams"]["bTagSFFile"][era],
+        "bTagThreshold": data["btag_threshold"][era],
+        "nominalBranch": data["bTagSFParams"]["nominalBranch"],
+        "upBranch": data["bTagSFParams"]["upBranch"],
+        "downBranch": data["bTagSFParams"]["downBranch"]
+    }
+    renderedbTagWeight = bTagWeightTemplate.render(bTagWeightData)
+    outputDir = data.get("tag", "outputs")
+    os.makedirs(outputDir, exist_ok=True)
+    with open(os.path.join(outputDir, f"bTagging_{era}_config.yaml"), "w") as f:
+        f.write(renderedbTagWeight)
+    print(f"Rendered {outputDir}/bTagging_{era}_config.yaml")
+
+
 def processProcessFlowConfig(data, env):
     processFlowTemplate = env.get_template("processFlowTemplate.yaml.j2")
     renderedProcessFlow = processFlowTemplate.render(data)
@@ -175,8 +194,9 @@ if __name__ == "__main__":
         processMuonIDWeightConfigs(data, env, era)
         processMuonHLTWeightConfigs(data, env, era)
         processlheWeightConfigs(data, env, era)
+        processbTagWeightConfig(data, env, era)
 
-        for wt in ['bTagging', 'jetPUID', 'Reco']:
+        for wt in ['jetPUID', 'Reco']:
             outputDir = data.get("tag", "outputs")
             with open(os.path.join(outputDir, f"{wt}_{era}_config.yaml"), "w") as f:
                 f.write("Test: test")

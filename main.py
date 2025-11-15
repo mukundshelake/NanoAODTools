@@ -23,8 +23,8 @@ def load_yaml_config(filePath):
     return config
 
 
-def processFolder(tag, stage, era):
-    baseD = os.path.join("/mnt/disk1/skimmed_Run2", stage, tag, era)
+def processFolder(outputDirBase, tag, stage, era, datasetsFolder):
+    baseD = os.path.join(outputDirBase, stage, tag, era)
     if not os.path.exists(baseD):
         logging.error(f"Fileset directory does not exist: {baseD}")
     jsonDic = {}
@@ -39,7 +39,7 @@ def processFolder(tag, stage, era):
                         jsonDic[DataMC][key][fileTotalPath] = "Events"
                     else:
                         logging.warning(f"Skipping unhealthy file while making JSON: {os.path.join(baseD, DataMC, key, file)}")
-    jsonFile = os.path.join("Datasets", f"{tag}_{stage}_{era}_dataFiles.json")
+    jsonFile = os.path.join(datasetsFolder, f"{tag}_{stage}_{era}_dataFiles.json")
     with open(jsonFile, 'w') as jf:
         json.dump(jsonDic, jf, indent=4)
     logging.info(f"Wrote JSON file: {jsonFile}")
@@ -67,8 +67,8 @@ def load_module(module_name, era, key=None, config=None):
         loaded = muonHLTWeightModule(config)
     elif module_name == "bTagging":
         # logging.info(f"Loading {module_name} module configs {config}")
-        from python.postprocessing.examples.bTaggingWeights import bTaggingWeightModule
-        loaded = bTaggingWeightModule(era, key)
+        from python.postprocessing.modules.custom.bTaggingWeight import bTaggingWeightModule
+        loaded = bTaggingWeightModule(config, key)
     elif module_name == "jetPUID":
         # logging.info(f"Loading {module_name} module configs {config}")
         from python.postprocessing.examples.JetPUIdWeightModule import jetPUIdWeightModule
@@ -134,6 +134,7 @@ def process_file(data):
     stage, era, DataMC, key, outputDir, file, configDir = data
     stage_era_configPath = os.path.join(configDir, f"{stage}_{era}_config.yaml")
     conf = load_yaml_config(stage_era_configPath)
+    
 
     files = [file]
     cuts = conf.get("cuts", None)
@@ -216,6 +217,7 @@ if __name__ == "__main__":
     runSample = args.sample
     logging.info(f"Using era: {args.era}")
     logging.info(f"Using output tag: {outputTag}")
+
     if runSample:
         logging.info("Running in sample mode: will process only one file from each dataset")
     if include_key_pattern:
@@ -292,7 +294,7 @@ if __name__ == "__main__":
                                 break
                         else:
                             logging.warning(f"Skipping unhealthy input file: {file}")
-            processFolder(tag, stage, era)
+            processFolder(outputDirBase, tag, stage, era, datasetsFolder)
     logging.info(f"Total files to process: {len(process_list)}")
     if len(process_list) == 0:
         logging.info("No files to process. Exiting.")

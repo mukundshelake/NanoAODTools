@@ -1,1 +1,9 @@
-Test: test
+bTagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2017_jet_Btagging.json"
+efficiencyFolder : "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency"
+era : "UL2017"
+bTagThreshold : 0.304
+branchNames:
+    sf: "bTaggingWeight"
+    sfup: "bTaggingWeightUp"
+    sfdown: "bTaggingWeightDown"
+        

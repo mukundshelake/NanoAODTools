@@ -2,38 +2,33 @@ from PhysicsTools.NanoAODTools.postprocessing.framework.eventloop import Module
 from PhysicsTools.NanoAODTools.postprocessing.framework.datamodel import Collection
 import correctionlib
 import numpy as np
+import os
 import awkward as ak
 from coffea.lookup_tools import extractor
 class bTaggingWeightProducer(Module):
-    def __init__(self, era, channel):
+    def __init__(self, config, channel):
         super().__init__()
-        self.era = era
+        self.era = config['era']
         self.channel = channel
-        effiFile = f"/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency/{era}/{channel}.root"
-        bTaggingFile = f"/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/{era}_jet_Btagging.json"
+        effiFolder = config['efficiencyFolder']
+        effiFile = os.path.join(effiFolder, config['era'], f"{channel}.root")
+        bTaggingFile = config['bTagSFFile']
         self.bTageval = correctionlib.CorrectionSet.from_file(bTaggingFile)
         b_eff_ext = extractor()
         b_eff_ext.add_weight_sets(["* * "+effiFile])
         b_eff_ext.finalize()
         self.b_eff_evaluator = b_eff_ext.make_evaluator()
+        self.bNames = config['branchNames']
+        self.bTagThreshold = config['bTagThreshold']
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         """Initialize output branches before event loop starts"""
         self.out = wrappedOutputTree
-        self.out.branch("bTaggingWeight", "F")
-        self.out.branch("bTaggingWeightUp", "F")
-        self.out.branch("bTaggingWeightDown", "F")
+        self.out.branch(self.bNames["sf"], "F")
+        self.out.branch(self.bNames["sfup"], "F")
+        self.out.branch(self.bNames["sfdown"], "F")
 
     def analyze(self, event):
-        maps = {
-            'btagThreshold': {
-                'UL2016preVFP': 0.2598,
-                'UL2016postVFP': 0.2489,
-                'UL2017': 0.3040,
-                'UL2018': 0.2783,
-            }
-        }
-        """Process each event and compute highest muon pt"""
         jets = Collection(event, "Jet")
         jets = [jet for jet in jets if jet.pt > 25 and abs(jet.eta) < 2.4 and jet.jetId ==6 and (jet.puId > 0 or jet.pt > 50)]
 
@@ -42,7 +37,7 @@ class bTaggingWeightProducer(Module):
         bTagWeightDown = 1.0
 
         for jet in jets:
-            if jet.btagDeepFlavB > maps['btagThreshold'][self.era]: # They are b-tagged
+            if jet.btagDeepFlavB > self.bTagThreshold: # They are b-tagged
                 if (jet.hadronFlavour == 5 or jet.hadronFlavour == 4):
                     weight = self.bTageval['deepJet_mujets'].evaluate('central', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     weightUp = self.bTageval['deepJet_mujets'].evaluate('up', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
@@ -98,11 +93,11 @@ class bTaggingWeightProducer(Module):
                     bTagWeightUp *= weightUp
                     bTagWeightDown *= weightDown
         
-        self.out.fillBranch("bTaggingWeight", bTagWeight)
-        self.out.fillBranch("bTaggingWeightUp", bTagWeightUp)
-        self.out.fillBranch("bTaggingWeightDown", bTagWeightDown)
+        self.out.fillBranch(self.bNames["sf"], bTagWeight)
+        self.out.fillBranch(self.bNames["sfup"], bTagWeightUp)
+        self.out.fillBranch(self.bNames["sfdown"], bTagWeightDown)
 
         return True  # Keep event
 
-def bTaggingWeightModule(era, channel):
-    return bTaggingWeightProducer(era, channel)
+def bTaggingWeightModule(config, channel):
+    return bTaggingWeightProducer(config, channel)
