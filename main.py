@@ -39,7 +39,7 @@ def processFolder(tag, stage, era):
                         jsonDic[DataMC][key][fileTotalPath] = "Events"
                     else:
                         logging.warning(f"Skipping unhealthy file while making JSON: {os.path.join(baseD, DataMC, key, file)}")
-    jsonFile = os.path.join("/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets", f"{tag}_{stage}_{era}_dataFiles.json")
+    jsonFile = os.path.join("Datasets", f"{tag}_{stage}_{era}_dataFiles.json")
     with open(jsonFile, 'w') as jf:
         json.dump(jsonDic, jf, indent=4)
     logging.info(f"Wrote JSON file: {jsonFile}")
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     if exclude_tree_pattern:
         logging.info(f"Excluding files matching: {args.excludeTrees}")
 
-    configDir = os.path.join("/home/mukund/Projects/SkimandSlim/NanoAODTools/configs/", f"{outputTag}")
+    configDir = os.path.join("configs", f"{outputTag}")
 
     processFlowPath = os.path.join(configDir, "processFlow_config.yaml")
 
