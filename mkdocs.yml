@@ -1,1 +1,25 @@
-site_name: My Docs
+site_name: MyProject Documentation
+repo_url: https://github.com/mukundshelake/NanoAODTools
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+
+nav:
+  - Home: index.md
+  - Installation: install.md
+  - Usage: usage.md
+  - API Reference:
+      - myproject: api.md
+
