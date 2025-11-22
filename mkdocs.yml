@@ -20,6 +20,14 @@ nav:
   - Home: index.md
   - Installation: install.md
   - Usage: usage.md
+  - Stages:
+      - Skimmed: Stages/Skimmed.md
+      - Selection: Stages/Selection.md
+      - Reconstruction: Stages/Reconstruction.md
+      - Observables: Stages/Observables.md
+      - BDT Variables: Stages/BDT-Variables.md
+      - BDT Score: Stages/BDT-Implementation.md
   - API Reference:
       - myproject: api.md
+  
 

@@ -1,0 +1,1 @@
+It is called as 'skimmed' in configurations.
