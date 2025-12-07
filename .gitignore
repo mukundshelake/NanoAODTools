@@ -10,5 +10,3 @@ build
 *.pcm
 *.root
 site/
-SFs/**/*.json
-SFs/**/*.gz

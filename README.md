@@ -9,8 +9,9 @@ This repository and the instructions below are still relevant only for older CMS
 
 You need to setup python 2.7 and a recent ROOT version first.
 
-    git clone https://github.com/cms-nanoAOD/nanoAOD-tools.git NanoAODTools
-    cd NanoAODTools
+    git lfs install
+    git clone git@github.com:mukundshelake/NanoAODTools.git PhysicsTools/NanoAODTools
+    cd PhysicsTools/NanoAODTools
     bash standalone/env_standalone.sh build
     source standalone/env_standalone.sh
 
@@ -21,7 +22,8 @@ Please never commit neither the build directory, nor the empty init.py files cre
 ## Checkout instructions: CMSSW (CMSSW 12X and below)
 
     cd $CMSSW_BASE/src
-    git clone https://github.com/cms-nanoAOD/nanoAOD-tools.git PhysicsTools/NanoAODTools
+    git lfs install
+    git clone git@github.com:mukundshelake/NanoAODTools.git PhysicsTools/NanoAODTools
     cd PhysicsTools/NanoAODTools
     cmsenv
     scram b
@@ -90,5 +92,17 @@ Now, let's have a look at another example, `python/postprocessing/examples/mhtju
 python scripts/nano_postproc.py outDir /eos/cms/store/user/andrey/f.root -I PhysicsTools.NanoAODTools.postprocessing.examples.mhtjuProducerCpp mhtju
 ```
 This module has the same structure of its producer as `exampleProducer`, but in addition it utilizes a C++ code to calculate the mht variable, `src/mhtjuProducerCppWorker.cc`. This code is loaded in the `__init__` method of the producer.
+
+### Documentation
+* Serve locally (auto-reload on changes)
+`mkdocs serve`
+
+* Open in browser: http://127.0.0.1:8000
+
+* Build static site
+`mkdocs build`
+
+* Deploy to GitHub Pages
+`mkdocs gh-deploy`
 
 
