@@ -1,4 +1,4 @@
-HLTSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016preVFP_mu_HLT.json"
+HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
 kinematics: 
     Muon:
         lohi:

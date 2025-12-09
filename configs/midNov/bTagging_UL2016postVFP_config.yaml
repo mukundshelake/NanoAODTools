@@ -1,5 +1,5 @@
-bTagSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_jet_Btagging.json"
-efficiencyFolder : "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/Efficiency"
+bTagSFFile: "SFs/UL2016postVFP_jet_Btagging.json"
+efficiencyFolder : "SFs/Efficiency"
 era : "UL2016postVFP"
 bTagThreshold : 0.2489
 branchNames:

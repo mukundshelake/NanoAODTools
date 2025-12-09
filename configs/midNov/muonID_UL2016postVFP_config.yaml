@@ -1,4 +1,4 @@
-IDSFFile: "/home/mukund/Projects/updatedCoffea/Coffea_Analysis/src/SFs/UL2016postVFP_mu_ID.json"
+IDSFFile: "SFs/UL2016postVFP_mu_ID.json"
 kinematics: 
     Muon:
         lohi:

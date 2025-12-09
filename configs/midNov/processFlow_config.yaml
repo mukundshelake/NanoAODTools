@@ -1,5 +1,5 @@
 tag: "midNov"
-DatasetJSONFolder: "/home/mukund/Projects/SkimandSlim/NanoAODTools/Datasets"
+DatasetJSONFolder: "Datasets"
 outputDirBase: "/mnt/disk1/skimmed_Run2/"
 
 processFlow:

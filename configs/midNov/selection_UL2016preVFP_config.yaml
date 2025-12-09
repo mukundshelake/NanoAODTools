@@ -1,4 +1,4 @@
-gJSON: "/home/mukund/Projects/SkimandSlim/NanoAODTools/goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
+gJSON: "goldenJSONs/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.json"
 branchsel: "python/postprocessing/examples/keep_and_drop.txt"
 cuts:
     - "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.06) >= 1"
