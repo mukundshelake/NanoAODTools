@@ -1,0 +1,30 @@
+{
+  "Run2018A_mu": {
+    "n_lumisections": 55392,
+    "query": "/SingleMuon/Run2018A-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+    "recorded_lumi_pb": 14026.707130881,
+    "run_max": 316995,
+    "run_min": 315257
+  },
+  "Run2018B_mu": {
+    "n_lumisections": 26187,
+    "query": "/SingleMuon/Run2018B-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+    "recorded_lumi_pb": 7060.668849682,
+    "run_max": 319310,
+    "run_min": 317080
+  },
+  "Run2018C_mu": {
+    "n_lumisections": 26183,
+    "query": "/SingleMuon/Run2018C-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+    "recorded_lumi_pb": 6891.784973515,
+    "run_max": 320065,
+    "run_min": 319337
+  },
+  "Run2018D_mu": {
+    "n_lumisections": 125773,
+    "query": "/SingleMuon/Run2018D-UL2018_MiniAODv2_NanoAODv9-v1/NANOAOD",
+    "recorded_lumi_pb": 31835.092468996,
+    "run_max": 325175,
+    "run_min": 320500
+  }
+}

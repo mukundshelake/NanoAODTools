@@ -1,0 +1,117 @@
+{
+  "eras": {
+    "2016 postVFP": {
+      "rows": [
+        {
+          "run_range": "278769\u2013278808",
+          "dataset": "/SingleMuon/Run2016F-UL2016_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 0.418120616481
+        },
+        {
+          "run_range": "278820\u2013280385",
+          "dataset": "/SingleMuon/Run2016G-UL2016_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 7.652808365558
+        },
+        {
+          "run_range": "281613\u2013284044",
+          "dataset": "/SingleMuon/Run2016H-UL2016_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 8.739883635677002
+        }
+      ],
+      "era_run_range": "278769\u2013284044",
+      "era_lumi_fb": 16.810812617716003
+    },
+    "2016 preVFP": {
+      "rows": [
+        {
+          "run_range": "273150\u2013275376",
+          "dataset": "/SingleMuon/Run2016B-ver2_HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 5.82423561376
+        },
+        {
+          "run_range": "275656\u2013276283",
+          "dataset": "/SingleMuon/Run2016C-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 2.6016698644439997
+        },
+        {
+          "run_range": "276315\u2013276811",
+          "dataset": "/SingleMuon/Run2016D-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 4.285851495814001
+        },
+        {
+          "run_range": "276831\u2013277420",
+          "dataset": "/SingleMuon/Run2016E-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 4.065974638614
+        },
+        {
+          "run_range": "277932\u2013278807",
+          "dataset": "/SingleMuon/Run2016F-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 2.717344923364
+        }
+      ],
+      "era_run_range": "273150\u2013278807",
+      "era_lumi_fb": 19.495076535996
+    },
+    "2017": {
+      "rows": [
+        {
+          "run_range": "297047\u2013299329",
+          "dataset": "/SingleMuon/Run2017B-UL2017_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 4.803363110197001
+        },
+        {
+          "run_range": "299368\u2013302029",
+          "dataset": "/SingleMuon/Run2017C-UL2017_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 9.572666847999
+        },
+        {
+          "run_range": "302031\u2013302663",
+          "dataset": "/SingleMuon/Run2017D-UL2017_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 4.247682053019
+        },
+        {
+          "run_range": "303824\u2013304797",
+          "dataset": "/SingleMuon/Run2017E-UL2017_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 9.312832061407
+        },
+        {
+          "run_range": "305040\u2013306462",
+          "dataset": "/SingleMuon/Run2017F-UL2017_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 13.538886094049
+        }
+      ],
+      "era_run_range": "297047\u2013306462",
+      "era_lumi_fb": 41.475430166671
+    },
+    "2018": {
+      "rows": [
+        {
+          "run_range": "315257\u2013316995",
+          "dataset": "/SingleMuon/Run2018A-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 14.026707130880999
+        },
+        {
+          "run_range": "317080\u2013319310",
+          "dataset": "/SingleMuon/Run2018B-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 7.060668849682
+        },
+        {
+          "run_range": "319337\u2013320065",
+          "dataset": "/SingleMuon/Run2018C-UL2018_MiniAODv2_NanoAODv9-v2/NANOAOD",
+          "lumi_fb": 6.8917849735150005
+        },
+        {
+          "run_range": "320500\u2013325175",
+          "dataset": "/SingleMuon/Run2018D-UL2018_MiniAODv2_NanoAODv9-v1/NANOAOD",
+          "lumi_fb": 31.835092468996002
+        }
+      ],
+      "era_run_range": "315257\u2013325175",
+      "era_lumi_fb": 59.814253423074
+    }
+  },
+  "sum_total": {
+    "run_range": "273150\u2013325175",
+    "lumi_fb": 137.59557274345698
+  }
+}
