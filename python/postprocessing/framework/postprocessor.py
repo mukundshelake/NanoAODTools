@@ -101,15 +101,15 @@ class PostProcessor:
         if not self.noOut:
 
             if self.compression != "none":
-                ROOT.gInterpreter.ProcessLine("#include <Compression.h>")
                 (algo, level) = self.compression.split(":")
                 compressionLevel = int(level)
+                # Use integer values directly for better compatibility
                 if algo == "LZMA":
-                    compressionAlgo = ROOT.ROOT.kLZMA
+                    compressionAlgo = 2  # ROOT::kLZMA
                 elif algo == "ZLIB":
-                    compressionAlgo = ROOT.ROOT.kZLIB
+                    compressionAlgo = 1  # ROOT::kZLIB
                 elif algo == "LZ4":
-                    compressionAlgo = ROOT.ROOT.kLZ4
+                    compressionAlgo = 4  # ROOT::kLZ4
                 else:
                     raise RuntimeError("Unsupported compression %s" % algo)
             else:

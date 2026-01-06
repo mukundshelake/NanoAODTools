@@ -71,7 +71,7 @@ def processSelectionConfigs(data, env, era, hostname):
 
         "muon_pt_lo": data["muon"]["pt"]["lo"][era],
         "muon_abs_eta_hi": data["muon"]["abs_eta"]["hi"][era],
-        "muon_iso_hi": data["muon"]["iso"]["hi"][era],
+        # "muon_iso_hi": data["muon"]["iso"]["hi"][era],
 
         "jet_pt_lo": data["jet"]["pt"]["lo"][era],
         "jet_abs_eta_hi": data["jet"]["abs_eta"]["hi"][era],
@@ -102,8 +102,8 @@ def processMuonIDWeightConfigs(data, env, era, hostname):
         "muon_pt_hi": data["muon"]["pt"]["hi"][era],
         "muon_eta_lo": data["muon"]["eta"]["lo"][era],
         "muon_eta_hi": data["muon"]["eta"]["hi"][era],
-        "muon_iso_lo": data["muon"]["iso"]["lo"][era],
-        "muon_iso_hi": data["muon"]["iso"]["hi"][era],
+        # "muon_iso_lo": data["muon"]["iso"]["lo"][era],
+        # "muon_iso_hi": data["muon"]["iso"]["hi"][era],
         "weightName": data["IDSFParams"]["weightName"],
         "eraName": data["IDSFParams"]["eraName"][era],
         "nominalBranch": data["IDSFParams"]["nominalBranch"],
@@ -139,8 +139,8 @@ def processMuonHLTWeightConfigs(data, env, era, hostname):
         "muon_pt_hi": data["muon"]["pt"]["hi"][era],
         "muon_eta_lo": data["muon"]["eta"]["lo"][era],
         "muon_eta_hi": data["muon"]["eta"]["hi"][era],
-        "muon_iso_lo": data["muon"]["iso"]["lo"][era],
-        "muon_iso_hi": data["muon"]["iso"]["hi"][era],
+        # "muon_iso_lo": data["muon"]["iso"]["lo"][era],
+        # "muon_iso_hi": data["muon"]["iso"]["hi"][era],
         "weightName": data["HLTSFParams"]["weightName"][era],
         "nominalBranch": data["HLTSFParams"]["nominalBranch"],
         "statBranch": data["HLTSFParams"]["statBranch"],
@@ -189,7 +189,13 @@ def processProcessFlowConfig(data, env, hostname):
     print(f"Rendered {outputDir}/processFlow_config.yaml")
 
 if __name__ == "__main__":
-    env = Environment(loader=FileSystemLoader("Templates"), trim_blocks=True, lstrip_blocks=True)
+    env = Environment(
+        loader=FileSystemLoader("Templates"), 
+        trim_blocks=True, 
+        lstrip_blocks=True,
+        auto_reload=True,  # Enable auto-reloading
+        cache_size=0       # Disable template cache
+    )
     env.filters["to_nice_yaml"] = to_nice_yaml
     with open("masterConfig.yaml") as f:
         data = yaml.safe_load(f)

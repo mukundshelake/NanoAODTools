@@ -1,7 +1,7 @@
 gJSON: "{{gJSON}}"
 branchsel: "{{branchFile}}"
 cuts:
-    - "Sum$(Muon_pt > {{ muon_pt_lo }} && abs(Muon_eta) < {{ muon_abs_eta_hi }} && Muon_tightId && Muon_pfRelIso04_all <= {{ muon_iso_hi}}) >= {{ atleast_n_muons }}"
+    - "Sum$(Muon_pt > {{ muon_pt_lo }} && abs(Muon_eta) < {{ muon_abs_eta_hi }} && Muon_tightId) >= {{ atleast_n_muons }}"
     - "Sum$(Jet_pt > {{ jet_pt_lo }} && abs(Jet_eta) < {{ jet_abs_eta_hi }} && Jet_btagDeepFlavB > {{btag_threshold}} && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= {{ atleast_n_btagged_jets }}"
     - "Sum$(Jet_pt > {{ jet_pt_lo }} && abs(Jet_eta) < {{ jet_abs_eta_hi }} && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= {{ atleast_n_jets }}"
     - "{{ hltFlag }}"

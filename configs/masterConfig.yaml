@@ -1,4 +1,4 @@
-tag : 'midNov'
+tag : 'earlyJan'
 DatasetJSONFolder:
   ehep154.ehep.tifr.res.in: 'Datasets'
   localhost.localdomain: 'Datasets'
@@ -7,7 +7,7 @@ DatasetJSONFolder :
   localhost.localdomain: 'Datasets'
 outputDirBase : 
   ehep154.ehep.tifr.res.in: '/mnt/disk1/skimmed_Run2/'
-  localhost.localdomain: '/home/mukund/outputs'
+  localhost.localdomain: '/home/irfan/mukund/Projects/outputs'
 efficiencyFolder : 
   ehep154.ehep.tifr.res.in: 'SFs/Efficiency'
   localhost.localdomain: 'SFs/Efficiency'
@@ -100,17 +100,17 @@ muon:
       UL2016postVFP: 2.4
       UL2017: 2.4
       UL2018: 2.4
-  iso:
-    hi:
-      UL2016preVFP: 0.06
-      UL2016postVFP: 0.06
-      UL2017: 0.06
-      UL2018: 0.06
-    lo:
-      UL2016preVFP: -1.0
-      UL2016postVFP: -1.0
-      UL2017: -1.0
-      UL2018: -1.0
+  # iso:
+  #   hi:
+  #     UL2016preVFP: 0.06
+  #     UL2016postVFP: 0.06
+  #     UL2017: 0.06
+  #     UL2018: 0.06
+  #   lo:
+  #     UL2016preVFP: -1.0
+  #     UL2016postVFP: -1.0
+  #     UL2017: -1.0
+  #     UL2018: -1.0
 
 jet:
   pt:

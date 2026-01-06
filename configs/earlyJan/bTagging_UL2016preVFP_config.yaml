@@ -1,0 +1,9 @@
+bTagSFFile: "SFs/UL2016preVFP_jet_Btagging.json"
+efficiencyFolder : "SFs/Efficiency"
+era : "UL2016preVFP"
+bTagThreshold : 0.2598
+branchNames:
+    sf: "bTaggingWeight"
+    sfup: "bTaggingWeightUp"
+    sfdown: "bTaggingWeightDown"
+        

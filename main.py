@@ -181,6 +181,7 @@ def process_file(data):
         modules=modules, 
         noOut=False,
         justcount=False,
+        compression="ZLIB:9",  # Use ZLIB instead of LZMA for compatibility
     )   
     # Run the PostProcessor
     post_processor.run()

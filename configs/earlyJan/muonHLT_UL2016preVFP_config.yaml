@@ -1,0 +1,18 @@
+HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
+kinematics: 
+    Muon:
+        lohi:
+            pt:
+                low: 26
+                high: 2000
+            eta:
+                low: -2.4
+                high: 2.4
+        value: 
+            tightId: 1
+correctionLib:
+    weightName: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
+branchNames:
+    sf: "MuonHLTWeight"
+    sfstat: "MuonHLTWeightStat"
+    sfsyst: "MuonHLTWeightSyst"

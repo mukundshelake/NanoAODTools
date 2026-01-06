@@ -1,0 +1,20 @@
+IDSFFile: "SFs/UL2017_mu_ID.json"
+kinematics: 
+    Muon:
+        lohi:
+            pt:
+                low: 29
+                high: 2000
+            eta:
+                low: -2.4
+                high: 2.4
+        value: 
+            tightId: 1
+correctionLib:
+    weightName: "NUM_TightID_DEN_TrackerMuons"
+    eraName: "2017_UL"
+branchNames:
+    sf: "MuonIDWeight"
+    sfup: "MuonIDWeightUp"
+    sfdown: "MuonIDWeightDown"
+        

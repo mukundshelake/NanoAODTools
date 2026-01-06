@@ -1,0 +1,9 @@
+bTagSFFile: "SFs/UL2018_jet_Btagging.json"
+efficiencyFolder : "SFs/Efficiency"
+era : "UL2018"
+bTagThreshold : 0.2783
+branchNames:
+    sf: "bTaggingWeight"
+    sfup: "bTaggingWeightUp"
+    sfdown: "bTaggingWeightDown"
+        
