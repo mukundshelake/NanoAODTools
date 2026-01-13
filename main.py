@@ -76,7 +76,7 @@ def load_module(module_name, era, key=None, config=None):
     elif module_name == "Reco":
         from python.postprocessing.examples.RecoModule import RecoModule
         loaded = RecoModule(era)
-    elif module_name == "BDTvariables":
+    elif module_name == "BDTVariable":
         from python.postprocessing.examples.BDTvariableModule import BDTvariableModule
         loaded = BDTvariableModule()
     elif module_name == "Observables":
@@ -151,7 +151,8 @@ def process_file(data):
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
 
-    modules = []
+    # Track modules with their names so we can detect failures to load
+    modules_with_names = []
     if "Data" in DataMC:
         goldenJSON = conf.get("goldenJSON", None)
         if conf["modules"]["Data"] is not None:
@@ -159,7 +160,8 @@ def process_file(data):
             for mod in conf["modules"]["Data"]:
                 module_config_path = os.path.join(configDir, f"{mod}_{era}_config.yaml")
                 module_conf = load_yaml_config(module_config_path)
-                modules.append(load_module(mod, era, key, module_conf))
+                loaded = load_module(mod, era, key, module_conf)
+                modules_with_names.append((mod, loaded))
     elif "MC" in DataMC:
         if conf["modules"]["MC"] is not None:
             logging.info(f"Loading MC modules for {key} in {stage}:{era}")
@@ -167,7 +169,15 @@ def process_file(data):
                 module_config_path = os.path.join(configDir, f"{mod}_{era}_config.yaml")
                 module_conf = load_yaml_config(module_config_path)
                 # logging.info(f"Module config for {mod}: {module_conf}")
-                modules.append(load_module(mod, era, key, module_conf))
+                loaded = load_module(mod, era, key, module_conf)
+                modules_with_names.append((mod, loaded))
+
+    # Filter out any modules that failed to load (None) and warn
+    missing_modules = [name for name, m in modules_with_names if m is None]
+    if missing_modules:
+        logging.error(f"Failed to load modules {missing_modules} for {key} in {stage}:{era}. Skipping this file.")
+        return
+    modules = [m for _, m in modules_with_names]
 
     # modules = [factory() for factory in modules]
     # logging.info(f"Processing modules for {file} in {key} of {DataMC} for {stage}:{era}: {[type(m).__name__ for m in modules]}")

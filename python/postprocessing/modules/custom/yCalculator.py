@@ -5,30 +5,63 @@ from PhysicsTools.NanoAODTools.postprocessing.framework.datamodel import Collect
 
 class CollisionTypeProducer(Module):
     def __init__(self):
-        pass
+        super(CollisionTypeProducer, self).__init__()
+        self.warn_once = False
+        self.is_data = False
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         self.out = wrappedOutputTree
+        self.inputTree = inputTree
+        
+        # Check if GenPart branch exists (won't exist in data)
+        if not inputTree.GetBranch("nGenPart"):
+            self.is_data = True
+            print("INFO: GenPart branch not found. This appears to be data - skipping parton classification.")
+        
         # We'll store integer labels for clarity:
         # 1=qqbar, 2=gg, 3=qg, 4=qqprime, 0=undefined
         self.out.branch("y", "I")
         self.out.branch("qDir", "I")
 
     def analyze(self, event):
-        genparts = Collection(event, "GenPart")
+        # Skip MC-only processing for data files
+        if self.is_data:
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return True
+        
+        try:
+            genparts = Collection(event, "GenPart")
+        except Exception as e:
+            if not self.warn_once:
+                print(f"WARNING: Could not access GenPart collection: {e}")
+                self.warn_once = True
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return True
 
         if len(genparts) < 2:
             self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
             return True
 
-        pdgIds = np.array([p.pdgId for p in genparts])
-        status = np.array([p.status for p in genparts])
+        try:
+            pdgIds = np.array([p.pdgId for p in genparts])
+            status = np.array([p.status for p in genparts])
+        except (AttributeError, Exception) as e:
+            if not self.warn_once:
+                print(f"WARNING: Could not access GenPart attributes: {e}")
+                self.warn_once = True
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return True
 
         # Incoming partons typically have status == 21 in Pythia
         incoming = pdgIds[status == 21]
 
         if len(incoming) < 2:
             self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
             return True
         dir_value = 0
         id1, id2 = int(incoming[0]), int(incoming[1])
