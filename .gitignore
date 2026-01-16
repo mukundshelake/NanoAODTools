@@ -10,3 +10,28 @@ build
 *.pcm
 *.root
 site/
+
+# Machine-specific configuration
+.env
+.env.*
+!.env.template
+
+# Local conda environments
+envs/
+
+# CMSSW build artifacts (if CMSSW inside repo)
+src/
+lib/
+tmp/
+python/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+MULTI_MACHINE_SETUP.md
+MULTI_MACHINE_SUMMARY.md
+.gitignore
+SETUP_GUIDE.md
+002-Samples/outputs/
