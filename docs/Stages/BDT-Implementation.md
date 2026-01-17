@@ -1,1 +1,0 @@
-It is called as 'BDTScore' in configurations.
