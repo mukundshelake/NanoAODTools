@@ -1,0 +1,53 @@
+# Example Configuration for Multiple Eras
+# This demonstrates how to process multiple eras in a single run
+
+chapter: "004-Reconstruction"
+description: "ttbar reconstruction kinematic distributions"
+
+# Analysis parameters
+analysis:
+  # Process multiple eras in one run
+  eras:
+    - "UL2016preVFP"
+    - "UL2016postVFP"
+    - "UL2017"
+    - "UL2018"
+  
+  # Tag identifier for input files (e.g., "midNov")
+  tag: "midNov"
+  
+  # Apply chi2_status == 0 filter (only successful reconstructions)
+  apply_chi2_filter: true
+
+# Input file specifications
+inputs:
+  # Template for dataFiles.json location
+  # Will be formatted as: data/Datasets/{tag}_{era}_reco_dataFiles.json
+  datafiles_template: "data/Datasets/{tag}_{era}_reco_dataFiles.json"
+  
+  # Template for sample info (luminosity, cross-sections, etc.)
+  # Will be formatted as: configs/{tag}_{era}_reco_lumiXinfo.json
+  sample_info_template: "configs/{tag}_{era}_reco_lumiXinfo.json"
+
+# Variables to plot (subset of all 13 reconstruction branches)
+# To plot all, use: "all"
+# To plot specific variables, list them: ["Top_lep_pt", "Top_had_mass", "Chi2"]
+variables: "all"
+
+# Output specifications
+outputs:
+  # Directory for .coffea files
+  coffea_dir: "outputs"
+  
+  # Directory for .png plot files
+  plots_dir: "plots"
+  
+  # Naming pattern for coffea output
+  # Will be formatted as: {tag}_{era}_reco.coffea
+  coffea_pattern: "{tag}_{era}_reco.coffea"
+  
+  # Use hash-based output directories (like 002-Samples)
+  use_hash_dirs: true
+  
+  # Log file for run history
+  run_history: "run_history.txt"

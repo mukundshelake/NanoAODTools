@@ -1,0 +1,21 @@
+# Python package requirements for 004-Reconstruction Data/MC plotting
+
+# Core Coffea framework
+coffea>=2024.1.0
+hist>=2.7.0
+dask>=2023.1.0
+dask-awkward>=2023.1.0
+awkward>=2.0.0
+
+# File I/O
+uproot>=5.0.0
+
+# Configuration
+pyyaml>=6.0
+
+# Numerical operations
+numpy>=1.20.0
+
+# Note: ROOT with PyROOT is also required but should be installed separately
+# Install via conda: conda install -c conda-forge root
+# Or from source: https://root.cern/install/

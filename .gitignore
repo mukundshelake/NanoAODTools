@@ -35,3 +35,8 @@ MULTI_MACHINE_SUMMARY.md
 .gitignore
 SETUP_GUIDE.md
 002-Samples/outputs/
+004-Reconstruction/configs/
+004-Reconstruction/outputs/
+004-Reconstruction/data/
+004-Reconstruction/run_history.txt
+004-Reconstruction/NOMENCLATURE.md
