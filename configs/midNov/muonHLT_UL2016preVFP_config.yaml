@@ -1,4 +1,4 @@
-HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
+[HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
 kinematics: 
     Muon:
         lohi:
@@ -18,4 +18,4 @@ correctionLib:
 branchNames:
     sf: "MuonHLTWeight"
     sfstat: "MuonHLTWeightStat"
-    sfsyst: "MuonHLTWeightSyst"
+    sfsyst: "MuonHLTWeightSyst"]

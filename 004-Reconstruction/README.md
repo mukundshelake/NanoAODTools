@@ -1,13 +1,15 @@
 # 004-Reconstruction
 
-This folder contains the ttbar reconstruction module and Data/MC plotting workflow for reconstructed variables.
+This folder contains the ttbar reconstruction and observables modules with Data/MC plotting workflows.
 
 ## Overview
 
-The reconstruction workflow consists of two main components:
+The workflow consists of two main components:
 
-1. **RecoModule.py** - Physics module that performs kinematic reconstruction of ttbar events
-2. **Data/MC Plotting** - Complete workflow to create stacked Data/MC distributions for reconstruction variables
+1. **Reconstruction Analysis** - Kinematic reconstruction of ttbar events with Data/MC plots for 13 reconstruction variables
+2. **Observables Analysis** - Physics observables computed from reconstructed tops with Data/MC plots for 7 observables
+
+Both analyses share the same infrastructure and can be run together or separately.
 
 ## Structure
 
@@ -17,22 +19,28 @@ The reconstruction workflow consists of two main components:
 ├── QUICKREF.sh             # Quick reference commands
 ├── run_history.txt         # Log of all plotting runs (git-tracked)
 ├── configs/
-│   └── sample_info.json    # Cross-sections, luminosities, category mappings
+│   ├── *_reco_lumiXinfo.json      # Reco sample info (cross-sections, luminosities)
+│   └── *_observables_lumiXinfo.json # Observables sample info
 ├── scripts/
-│   ├── RecoDataMCHist.py   # Generate histograms from reconstructed ROOT files
-│   ├── RecoHistPlotter.py  # Create Data/MC plots with ratio panels
-│   ├── run_all.py          # Master orchestration script
-│   └── utils.py            # Utility functions (hashing, logging, etc.)
+│   ├── RecoDataMCHist.py          # Generate histograms for reconstruction
+│   ├── RecoHistPlotter.py         # Create reco Data/MC plots
+│   ├── ObservablesDataMCHist.py   # Generate histograms for observables
+│   ├── ObservablesHistPlotter.py  # Create observables Data/MC plots
+│   ├── run_all.py                 # Master orchestration script (both analyses)
+│   └── utils.py                   # Utility functions
 ├── data/
-│   └── Datasets/           # Input file lists (*_reco_*_dataFiles.json)
+│   └── Datasets/
+│       ├── *_reco_dataFiles.json       # Reconstruction input file lists
+│       └── *_observables_dataFiles.json # Observables input file lists
 ├── outputs/
-│   ├── a1b2c3d4e5f6/       # Hash-based output directory
-│   │   ├── config.yaml     # Config snapshot for reproducibility
-│   │   ├── *.coffea        # Histogram files
-│   │   └── plots/          # Generated PNG plots
-│   ├── latest -> a1b2c3d4e5f6/  # Symlink to most recent run
-│   └── tags/               # Named bookmarks (baseline, paper_v1, etc.)
-└── plots/                  # Additional plots output (optional)
+│   ├── {hash}_reco/           # Hash-based output for reconstruction
+│   │   ├── config.yaml        # Config snapshot
+│   │   ├── *.coffea           # Histogram files
+│   │   └── plots/             # Generated PNG plots
+│   ├── {hash}_observables/    # Hash-based output for observables
+│   ├── latest -> {hash}_*/    # Symlink to most recent run
+│   └── tags/                  # Named bookmarks
+└── plots/                     # Additional plots output (optional)
 ```
 
 ## Reconstruction Branches
@@ -64,6 +72,28 @@ The [RecoModule.py](../python/postprocessing/modules/custom/RecoModule.py) adds 
   - `2`: Neutrino solution failed (negative discriminant)
   - `3`: Kinematic fit failed (using pre-fit values)
 
+## Physics Observables
+
+The [observables.py](../python/postprocessing/modules/custom/observables.py) module computes 7 physics observables from reconstructed top quarks:
+
+### Polar Angles (ttbar rest frame)
+
+- `cosTheta` - cos(θ) of top quark in ttbar rest frame (beam axis), sign-corrected by ttbar_pz
+- `anticosTheta` - cos(θ) of antitop quark in ttbar rest frame
+- `LabcosTheta` - cos(θ) in lab frame before boosting
+
+### Rapidities
+
+- `yt` - Rapidity of top quark: 0.5 × ln[(E + pz) / (E - pz)]
+- `ytbar` - Rapidity of antitop quark
+
+### ttbar System Kinematics
+
+- `ttbar_pz` - Longitudinal momentum of ttbar system (GeV)
+- `ttbar_mass` - Invariant mass of ttbar system (GeV)
+
+These observables are used for measuring charge asymmetries and differential cross-sections.
+
 ## Data/MC Plotting Workflow
 
 ### Prerequisites
@@ -91,12 +121,21 @@ ls outputs/latest/plots/
 
 ### Configuration
 
-Edit [config.yaml](config.yaml) to specify:
+Edit [config.yaml](config.yaml) to specify settings for both reconstruction and observables analyses.
 
-- **Eras**: Single era or list of eras to process (e.g., `["UL2017"]` or `["UL2016preVFP", "UL2016postVFP", "UL2017", "UL2018"]`)
+**Common settings (analysis section):**
+- **Eras**: Single era or list of eras to process
 - **Tag**: Identifier for input files (e.g., `midNov`)
-- **Variables**: List of variables to plot, or `"all"` for all 13 branches
+
+**Reconstruction-specific (reco section):**
+- **Variables**: List of 13 reconstruction variables to plot
 - **Chi2 filter**: Whether to apply `chi2_status == 0` filter (default: true)
+- **Inputs**: Templates for reco dataFiles and sample info
+
+**Observables-specific (observables section):**
+- **Variables**: List of 7 physics observables to plot
+- **Chi2 filter**: Set to false (observables computed from good reconstructions)
+- **Inputs**: Templates for observables dataFiles and sample info
 
 Example config.yaml:
 ```yaml
@@ -105,18 +144,32 @@ analysis:
     - "UL2017"
     - "UL2018"
   tag: "midNov"
+
+reco:
   apply_chi2_filter: true
+  inputs:
+    datafiles_template: "data/Datasets/{tag}_{era}_reco_dataFiles.json"
+    sample_info_template: "configs/{tag}_{era}_reco_lumiXinfo.json"
+  variables:
+    - "Top_lep_pt"
+    - "Top_lep_mass"
+    - "Top_had_pt"
+    - "Top_had_mass"
+    - "Chi2"
 
-inputs:
-  sample_info_template: "configs/{tag}_{era}_reco_lumiXinfo.json"
-
-variables:
-  - "Top_lep_pt"
-  - "Top_lep_mass"
-  - "Top_had_pt"
-  - "Top_had_mass"
-  - "Chi2"
-  - "chi2_status"
+observables:
+  apply_chi2_filter: false
+  inputs:
+    datafiles_template: "data/Datasets/{tag}_{era}_observables_dataFiles.json"
+    sample_info_template: "configs/{tag}_{era}_observables_lumiXinfo.json"
+  variables:
+    - "cosTheta"
+    - "anticosTheta"
+    - "LabcosTheta"
+    - "yt"
+    - "ytbar"
+    - "ttbar_pz"
+    - "ttbar_mass"
 ```
 
 ### Sample Info Configuration
@@ -140,20 +193,30 @@ inputs:
 
 ### Workflow Commands
 
-#### Basic eras from config
+#### Run Both Analyses (Default)
+
+```bash
+# Generate plots for both reconstruction and observables
+python scripts/run_all.py
+
+# Override eras for both analyses
 python scripts/run_all.py --eras UL2017,UL2018
 
 # Override tag
-python scripts/run_all.py
+python scripts/run_all.py --tag midNov
+```
+
+#### Run Specific Analysis Type
+
 ```bash
-# Generate all plots (reads from config.yaml)
-python scripts/run_all.py
+# Run only reconstruction analysis
+python scripts/run_all.py --analysis-type reco
 
-# Override config settings
-python scripts/run_all.py --era UL2017 --tag midNov
+# Run only observables analysis
+python scripts/run_all.py --analysis-type observables
 
-# Plot specific variables only
-python scripts/run_all.py --variables Top_lep_pt,Top_had_mass,Chi2
+# Plot specific variables in observables
+python scripts/run_all.py --analysis-type observables --variables cosTheta,ttbar_mass
 ```
 
 #### Advanced Options
@@ -177,6 +240,7 @@ python scripts/run_all.py --no-filter
 
 #### Step-by-Step Workflow
 
+**Reconstruction:**
 ```bash
 # Step 1: Generate histograms manually
 cd scripts/
@@ -184,6 +248,16 @@ python RecoDataMCHist.py -e UL2017 -t midNov
 
 # Step 2: Create plots from .coffea file
 python RecoHistPlotter.py ../outputs/midNov_UL2017_reco.coffea
+```
+
+**Observables:**
+```bash
+# Step 1: Generate histograms manually
+cd scripts/
+python ObservablesDataMCHist.py -e UL2017 -t midNov
+
+# Step 2: Create plots from .coffea file
+python ObservablesHistPlotter.py ../outputs/midNov_UL2017_observables.coffea
 ```
 
 ### Output Organization

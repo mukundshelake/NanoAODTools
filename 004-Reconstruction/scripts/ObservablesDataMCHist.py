@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-RecoDataMCHist.py - Process reconstructed ttbar ROOT files to create Data/MC histograms
+ObservablesDataMCHist.py - Process ttbar observables ROOT files to create Data/MC histograms
 
-This script reads post-reconstruction ROOT files (with branches from RecoModule.py)
-and creates histograms for the 13 reconstruction branches using Coffea framework.
+This script reads post-reconstruction ROOT files with observable branches (from observables.py)
+and creates histograms for the 7 physics observables using Coffea framework.
 
 Usage:
-    python scripts/RecoDataMCHist.py -e UL2017 -t midNov [--sample] [--no-filter]
+    python scripts/ObservablesDataMCHist.py -e UL2017 -t midNov [--sample]
 """
 
 import json, os, argparse
@@ -67,101 +67,58 @@ def remove_empty_files(fileset):
     return cleaned_fileset
 
 
-class RecoProcessor(processor.ProcessorABC):
-    def __init__(self, apply_chi2_filter=True):
-        self.apply_chi2_filter = apply_chi2_filter
+class ObservablesProcessor(processor.ProcessorABC):
+    def __init__(self):
+        pass
 
     def process(self, events):
         dataset = events.metadata['dataset']
         logger.info(f"Processing dataset: {dataset}")
 
-        # Initialize histograms for 13 reconstruction branches
-        logger.debug("Initializing reconstruction histograms...")
+        # Initialize histograms for 7 observable branches
+        logger.debug("Initializing observable histograms...")
         histograms = {
-            # Leptonic top 4-vector
-            "Top_lep_pt": hist.Hist.new.Reg(50, 0.0, 500.0, name="pt", label="Leptonic Top $p_T$ [GeV]").Double(),
-            "Top_lep_eta": hist.Hist.new.Reg(50, -2.5, 2.5, name="eta", label="Leptonic Top $\\eta$").Double(),
-            "Top_lep_phi": hist.Hist.new.Reg(64, -3.2, 3.2, name="phi", label="Leptonic Top $\\phi$").Double(),
-            "Top_lep_mass": hist.Hist.new.Reg(50, 100.0, 250.0, name="mass", label="Leptonic Top Mass [GeV]").Double(),
+            # Polar angles in ttbar rest frame
+            "cosTheta": hist.Hist.new.Reg(50, -1.0, 1.0, name="cosTheta", label="cos#theta").Double(),
+            "anticosTheta": hist.Hist.new.Reg(50, -1.0, 1.0, name="anticosTheta", label="cos#bar{#theta}").Double(),
+            "LabcosTheta": hist.Hist.new.Reg(50, -1.0, 1.0, name="LabcosTheta", label="cos#theta_{lab}").Double(),
             
-            # Hadronic top 4-vector
-            "Top_had_pt": hist.Hist.new.Reg(50, 0.0, 500.0, name="pt", label="Hadronic Top $p_T$ [GeV]").Double(),
-            "Top_had_eta": hist.Hist.new.Reg(50, -2.5, 2.5, name="eta", label="Hadronic Top $\\eta$").Double(),
-            "Top_had_phi": hist.Hist.new.Reg(64, -3.2, 3.2, name="phi", label="Hadronic Top $\\phi$").Double(),
-            "Top_had_mass": hist.Hist.new.Reg(50, 100.0, 250.0, name="mass", label="Hadronic Top Mass [GeV]").Double(),
+            # Rapidities
+            "yt": hist.Hist.new.Reg(50, -2.5, 2.5, name="yt", label="y_{t}").Double(),
+            "ytbar": hist.Hist.new.Reg(50, -2.5, 2.5, name="ytbar", label="y_{#bar{t}}").Double(),
             
-            # Fit quality variables
-            "Chi2_prefit": hist.Hist.new.Reg(50, 0.0, 50.0, name="chi2", label="Pre-fit $\\chi^2$").Double(),
-            "Chi2": hist.Hist.new.Reg(50, 0.0, 50.0, name="chi2", label="Fitted $\\chi^2$").Double(),
-            "Pgof": hist.Hist.new.Reg(50, 0.0, 1.0, name="pgof", label="P($\\chi^2$)").Double(),
-            "chi2_status": hist.Hist.new.Reg(5, 0, 5, name="status", label="Reconstruction Status").Double(),
+            # ttbar system kinematics
+            "ttbar_pz": hist.Hist.new.Reg(50, -500.0, 500.0, name="ttbar_pz", label="p_{z}^{t#bar{t}} [GeV]").Double(),
+            "ttbar_mass": hist.Hist.new.Reg(50, 300.0, 2000.0, name="ttbar_mass", label="m_{t#bar{t}} [GeV]").Double(),
         }
 
-        # Access reconstruction branches directly (flat branches from ROOT file)
+        # Access observable branches directly (flat branches from ROOT file)
         # BaseSchema should provide direct attribute access
         try:
-            top_lep_pt = events.Top_lep_pt
-            top_lep_eta = events.Top_lep_eta
-            top_lep_phi = events.Top_lep_phi
-            top_lep_mass = events.Top_lep_mass
-            
-            top_had_pt = events.Top_had_pt
-            top_had_eta = events.Top_had_eta
-            top_had_phi = events.Top_had_phi
-            top_had_mass = events.Top_had_mass
-            
-            chi2_prefit = events.Chi2_prefit
-            chi2 = events.Chi2
-            pgof = events.Pgof
-            chi2_status = events.chi2_status
+            cosTheta = events.cosTheta
+            anticosTheta = events.anticosTheta
+            LabcosTheta = events.LabcosTheta
+            yt = events.yt
+            ytbar = events.ytbar
+            ttbar_pz = events.ttbar_pz
+            ttbar_mass = events.ttbar_mass
         except AttributeError as e:
-            logger.error(f"Error accessing reconstruction branches: {e}")
+            logger.error(f"Error accessing observable branches: {e}")
             logger.info("Attempting dictionary-style access...")
             # Fallback to dictionary-style access if attribute access fails
-            top_lep_pt = events["Top_lep_pt"]
-            top_lep_eta = events["Top_lep_eta"]
-            top_lep_phi = events["Top_lep_phi"]
-            top_lep_mass = events["Top_lep_mass"]
-            
-            top_had_pt = events["Top_had_pt"]
-            top_had_eta = events["Top_had_eta"]
-            top_had_phi = events["Top_had_phi"]
-            top_had_mass = events["Top_had_mass"]
-            
-            chi2_prefit = events["Chi2_prefit"]
-            chi2 = events["Chi2"]
-            pgof = events["Pgof"]
-            chi2_status = events["chi2_status"]
+            cosTheta = events["cosTheta"]
+            anticosTheta = events["anticosTheta"]
+            LabcosTheta = events["LabcosTheta"]
+            yt = events["yt"]
+            ytbar = events["ytbar"]
+            ttbar_pz = events["ttbar_pz"]
+            ttbar_mass = events["ttbar_mass"]
 
-        # Apply chi2_status filter if requested (only successful reconstructions)
-        if self.apply_chi2_filter:
-            good_reco = chi2_status == 0
-            n_before = len(chi2_status)
-            n_after = ak.sum(good_reco)
-            logger.debug(f"Chi2 filter: {n_after}/{n_before} events pass (chi2_status==0)")
-            
-            # Apply filter to all variables
-            top_lep_pt = top_lep_pt[good_reco]
-            top_lep_eta = top_lep_eta[good_reco]
-            top_lep_phi = top_lep_phi[good_reco]
-            top_lep_mass = top_lep_mass[good_reco]
-            
-            top_had_pt = top_had_pt[good_reco]
-            top_had_eta = top_had_eta[good_reco]
-            top_had_phi = top_had_phi[good_reco]
-            top_had_mass = top_had_mass[good_reco]
-            
-            chi2_prefit = chi2_prefit[good_reco]
-            chi2 = chi2[good_reco]
-            pgof = pgof[good_reco]
-            chi2_status = chi2_status[good_reco]
-            
-            # Filter events object for weight calculation
-            events = events[good_reco]
-
+        # No chi2_status filter needed for observables (already computed from good reconstructions)
+        
         # --- Calculate Total Weights ---
-        # Initialize with ones (appropriate length after filtering)
-        total_weight = ak.ones_like(chi2_status, dtype=np.float32)
+        # Initialize with ones
+        total_weight = ak.ones_like(cosTheta, dtype=np.float32)
         
         # Multiply by available weights (check fields to avoid dask lazy evaluation issues)
         available_fields = events.fields
@@ -179,20 +136,13 @@ class RecoProcessor(processor.ProcessorABC):
             total_weight = total_weight * events.puWeight
 
         # Fill histograms (compute dask arrays)
-        histograms["Top_lep_pt"].fill(pt=top_lep_pt.compute(), weight=total_weight.compute())
-        histograms["Top_lep_eta"].fill(eta=top_lep_eta.compute(), weight=total_weight.compute())
-        histograms["Top_lep_phi"].fill(phi=top_lep_phi.compute(), weight=total_weight.compute())
-        histograms["Top_lep_mass"].fill(mass=top_lep_mass.compute(), weight=total_weight.compute())
-        
-        histograms["Top_had_pt"].fill(pt=top_had_pt.compute(), weight=total_weight.compute())
-        histograms["Top_had_eta"].fill(eta=top_had_eta.compute(), weight=total_weight.compute())
-        histograms["Top_had_phi"].fill(phi=top_had_phi.compute(), weight=total_weight.compute())
-        histograms["Top_had_mass"].fill(mass=top_had_mass.compute(), weight=total_weight.compute())
-        
-        histograms["Chi2_prefit"].fill(chi2=chi2_prefit.compute(), weight=total_weight.compute())
-        histograms["Chi2"].fill(chi2=chi2.compute(), weight=total_weight.compute())
-        histograms["Pgof"].fill(pgof=pgof.compute(), weight=total_weight.compute())
-        histograms["chi2_status"].fill(status=chi2_status.compute(), weight=total_weight.compute())
+        histograms["cosTheta"].fill(cosTheta=cosTheta.compute(), weight=total_weight.compute())
+        histograms["anticosTheta"].fill(anticosTheta=anticosTheta.compute(), weight=total_weight.compute())
+        histograms["LabcosTheta"].fill(LabcosTheta=LabcosTheta.compute(), weight=total_weight.compute())
+        histograms["yt"].fill(yt=yt.compute(), weight=total_weight.compute())
+        histograms["ytbar"].fill(ytbar=ytbar.compute(), weight=total_weight.compute())
+        histograms["ttbar_pz"].fill(ttbar_pz=ttbar_pz.compute(), weight=total_weight.compute())
+        histograms["ttbar_mass"].fill(ttbar_mass=ttbar_mass.compute(), weight=total_weight.compute())
 
         return {
             "entries": ak.num(events, axis=0),
@@ -205,7 +155,7 @@ class RecoProcessor(processor.ProcessorABC):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Process reconstructed ttbar ROOT files to create histograms",
+        description="Process ttbar observables ROOT files to create histograms",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     allowed_eras = ['UL2016preVFP', 'UL2016postVFP', 'UL2017', 'UL2018']
@@ -213,15 +163,12 @@ def main():
                         help='Era to process')
     parser.add_argument('-t', '--tag', type=str, required=True, 
                         help='Tag to identify input files (e.g., midNov)')
-    parser.add_argument('--no-filter', action='store_true',
-                        help='Disable chi2_status==0 filter (include failed reconstructions)')
     parser.add_argument('--config', type=str, default='../config.yaml',
                         help='Path to config.yaml file')
     args = parser.parse_args()
 
     logger.info(f"Selected era: {args.era}")
     logger.info(f"Output tag: {args.tag}")
-    logger.info(f"Chi2 filter: {not args.no_filter}")
 
     # Load configuration
     config_path = Path(args.config)
@@ -240,11 +187,11 @@ def main():
 
     # Build path to dataFiles.json
     data_dir = script_dir.parent / "data" / "Datasets"
-    datafiles_path = data_dir / f"{args.tag}_{args.era}_reco_dataFiles.json"
+    datafiles_path = data_dir / f"{args.tag}_{args.era}_observables_dataFiles.json"
     
     if not datafiles_path.exists():
         logger.error(f"DataFiles not found: {datafiles_path}")
-        logger.error("Please ensure reconstructed ROOT files are indexed in data/Datasets/")
+        logger.error("Please ensure observables ROOT files are indexed in data/Datasets/")
         return
 
     logger.info(f"Reading dataFiles from: {datafiles_path}")
@@ -283,9 +230,9 @@ def main():
     )
 
     # Run processor with BaseSchema
-    logger.info("Running RecoProcessor...")
+    logger.info("Running ObservablesProcessor...")
     to_compute = apply_to_fileset(
-        RecoProcessor(apply_chi2_filter=not args.no_filter),
+        ObservablesProcessor(),
         max_chunks(dataset_runnable, 300),
         schemaclass=BaseSchema,  # Use BaseSchema for flat ROOT trees
     )
@@ -293,7 +240,7 @@ def main():
     (out,) = dask.compute(to_compute, scheduler='threads')
 
     # Save output .coffea file
-    outputFile = f"{args.tag}_{args.era}_reco.coffea"
+    outputFile = f"{args.tag}_{args.era}_observables.coffea"
     output_path = output_dir / outputFile
     save(out, str(output_path))
     logger.info(f"✓ Saved output to {output_path}")

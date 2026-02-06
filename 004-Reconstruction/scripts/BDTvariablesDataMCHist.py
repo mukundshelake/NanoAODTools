@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-RecoDataMCHist.py - Process reconstructed ttbar ROOT files to create Data/MC histograms
+BDTvariablesDataMCHist.py - Process BDT variables ROOT files to create Data/MC histograms
 
-This script reads post-reconstruction ROOT files (with branches from RecoModule.py)
-and creates histograms for the 13 reconstruction branches using Coffea framework.
+This script reads ROOT files with BDT variable branches (from BDTvariableModule.py)
+and creates histograms for the 17 event-shape and kinematic variables using Coffea framework.
 
 Usage:
-    python scripts/RecoDataMCHist.py -e UL2017 -t midNov [--sample] [--no-filter]
+    python scripts/BDTvariablesDataMCHist.py -e UL2017 -t midNov
 """
 
 import json, os, argparse
@@ -67,101 +67,92 @@ def remove_empty_files(fileset):
     return cleaned_fileset
 
 
-class RecoProcessor(processor.ProcessorABC):
-    def __init__(self, apply_chi2_filter=True):
-        self.apply_chi2_filter = apply_chi2_filter
+class BDTvariablesProcessor(processor.ProcessorABC):
+    def __init__(self):
+        pass
 
     def process(self, events):
         dataset = events.metadata['dataset']
         logger.info(f"Processing dataset: {dataset}")
 
-        # Initialize histograms for 13 reconstruction branches
-        logger.debug("Initializing reconstruction histograms...")
+        # Initialize histograms for 17 BDT variable branches
+        logger.debug("Initializing BDT variable histograms...")
         histograms = {
-            # Leptonic top 4-vector
-            "Top_lep_pt": hist.Hist.new.Reg(50, 0.0, 500.0, name="pt", label="Leptonic Top $p_T$ [GeV]").Double(),
-            "Top_lep_eta": hist.Hist.new.Reg(50, -2.5, 2.5, name="eta", label="Leptonic Top $\\eta$").Double(),
-            "Top_lep_phi": hist.Hist.new.Reg(64, -3.2, 3.2, name="phi", label="Leptonic Top $\\phi$").Double(),
-            "Top_lep_mass": hist.Hist.new.Reg(50, 100.0, 250.0, name="mass", label="Leptonic Top Mass [GeV]").Double(),
+            # Jet kinematic variables
+            "JetHT": hist.Hist.new.Reg(50, 0.0, 1000.0, name="JetHT", label="Jet H_{T} [GeV]").Double(),
+            "pTSum": hist.Hist.new.Reg(50, 0.0, 1200.0, name="pTSum", label="p_{T} Sum [GeV]").Double(),
             
-            # Hadronic top 4-vector
-            "Top_had_pt": hist.Hist.new.Reg(50, 0.0, 500.0, name="pt", label="Hadronic Top $p_T$ [GeV]").Double(),
-            "Top_had_eta": hist.Hist.new.Reg(50, -2.5, 2.5, name="eta", label="Hadronic Top $\\eta$").Double(),
-            "Top_had_phi": hist.Hist.new.Reg(64, -3.2, 3.2, name="phi", label="Hadronic Top $\\phi$").Double(),
-            "Top_had_mass": hist.Hist.new.Reg(50, 100.0, 250.0, name="mass", label="Hadronic Top Mass [GeV]").Double(),
+            # Fox-Wolfram moments
+            "FW1": hist.Hist.new.Reg(50, -1.0, 1.0, name="FW1", label="Fox-Wolfram H_{1}").Double(),
+            "FW2": hist.Hist.new.Reg(50, -1.0, 1.0, name="FW2", label="Fox-Wolfram H_{2}").Double(),
+            "FW3": hist.Hist.new.Reg(50, -1.0, 1.0, name="FW3", label="Fox-Wolfram H_{3}").Double(),
             
-            # Fit quality variables
-            "Chi2_prefit": hist.Hist.new.Reg(50, 0.0, 50.0, name="chi2", label="Pre-fit $\\chi^2$").Double(),
-            "Chi2": hist.Hist.new.Reg(50, 0.0, 50.0, name="chi2", label="Fitted $\\chi^2$").Double(),
-            "Pgof": hist.Hist.new.Reg(50, 0.0, 1.0, name="pgof", label="P($\\chi^2$)").Double(),
-            "chi2_status": hist.Hist.new.Reg(5, 0, 5, name="status", label="Reconstruction Status").Double(),
+            # Longitudinal alignment
+            "AL": hist.Hist.new.Reg(50, -1.0, 1.0, name="AL", label="Alignment A_{L}").Double(),
+            
+            # Sphericity tensor elements
+            "Sxx": hist.Hist.new.Reg(50, 0.0, 1.0, name="Sxx", label="S_{xx}").Double(),
+            "Syy": hist.Hist.new.Reg(50, 0.0, 1.0, name="Syy", label="S_{yy}").Double(),
+            "Sxy": hist.Hist.new.Reg(50, -0.5, 0.5, name="Sxy", label="S_{xy}").Double(),
+            "Sxz": hist.Hist.new.Reg(50, -0.5, 0.5, name="Sxz", label="S_{xz}").Double(),
+            "Syz": hist.Hist.new.Reg(50, -0.5, 0.5, name="Syz", label="S_{yz}").Double(),
+            "Szz": hist.Hist.new.Reg(50, 0.0, 1.0, name="Szz", label="S_{zz}").Double(),
+            
+            # Event shape variables
+            "S": hist.Hist.new.Reg(50, 0.0, 1.0, name="S", label="Sphericity").Double(),
+            "P": hist.Hist.new.Reg(50, 0.0, 1.0, name="P", label="Planarity").Double(),
+            "A": hist.Hist.new.Reg(50, 0.0, 1.0, name="A", label="Aplanarity").Double(),
+            "p2in": hist.Hist.new.Reg(50, 0.0, 1.0, name="p2in", label="p_{2}^{in}").Double(),
+            "p2out": hist.Hist.new.Reg(50, 0.0, 1.0, name="p2out", label="p_{2}^{out}").Double(),
         }
 
-        # Access reconstruction branches directly (flat branches from ROOT file)
+        # Access BDT variable branches directly (flat branches from ROOT file)
         # BaseSchema should provide direct attribute access
         try:
-            top_lep_pt = events.Top_lep_pt
-            top_lep_eta = events.Top_lep_eta
-            top_lep_phi = events.Top_lep_phi
-            top_lep_mass = events.Top_lep_mass
-            
-            top_had_pt = events.Top_had_pt
-            top_had_eta = events.Top_had_eta
-            top_had_phi = events.Top_had_phi
-            top_had_mass = events.Top_had_mass
-            
-            chi2_prefit = events.Chi2_prefit
-            chi2 = events.Chi2
-            pgof = events.Pgof
-            chi2_status = events.chi2_status
+            JetHT = events.JetHT
+            pTSum = events.pTSum
+            FW1 = events.FW1
+            FW2 = events.FW2
+            FW3 = events.FW3
+            AL = events.AL
+            Sxx = events.Sxx
+            Syy = events.Syy
+            Sxy = events.Sxy
+            Sxz = events.Sxz
+            Syz = events.Syz
+            Szz = events.Szz
+            S = events.S
+            P = events.P
+            A = events.A
+            p2in = events.p2in
+            p2out = events.p2out
         except AttributeError as e:
-            logger.error(f"Error accessing reconstruction branches: {e}")
+            logger.error(f"Error accessing BDT variable branches: {e}")
             logger.info("Attempting dictionary-style access...")
             # Fallback to dictionary-style access if attribute access fails
-            top_lep_pt = events["Top_lep_pt"]
-            top_lep_eta = events["Top_lep_eta"]
-            top_lep_phi = events["Top_lep_phi"]
-            top_lep_mass = events["Top_lep_mass"]
-            
-            top_had_pt = events["Top_had_pt"]
-            top_had_eta = events["Top_had_eta"]
-            top_had_phi = events["Top_had_phi"]
-            top_had_mass = events["Top_had_mass"]
-            
-            chi2_prefit = events["Chi2_prefit"]
-            chi2 = events["Chi2"]
-            pgof = events["Pgof"]
-            chi2_status = events["chi2_status"]
+            JetHT = events["JetHT"]
+            pTSum = events["pTSum"]
+            FW1 = events["FW1"]
+            FW2 = events["FW2"]
+            FW3 = events["FW3"]
+            AL = events["AL"]
+            Sxx = events["Sxx"]
+            Syy = events["Syy"]
+            Sxy = events["Sxy"]
+            Sxz = events["Sxz"]
+            Syz = events["Syz"]
+            Szz = events["Szz"]
+            S = events["S"]
+            P = events["P"]
+            A = events["A"]
+            p2in = events["p2in"]
+            p2out = events["p2out"]
 
-        # Apply chi2_status filter if requested (only successful reconstructions)
-        if self.apply_chi2_filter:
-            good_reco = chi2_status == 0
-            n_before = len(chi2_status)
-            n_after = ak.sum(good_reco)
-            logger.debug(f"Chi2 filter: {n_after}/{n_before} events pass (chi2_status==0)")
-            
-            # Apply filter to all variables
-            top_lep_pt = top_lep_pt[good_reco]
-            top_lep_eta = top_lep_eta[good_reco]
-            top_lep_phi = top_lep_phi[good_reco]
-            top_lep_mass = top_lep_mass[good_reco]
-            
-            top_had_pt = top_had_pt[good_reco]
-            top_had_eta = top_had_eta[good_reco]
-            top_had_phi = top_had_phi[good_reco]
-            top_had_mass = top_had_mass[good_reco]
-            
-            chi2_prefit = chi2_prefit[good_reco]
-            chi2 = chi2[good_reco]
-            pgof = pgof[good_reco]
-            chi2_status = chi2_status[good_reco]
-            
-            # Filter events object for weight calculation
-            events = events[good_reco]
-
+        # No chi2_status filter needed for BDT variables (event-level information)
+        
         # --- Calculate Total Weights ---
-        # Initialize with ones (appropriate length after filtering)
-        total_weight = ak.ones_like(chi2_status, dtype=np.float32)
+        # Initialize with ones
+        total_weight = ak.ones_like(JetHT, dtype=np.float32)
         
         # Multiply by available weights (check fields to avoid dask lazy evaluation issues)
         available_fields = events.fields
@@ -179,20 +170,23 @@ class RecoProcessor(processor.ProcessorABC):
             total_weight = total_weight * events.puWeight
 
         # Fill histograms (compute dask arrays)
-        histograms["Top_lep_pt"].fill(pt=top_lep_pt.compute(), weight=total_weight.compute())
-        histograms["Top_lep_eta"].fill(eta=top_lep_eta.compute(), weight=total_weight.compute())
-        histograms["Top_lep_phi"].fill(phi=top_lep_phi.compute(), weight=total_weight.compute())
-        histograms["Top_lep_mass"].fill(mass=top_lep_mass.compute(), weight=total_weight.compute())
-        
-        histograms["Top_had_pt"].fill(pt=top_had_pt.compute(), weight=total_weight.compute())
-        histograms["Top_had_eta"].fill(eta=top_had_eta.compute(), weight=total_weight.compute())
-        histograms["Top_had_phi"].fill(phi=top_had_phi.compute(), weight=total_weight.compute())
-        histograms["Top_had_mass"].fill(mass=top_had_mass.compute(), weight=total_weight.compute())
-        
-        histograms["Chi2_prefit"].fill(chi2=chi2_prefit.compute(), weight=total_weight.compute())
-        histograms["Chi2"].fill(chi2=chi2.compute(), weight=total_weight.compute())
-        histograms["Pgof"].fill(pgof=pgof.compute(), weight=total_weight.compute())
-        histograms["chi2_status"].fill(status=chi2_status.compute(), weight=total_weight.compute())
+        histograms["JetHT"].fill(JetHT=JetHT.compute(), weight=total_weight.compute())
+        histograms["pTSum"].fill(pTSum=pTSum.compute(), weight=total_weight.compute())
+        histograms["FW1"].fill(FW1=FW1.compute(), weight=total_weight.compute())
+        histograms["FW2"].fill(FW2=FW2.compute(), weight=total_weight.compute())
+        histograms["FW3"].fill(FW3=FW3.compute(), weight=total_weight.compute())
+        histograms["AL"].fill(AL=AL.compute(), weight=total_weight.compute())
+        histograms["Sxx"].fill(Sxx=Sxx.compute(), weight=total_weight.compute())
+        histograms["Syy"].fill(Syy=Syy.compute(), weight=total_weight.compute())
+        histograms["Sxy"].fill(Sxy=Sxy.compute(), weight=total_weight.compute())
+        histograms["Sxz"].fill(Sxz=Sxz.compute(), weight=total_weight.compute())
+        histograms["Syz"].fill(Syz=Syz.compute(), weight=total_weight.compute())
+        histograms["Szz"].fill(Szz=Szz.compute(), weight=total_weight.compute())
+        histograms["S"].fill(S=S.compute(), weight=total_weight.compute())
+        histograms["P"].fill(P=P.compute(), weight=total_weight.compute())
+        histograms["A"].fill(A=A.compute(), weight=total_weight.compute())
+        histograms["p2in"].fill(p2in=p2in.compute(), weight=total_weight.compute())
+        histograms["p2out"].fill(p2out=p2out.compute(), weight=total_weight.compute())
 
         return {
             "entries": ak.num(events, axis=0),
@@ -205,7 +199,7 @@ class RecoProcessor(processor.ProcessorABC):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Process reconstructed ttbar ROOT files to create histograms",
+        description="Process BDT variables ROOT files to create histograms",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     allowed_eras = ['UL2016preVFP', 'UL2016postVFP', 'UL2017', 'UL2018']
@@ -213,15 +207,12 @@ def main():
                         help='Era to process')
     parser.add_argument('-t', '--tag', type=str, required=True, 
                         help='Tag to identify input files (e.g., midNov)')
-    parser.add_argument('--no-filter', action='store_true',
-                        help='Disable chi2_status==0 filter (include failed reconstructions)')
     parser.add_argument('--config', type=str, default='../config.yaml',
                         help='Path to config.yaml file')
     args = parser.parse_args()
 
     logger.info(f"Selected era: {args.era}")
     logger.info(f"Output tag: {args.tag}")
-    logger.info(f"Chi2 filter: {not args.no_filter}")
 
     # Load configuration
     config_path = Path(args.config)
@@ -240,11 +231,11 @@ def main():
 
     # Build path to dataFiles.json
     data_dir = script_dir.parent / "data" / "Datasets"
-    datafiles_path = data_dir / f"{args.tag}_{args.era}_reco_dataFiles.json"
+    datafiles_path = data_dir / f"{args.tag}_{args.era}_bdtvariables_dataFiles.json"
     
     if not datafiles_path.exists():
         logger.error(f"DataFiles not found: {datafiles_path}")
-        logger.error("Please ensure reconstructed ROOT files are indexed in data/Datasets/")
+        logger.error("Please ensure BDT variables ROOT files are indexed in data/Datasets/")
         return
 
     logger.info(f"Reading dataFiles from: {datafiles_path}")
@@ -283,9 +274,9 @@ def main():
     )
 
     # Run processor with BaseSchema
-    logger.info("Running RecoProcessor...")
+    logger.info("Running BDTvariablesProcessor...")
     to_compute = apply_to_fileset(
-        RecoProcessor(apply_chi2_filter=not args.no_filter),
+        BDTvariablesProcessor(),
         max_chunks(dataset_runnable, 300),
         schemaclass=BaseSchema,  # Use BaseSchema for flat ROOT trees
     )
@@ -293,7 +284,7 @@ def main():
     (out,) = dask.compute(to_compute, scheduler='threads')
 
     # Save output .coffea file
-    outputFile = f"{args.tag}_{args.era}_reco.coffea"
+    outputFile = f"{args.tag}_{args.era}_bdtvariables.coffea"
     output_path = output_dir / outputFile
     save(out, str(output_path))
     logger.info(f"✓ Saved output to {output_path}")

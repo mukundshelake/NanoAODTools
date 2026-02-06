@@ -125,11 +125,15 @@ def load_config(config_path):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Validate required fields
-    required_sections = ['analysis', 'inputs', 'variables', 'outputs']
+    # Validate required fields (updated for new structure with reco and observables)
+    required_sections = ['analysis', 'outputs']
     for section in required_sections:
         if section not in config:
             raise ValueError(f"Missing required section in config.yaml: {section}")
+    
+    # Check for at least one analysis type (reco, observables, bdtvariables, or bdtvariables_parton)
+    if 'reco' not in config and 'observables' not in config and 'bdtvariables' not in config and 'bdtvariables_parton' not in config:
+        raise ValueError("Config must contain at least one of 'reco', 'observables', 'bdtvariables', or 'bdtvariables_parton' sections")
     
     return config
 

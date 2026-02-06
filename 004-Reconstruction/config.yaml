@@ -1,52 +1,144 @@
 # Configuration for 004-Reconstruction Data/MC Plotting
-# This config determines which reconstruction variables are plotted
+# This config determines which reconstruction and observables variables are plotted
 
 chapter: "004-Reconstruction"
-description: "ttbar reconstruction kinematic distributions"
+description: "ttbar reconstruction kinematic distributions and physics observables"
 
-# Analysis parameters
+# Analysis parameters (common for both reco and observables)
 analysis:
   # Era(s) to process - can be a single era or list of eras
   # Single: "UL2017"
   # Multiple: ["UL2016preVFP", "UL2016postVFP", "UL2017", "UL2018"]
   eras:
     - "UL2016preVFP"
-    - "UL2016postVFP"
-    - "UL2017"
-    - "UL2018"
+    # - "UL2016postVFP"
+    # - "UL2017"
+    # - "UL2018"
   
   # Tag identifier for input files (e.g., "midNov")
   tag: "midNov"
-  
+
+# Reconstruction analysis configuration
+reco:
   # Apply chi2_status == 0 filter (only successful reconstructions)
   apply_chi2_filter: true
-
-# Input file specifications
-inputs:
-  # Template for dataFiles.json location
-  # Will be formatted as: data/Datasets/{tag}_{era}_reco_dataFiles.json
-  datafiles_template: "data/Datasets/{tag}_{era}_reco_dataFiles.json"
   
-  # Template for sample info (luminosity, cross-sections, etc.)
-  # Will be formatted as: configs/{tag}_{era}_reco_lumiXinfo.json
-  sample_info_template: "configs/{tag}_{era}_reco_lumiXinfo.json"
+  # Input file specifications
+  inputs:
+    # Template for dataFiles.json location
+    # Will be formatted as: data/Datasets/{tag}_{era}_reco_dataFiles.json
+    datafiles_template: "data/Datasets/{tag}_{era}_reco_dataFiles.json"
+    
+    # Template for sample info (luminosity, cross-sections, etc.)
+    # Will be formatted as: configs/{tag}_{era}_reco_lumiXinfo.json
+    sample_info_template: "configs/{tag}_{era}_reco_lumiXinfo.json"
+  
+  # Variables to plot (subset of all 13 reconstruction branches)
+  # To plot all, use: "all"
+  # To plot specific variables, list them: ["Top_lep_pt", "Top_had_mass", "Chi2"]
+  variables:
+    - "Top_lep_pt"
+    - "Top_lep_eta"
+    - "Top_lep_phi"
+    - "Top_lep_mass"
+    - "Top_had_pt"
+    - "Top_had_eta"
+    - "Top_had_phi"
+    - "Top_had_mass"
+    - "Chi2_prefit"
+    - "Chi2"
+    - "Pgof"
+    - "chi2_status"
 
-# Variables to plot (subset of all 13 reconstruction branches)
-# To plot all, use: "all"
-# To plot specific variables, list them: ["Top_lep_pt", "Top_had_mass", "Chi2"]
-variables:
-  - "Top_lep_pt"
-  - "Top_lep_eta"
-  - "Top_lep_phi"
-  - "Top_lep_mass"
-  - "Top_had_pt"
-  - "Top_had_eta"
-  - "Top_had_phi"
-  - "Top_had_mass"
-  - "Chi2_prefit"
-  - "Chi2"
-  - "Pgof"
-  - "chi2_status"
+# Observables analysis configuration
+observables:
+  # No chi2 filter needed for observables (computed from successful reconstructions)
+  apply_chi2_filter: false
+  
+  # Input file specifications
+  inputs:
+    # Template for dataFiles.json location
+    # Will be formatted as: data/Datasets/{tag}_{era}_observables_dataFiles.json
+    datafiles_template: "data/Datasets/{tag}_{era}_observables_dataFiles.json"
+    
+    # Template for sample info (luminosity, cross-sections, etc.)
+    # Will be formatted as: configs/{tag}_{era}_observables_lumiXinfo.json
+    sample_info_template: "configs/{tag}_{era}_observables_lumiXinfo.json"
+  
+  # Observable variables to plot (7 physics observables)
+  variables:
+    - "cosTheta"
+    - "anticosTheta"
+    - "LabcosTheta"
+    - "yt"
+    - "ytbar"
+    - "ttbar_pz"
+    - "ttbar_mass"
+
+# BDT variables analysis configuration
+bdtvariables:
+  # No chi2 filter needed for BDT variables (computed from event-level information)
+  apply_chi2_filter: false
+  
+  # Input file specifications
+  inputs:
+    # Template for dataFiles.json location
+    datafiles_template: "data/Datasets/{tag}_{era}_bdtvariables_dataFiles.json"
+    
+    # Template for sample info (luminosity, cross-sections, etc.)
+    sample_info_template: "configs/{tag}_{era}_bdtvariables_lumiXinfo.json"
+  
+  # BDT variable features to plot (17 event-shape and kinematic variables)
+  variables:
+    - "JetHT"
+    - "pTSum"
+    - "FW1"
+    - "FW2"
+    - "FW3"
+    - "AL"
+    - "Sxx"
+    - "Syy"
+    - "Sxy"
+    - "Sxz"
+    - "Syz"
+    - "Szz"
+    - "S"
+    - "P"
+    - "A"
+    - "p2in"
+    - "p2out"
+
+# BDT variables parton-classification analysis configuration
+bdtvariables_parton:
+  # No chi2 filter needed for parton classification (MC-only analysis)
+  apply_chi2_filter: false
+  
+  # Input file specifications
+  inputs:
+    # Template for dataFiles.json location (MC ttbar_SemiLeptonic only)
+    datafiles_template: "data/Datasets/{tag}_bdtvariables_parton_{era}_dataFiles.json"
+    
+    # No sample_info_template needed (no luminosity scaling for same-channel comparison)
+  
+  # BDT variable features to plot (same 17 event-shape and kinematic variables)
+  variables:
+    - "JetHT"
+    - "pTSum"
+    - "FW1"
+    - "FW2"
+    - "FW3"
+    - "AL"
+    - "Sxx"
+    - "Syy"
+    - "Sxy"
+    - "Sxz"
+    - "Syz"
+    - "Szz"
+    - "S"
+    - "P"
+    - "A"
+    - "p2in"
+    - "p2out"
 
 # Output specifications
 outputs:
