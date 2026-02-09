@@ -2,6 +2,13 @@
 
 This folder contains configuration, scripts, and outputs to populate the Samples chapter (002) in the Analysis Note.
 
+
+## Expected Outcomes
+
+1. Data Sample Table: All the necessary information to populate the following table in the AN.
+* For Run 2 analysis the eras are UL2016preVFP, UL2016postVFP, UL2017 and UL2018. The whole analysis starts with the datasets list for each era. For this analysis the 
+![Data Sample Table](image.png)
+
 ## Structure
 
 ```
