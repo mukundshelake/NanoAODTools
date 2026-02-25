@@ -32,74 +32,6 @@ def load_yaml_config(filePath):
         config = yaml.safe_load(f)
     return config
 
-
-def processFolder(outputDirBase, tag, stage, era, datasetsFolder):
-    baseD = os.path.join(outputDirBase, stage, tag, era)
-    if not os.path.exists(baseD):
-        logging.error(f"Fileset directory does not exist: {baseD}")
-    jsonDic = {}
-    for DataMC in os.listdir(baseD):
-        jsonDic[DataMC] = {}
-        for key in os.listdir(os.path.join(baseD, DataMC)):
-            jsonDic[DataMC][key] = {}
-            for file in os.listdir(os.path.join(baseD, DataMC, key)):
-                if file.endswith(".root"):
-                    fileTotalPath = os.path.join(baseD, DataMC, key, file)
-                    if is_root_file_healthy(fileTotalPath):
-                        jsonDic[DataMC][key][fileTotalPath] = "Events"
-                    else:
-                        logging.warning(f"Skipping unhealthy file while making JSON: {os.path.join(baseD, DataMC, key, file)}")
-    jsonFile = os.path.join(datasetsFolder, f"{tag}_{stage}_{era}_dataFiles.json")
-    with open(jsonFile, 'w') as jf:
-        json.dump(jsonDic, jf, indent=4)
-    logging.info(f"Wrote JSON file: {jsonFile}")
-
-def load_module(module_name, era, key=None, config=None):
-    # --- Preload all correctionlib files once before forking ---
-    # This prevents "Duplicate Correction name" error in multiprocessing
-    loaded = None
-    if module_name == "lheWeightSign":
-        # logging.info(f"Loading {module_name} module configs {config}")
-        from python.postprocessing.modules.custom.LHEWeightSign import lheWeightSignModule
-        loaded = lheWeightSignModule(config)
-    elif module_name == "muonID":
-        # logging.info(f"Loading {module_name} module configs {config}")
-        ID_json = config["IDSFFile"]
-        # logging.info(f"Preloading correctionlib file for muonID: {ID_json}")
-        preload_correctionlib(ID_json)
-        from python.postprocessing.modules.custom.MuonIDWeight import muonIDWeightModule
-        loaded = muonIDWeightModule(config)
-    elif module_name == "muonHLT":
-        # logging.info(f"Loading {module_name} module configs {config}")
-        HLT_json = config["HLTSFFile"]
-        preload_correctionlib(HLT_json)
-        from python.postprocessing.modules.custom.MuonHLTWeight import muonHLTWeightModule
-        loaded = muonHLTWeightModule(config)
-    elif module_name == "bTagging":
-        # logging.info(f"Loading {module_name} module configs {config}")
-        from python.postprocessing.modules.custom.bTaggingWeight import bTaggingWeightModule
-        loaded = bTaggingWeightModule(config, key)
-    elif module_name == "jetPUID":
-        # logging.info(f"Loading {module_name} module configs {config}")
-        from python.postprocessing.examples.JetPUIdWeightModule import jetPUIdWeightModule
-        loaded = jetPUIdWeightModule(era, key)
-    elif module_name == "Reco":
-        from python.postprocessing.examples.RecoModule import RecoModule
-        loaded = RecoModule(era)
-    elif module_name == "BDTVariable":
-        from python.postprocessing.examples.BDTvariableModule import BDTvariableModule
-        loaded = BDTvariableModule()
-    elif module_name == "Observables":
-        from python.postprocessing.modules.custom.observables import ObservablesProducer
-        loaded = ObservablesProducer()
-    elif module_name == "applyBDT":
-        from python.postprocessing.examples.applyBDTModule import applyBDTModule
-        loaded = applyBDTModule(config["moduleConfigs"]["applyBDT"])
-    elif module_name == "yCalculator":
-        from python.postprocessing.modules.custom.yCalculator import yCalculator
-        loaded = yCalculator()
-    return loaded
-
 def is_root_file_healthy(filepath: str) -> bool:
     """Check if a ROOT file is healthy using PyROOT, with logging info."""
     # General checks
@@ -246,7 +178,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era and output tag.")
     parser.add_argument('--outputTag','-t', required=True, help='Tag for the output directory (e.g., April152025)')
     parser.add_argument('--era', '-e', help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
-    parser.add_argument('--stage', '-s', help='Stage of the analysis')
     parser.add_argument('--workers', '-w', type=int, default=15, help='Number of parallel workers to use')
     parser.add_argument('--includeKeys', help='Regex pattern: only include keys that match this pattern')
     parser.add_argument('--excludeKeys', help='Regex pattern: exclude keys that match this pattern')
@@ -275,7 +206,7 @@ if __name__ == "__main__":
     if exclude_tree_pattern:
         logging.info(f"Excluding files matching: {args.excludeTrees}")
 
-    configDir = os.path.join("configs", f"{outputTag}")
+    configDir = os.path.join("../", f"{outputTag}")
 
     processFlowPath = os.path.join(configDir, "processFlow_config.yaml")
 
@@ -340,7 +271,7 @@ if __name__ == "__main__":
                                 break
                         else:
                             logging.warning(f"Skipping unhealthy input file: {file}")
-            processFolder(outputDirBase, tag, stage, era, datasetsFolder)
+                            
     logging.info(f"Total files to process: {len(process_list)}")
     if len(process_list) == 0:
         logging.info("No files to process. Exiting.")

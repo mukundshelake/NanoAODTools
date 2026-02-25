@@ -40,3 +40,13 @@ SETUP_GUIDE.md
 004-Reconstruction/data/
 004-Reconstruction/run_history.txt
 004-Reconstruction/NOMENCLATURE.md
+003-ObjectSelection/datasets/*
+Datasets/*
+*.ipynb
+SEGFAULT_FIX_GUIDE.md
+004-Reconstruction/notebooks/*
+004-Reconstruction/scripts/BDT/outputs/*
+*.json
+*.yaml
+*.coffea
+*.coffea

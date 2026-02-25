@@ -5,6 +5,10 @@ from PhysicsTools.NanoAODTools.postprocessing.framework.datamodel import Collect
 from PhysicsTools.NanoAODTools.postprocessing.framework.eventloop import Module
 from scipy.optimize import minimize
 import yaml
+import warnings
+
+# Suppress scipy optimization warnings that can clutter output
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 class TTbarSemilepReconstructor(Module):
     def __init__(self, era):
         era_thresholds = {
@@ -147,9 +151,11 @@ class TTbarSemilepReconstructor(Module):
             if "nu_p4" in best_perm:
                 nu_p4 = best_perm["nu_p4"]
             else:
-                # fallback: build nu_p4 from MET components (you may have them somewhere)
-                E_nu = math.sqrt(met_px**2 + met_py**2 + met_pz**2)
-                nu_p4 = ROOT.TLorentzVector(met_px, met_py, met_pz, E_nu)
+                # fallback: build nu_p4 from MET components
+                # Assume pz=0 for neutrino if not available from best_perm
+                nu_pz = 0.0
+                E_nu = math.sqrt(met_px**2 + met_py**2 + nu_pz**2)
+                nu_p4 = ROOT.TLorentzVector(met_px, met_py, nu_pz, E_nu)
 
             lep_top = mu_p4 + nu_p4 + br_p4
             had_top = q1_p4 + q2_p4 + bh_p4
@@ -230,14 +236,18 @@ class TTbarSemilepReconstructor(Module):
             return chi2
 
         # Run optimization without constraints
-        result = minimize(
-            chi2_fn,
-            p_meas,
-            method='SLSQP',
-            options={'maxiter': 1000, 'ftol': 1e-6}
-        )
-
-        if not result.success:
+        try:
+            result = minimize(
+                chi2_fn,
+                p_meas,
+                method='SLSQP',
+                options={'maxiter': 1000, 'ftol': 1e-6, 'disp': False}
+            )
+            
+            if not result.success:
+                return {'success': False}
+        except Exception as e:
+            # If optimization crashes, return failure gracefully
             return {'success': False}
 
         p_fit = result.x

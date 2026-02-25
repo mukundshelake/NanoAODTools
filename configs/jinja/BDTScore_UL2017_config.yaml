@@ -1,5 +1,0 @@
-modules:
-    Data:
-    - applyBDT
-    MC:
-    - applyBDT

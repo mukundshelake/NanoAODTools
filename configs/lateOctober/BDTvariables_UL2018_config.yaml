@@ -1,5 +1,0 @@
-modules:
-    Data:
-    - BDTVariable
-    MC:
-    - BDTVariable
