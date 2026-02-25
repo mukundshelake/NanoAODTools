@@ -1,0 +1,29 @@
+# Ignore generated outputs (except placeholders)
+outputs/*
+!outputs/placeholder/
+!outputs/.gitkeep
+
+# But keep the tags directory structure
+!outputs/tags/
+!outputs/tags/.gitkeep
+
+# Run history is tracked
+!run_history.txt
+
+# Golden JSON files are large, don't commit (can be redownloaded)
+data/golden_jsons/*.json
+!data/golden_jsons/.gitkeep
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

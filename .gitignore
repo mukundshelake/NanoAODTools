@@ -32,7 +32,6 @@ python/
 *.swo
 MULTI_MACHINE_SETUP.md
 MULTI_MACHINE_SUMMARY.md
-.gitignore
 SETUP_GUIDE.md
 002-Samples/outputs/
 004-Reconstruction/configs/
