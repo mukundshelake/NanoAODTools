@@ -60,6 +60,8 @@ BRANCHES = [
     "Top_had_pt",  "Top_had_eta",  "Top_had_phi",  "Top_had_mass",
     "Muon_pt",     "Muon_eta",     "Muon_charge",
     "Muon_pfRelIso04_all", "Muon_tightId",
+    "y",           # parton type: 1=qqbar, 2=gg, 3=qg, 4=qqprime, 5=qq, 0=undefined/data
+    "BDTScore",    # BDT discriminant score
 ]
 
 
@@ -141,9 +143,19 @@ _vcompute_observables = np.vectorize(
 )
 
 
-def fill_histogram(data: ak.Array, muon_pt_thresh: float) -> hist.Hist:
+def fill_histogram(
+    data: ak.Array,
+    muon_pt_thresh: float,
+    qqbar_only: bool = False,
+    bdt_cut: float | None = None,
+) -> hist.Hist:
     """
-    Apply muon selection, assign top/anti-top, compute observables, fill histogram.
+    Apply event-level cuts, muon selection, assign top/anti-top, compute observables,
+    fill histogram.
+
+    Event-level pre-selection (applied before muon selection):
+        BDTScore > bdt_cut          (if bdt_cut is not None; applied to all events)
+        y == 1                      (if qqbar_only is True; applied to MC groups only)
 
     Muon selection (era-dependent pt threshold, common cuts):
         Muon_pt > muon_pt_thresh
@@ -165,6 +177,15 @@ def fill_histogram(data: ak.Array, muon_pt_thresh: float) -> hist.Hist:
         deltaAbsY  = |yt| - |ytbar|
         ttbar_mass = invariant mass of the ttbar system in GeV
     """
+
+    # ------------------------------------------------------------------
+    # Event-level pre-selection cuts
+    # ------------------------------------------------------------------
+    if bdt_cut is not None:
+        data = data[data["BDTScore"] > bdt_cut]
+
+    if qqbar_only:
+        data = data[data["y"] == 1]
 
     # ------------------------------------------------------------------
     # Muon selection: pick the highest-pT muon passing all cuts
@@ -264,6 +285,14 @@ def main():
     parser.add_argument("--json_file",     type=str, help="Path to the dataset JSON file")
     parser.add_argument("--output_folder", type=str, help="Output folder (created if absent)")
     parser.add_argument("--output_name",   type=str, help="Output coffea file name (no extension)")
+    parser.add_argument(
+        "--qqbar_only", action="store_true", default=False,
+        help="Only process qqbar events (y==1). Applied to MC groups only; Data is unaffected.",
+    )
+    parser.add_argument(
+        "--bdt_cut", type=float, default=None, metavar="SCORE",
+        help="Keep only events with BDTScore > SCORE (applied to both Data and MC).",
+    )
     args = parser.parse_args()
 
     if args.era not in MUON_PT_THRESHOLD:
@@ -273,6 +302,10 @@ def main():
 
     muon_pt_thresh = MUON_PT_THRESHOLD[args.era]
     print(f"Era: {args.era}  |  Muon pT threshold: {muon_pt_thresh} GeV")
+    if args.bdt_cut is not None:
+        print(f"BDT cut: BDTScore > {args.bdt_cut}")
+    if args.qqbar_only:
+        print("qqbar-only mode: MC groups will be filtered to y==1 events.")
 
     with open(args.json_file) as f:
         datasets = json.load(f)
@@ -293,7 +326,11 @@ def main():
                 results[group][dataset_name] = {"nevents": 0, "hist": None}
                 continue
 
-            h = fill_histogram(data, muon_pt_thresh)
+            # Apply qqbar filter only for MC groups (Data has y=0 always)
+            apply_qqbar = args.qqbar_only and group.startswith("MC")
+            h = fill_histogram(data, muon_pt_thresh,
+                               qqbar_only=apply_qqbar,
+                               bdt_cut=args.bdt_cut)
             n_filled = int(np.sum(h.values(flow=True)))
 
             results[group][dataset_name] = {

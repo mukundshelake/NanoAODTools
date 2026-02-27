@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Master orchestration script for 004-Reconstruction Data/MC plotting workflow
+Master orchestration script for 004A-Reconstruction Data/MC plotting workflow
 
-Supports both reconstruction and observables analysis types.
+Supports reconstruction and observables analysis types.
 Follows the 002-Samples pattern with hash-based output directories for reproducibility.
 
 Usage:
@@ -46,7 +46,7 @@ def run_command(cmd, description):
     print(f"Command: {' '.join(cmd)}")
     print()
     
-    # Run from 004-Reconstruction directory (parent of scripts)
+    # Run from 004A-Reconstruction directory (parent of scripts)
     result = subprocess.run(cmd, cwd=Path(__file__).parent.parent)
     
     if result.returncode != 0:
@@ -64,8 +64,8 @@ def main():
     )
     
     # Analysis type selection
-    parser.add_argument('--analysis-type', type=str, choices=['reco', 'observables', 'bdtvariables', 'bdtvariables_parton', 'all'], default='all',
-                        help='Type of analysis to run: reco, observables, bdtvariables, bdtvariables_parton, or all')
+    parser.add_argument('--analysis-type', type=str, choices=['reco', 'observables', 'all'], default='all',
+                        help='Type of analysis to run: reco, observables, or all')
     
     # Config overrides
     parser.add_argument('--eras', type=str,
@@ -97,7 +97,7 @@ def main():
     # Determine which analysis types to run
     analysis_types = []
     if args.analysis_type == 'all':
-        analysis_types = ['reco', 'observables', 'bdtvariables', 'bdtvariables_parton']
+        analysis_types = ['reco', 'observables']
     else:
         analysis_types = [args.analysis_type]
     
@@ -184,14 +184,6 @@ def process_era(era, tag, analysis_type, apply_chi2_filter, variables, config_pa
         hist_script = 'ObservablesDataMCHist.py'
         plotter_script = 'ObservablesHistPlotter.py'
         coffea_suffix = 'observables'
-    elif analysis_type == 'bdtvariables':
-        hist_script = 'BDTvariablesDataMCHist.py'
-        plotter_script = 'BDTvariablesHistPlotter.py'
-        coffea_suffix = 'bdtvariables'
-    elif analysis_type == 'bdtvariables_parton':
-        hist_script = 'BDTvariablesPartonProcessor.py'
-        plotter_script = 'BDTvariablesPartonPlotter.py'
-        coffea_suffix = 'bdtvariables_parton'
     else:
         raise ValueError(f"Unknown analysis type: {analysis_type}")
     
@@ -214,7 +206,6 @@ def process_era(era, tag, analysis_type, apply_chi2_filter, variables, config_pa
         # Check if the specific expected .coffea file exists
         if expected_coffea_path.exists() and not args.skip_histograms:
             print(f"  Found existing .coffea file: {expected_coffea}")
-            response = input("  Skip histogram generation and proceed to plotting? [Y/n]: ")
             response = input("  Skip histogram generation and proceed to plotting? [Y/n]: ")
             if response.lower() not in ['n', 'no']:
                 args.skip_histograms = True
@@ -240,7 +231,7 @@ def process_era(era, tag, analysis_type, apply_chi2_filter, variables, config_pa
     if not args.skip_histograms:
         cmd = [
             sys.executable,  # Use same Python interpreter
-            f"scripts/{hist_script}",  # Path relative to 004-Reconstruction
+            f"scripts/{hist_script}",  # Path relative to 004A-Reconstruction
             '-e', era,
             '-t', tag,
         ]
@@ -276,7 +267,7 @@ def process_era(era, tag, analysis_type, apply_chi2_filter, variables, config_pa
         
         cmd = [
             sys.executable,
-            f"scripts/{plotter_script}",  # Path relative to 004-Reconstruction
+            f"scripts/{plotter_script}",  # Path relative to 004A-Reconstruction
             str(coffea_file),
             '--output-dir', str(plots_dir),
         ]
