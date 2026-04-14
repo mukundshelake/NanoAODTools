@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-extractNs.py - Extract event counts from a coffea file produced by getNs.py.
+extractNs.py - Extract event counts from per-dataset coffea files produced by getObservables_*.py.
 
 Usage:
-    python extractNs.py --coffea_file <path> --output_folder <folder> --output_name <name>
+    python extractNs.py \\
+        --input_folder Outputs/reco_bdt \\
+        --era UL2016preVFP \\
+        --json_file Inputs/midNov_BDTScore_UL2016preVFP_dataFiles.json \\
+        --output_folder Outputs \\
+        --output_name counts_UL2016preVFP
 
 Arguments:
-    --coffea_file   : Path to the input coffea file (output of getNs.py).
+    --input_folder  : Folder containing <era>_<dataset>.coffea files.
+    --era           : Era string, e.g. UL2016preVFP.
+    --json_file     : Path to the dataFiles JSON (used to reconstruct group->dataset mapping).
     --output_folder : Output folder path (created if absent).
     --output_name   : Output JSON file name (without extension).
 
@@ -23,12 +30,21 @@ Output:
             "N_FB_neg"  : [...],                # cos(theta*) < 0,         per ttbar_mass bin
             "N_c_pos"   : [...],                # |yt| - |ytbar| > 0,      per ttbar_mass bin
             "N_c_neg"   : [...],                # |yt| - |ytbar| < 0,      per ttbar_mass bin
+            "nEvents"   : int,
+            "nTotal"    : int,
+
+            # Only present when the coffea file contains syst variations:
+            "syst": {
+                "muonIDUp":   { "N_out_pos": [...], ... },
+                "muonIDDown": { ... },
+                ...  # one entry per variation found in the histogram's systematic axis
+            }
         }
 
     The 9 values in each list correspond to the ttbar_mass bins:
         [300,400], [400,500], ..., [1100,1200]  (100 GeV steps)
 
-Histogram axis layout (from getNs.py):
+Histogram axis layout (after slicing the systematic axis):
     Axis 0  yt        : 4 bins, edges [-2.5, -1.25, 0, 1.25, 2.5]
               bin 0 [-2.5,-1.25] -> |yt| in [1.25,2.5]  (out)
               bin 1 [-1.25, 0  ] -> |yt| in [0,  1.25]  (in)
@@ -63,6 +79,7 @@ def extract_counts(h) -> dict:
 
     The histogram axes must be ordered as:
         (yt, ytbar, costheta, deltaAbsY, ttbar_mass)
+    (i.e. call with the systematic axis already sliced off)
 
     Returns
     -------
@@ -74,61 +91,91 @@ def extract_counts(h) -> dict:
     v = h.values(flow=False)
 
     def _sum_over_leading(arr_5d, axis, bins):
-        """Sum arr_5d along `axis`, keeping only `bins`, then flatten remaining axes."""
         idx        = [slice(None)] * arr_5d.ndim
         idx[axis]  = bins
-        selected   = arr_5d[tuple(idx)]                   # reduced along `axis`
-        # sum all axes except the last one (ttbar_mass)
+        selected   = arr_5d[tuple(idx)]
         return selected.sum(axis=tuple(range(arr_5d.ndim - 1))).tolist()
 
     return {
-        # |yt| in [1.25, 2.5]  -> yt bins 0, 3
         "N_out_pos": _sum_over_leading(v, axis=0, bins=OUT_BINS),
-        # |ytbar| in [1.25, 2.5]  -> ytbar bins 0, 3
         "N_out_neg": _sum_over_leading(v, axis=1, bins=OUT_BINS),
-        # |yt| < 1.25  -> yt bins 1, 2
         "N_in_pos":  _sum_over_leading(v, axis=0, bins=IN_BINS),
-        # |ytbar| < 1.25  -> ytbar bins 1, 2
         "N_in_neg":  _sum_over_leading(v, axis=1, bins=IN_BINS),
-        # costheta > 0  -> costheta bin 1
         "N_FB_pos":  _sum_over_leading(v, axis=2, bins=[1]),
-        # costheta < 0  -> costheta bin 0
         "N_FB_neg":  _sum_over_leading(v, axis=2, bins=[0]),
-        # deltaAbsY > 0  -> deltaAbsY bin 1
         "N_c_pos":   _sum_over_leading(v, axis=3, bins=[1]),
-        # deltaAbsY < 0  -> deltaAbsY bin 0
         "N_c_neg":   _sum_over_leading(v, axis=3, bins=[0]),
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract event counts from a getNs.py coffea file."
+        description="Extract event counts from per-dataset coffea files."
     )
-    parser.add_argument("--coffea_file",   type=str, required=True,
-                        help="Path to the input coffea file")
+    parser.add_argument("--input_folder",  type=str, required=True,
+                        help="Folder containing <era>_<dataset>.coffea files")
+    parser.add_argument("--era",           type=str, required=True,
+                        help="Era string, e.g. UL2016preVFP")
+    parser.add_argument("--json_file",     type=str, required=True,
+                        help="Path to the dataFiles JSON (for group->dataset mapping)")
     parser.add_argument("--output_folder", type=str, required=True,
                         help="Output folder path (created if absent)")
     parser.add_argument("--output_name",   type=str, required=True,
                         help="Output JSON file name (without extension)")
     args = parser.parse_args()
 
-    print(f"Loading: {args.coffea_file}")
-    data = load(args.coffea_file)
+    with open(args.json_file) as f:
+        datasets_json = json.load(f)
 
     output = {}
 
-    for group, group_datasets in data.items():
+    for group, group_datasets in datasets_json.items():
         output[group] = {}
-        for dataset_name, dataset_data in group_datasets.items():
-            h = dataset_data.get("hist")
-
-            if h is None:
-                print(f"  [{group}] {dataset_name}: no histogram, skipping.")
-                output[group][dataset_name] = None
+        for dataset_name in group_datasets:
+            coffea_file = os.path.join(
+                args.input_folder, f"{args.era}_{dataset_name}.coffea"
+            )
+            if not os.path.exists(coffea_file):
+                print(f"  [{group}] {dataset_name}: file not found, skipping.")
                 continue
 
-            counts = extract_counts(h)
+            print(f"\n  [{group}] {dataset_name}: loading {coffea_file}")
+            data = load(coffea_file)
+
+            # Find the histogram (key may be "reco" or "gen")
+            h_full = None
+            for key in ("reco", "gen", "hist"):
+                h_full = data.get(key)
+                if h_full is not None:
+                    break
+
+            if h_full is None:
+                print(f"  [{group}] {dataset_name}: no histogram found, skipping.")
+                continue
+
+            # Determine if the histogram has a systematic axis
+            axis_names = [ax.name for ax in h_full.axes]
+            has_syst   = "systematic" in axis_names
+
+            # Slice out the nominal 5D histogram
+            h_nom = h_full[{"systematic": "nominal"}] if has_syst else h_full
+
+            counts = extract_counts(h_nom)
+            counts["nEvents"] = int(data.get("nEvents", 0))
+            counts["nTotal"]  = int(data.get("nTotal",  0))
+
+            # Extract syst variations from the same file
+            if has_syst:
+                syst_labels = [c for c in h_full.axes["systematic"]
+                               if c != "nominal"]
+                if syst_labels:
+                    syst_counts = {}
+                    for var in syst_labels:
+                        h_var = h_full[{"systematic": var}]
+                        syst_counts[var] = extract_counts(h_var)
+                    counts["syst"] = syst_counts
+                    print(f"  [{group}] {dataset_name}: {len(syst_counts)} syst variations extracted.")
+
             output[group][dataset_name] = counts
 
             total = sum(counts["N_out_pos"]) + sum(counts["N_in_pos"])

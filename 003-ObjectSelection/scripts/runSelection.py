@@ -1,6 +1,16 @@
-from pathlib import Path
-import os, json, argparse, logging, yaml, re
-import sys
+import os, json, argparse, logging, sys, traceback
+
+# ---------------------------------------------------------------------------
+# Limit background thread pools BEFORE any library imports.
+# Without this, numpy spawns ~20 BLAS threads that compete with ROOT's
+# TTreeReader memory allocator in worker processes, causing segfaults.
+for _thread_env in [
+    "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "BLIS_NUM_THREADS",
+]:
+    if _thread_env not in os.environ:
+        os.environ[_thread_env] = "1"
+# ---------------------------------------------------------------------------
 
 # Initialize ROOT in batch mode BEFORE any other ROOT imports
 import ROOT
@@ -13,158 +23,93 @@ ROOT.gErrorIgnoreLevel = ROOT.kWarning  # Suppress info messages
 
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
 from multiprocessing import Pool
-import importlib
 from tqdm import tqdm
 
-# 🧠 --- Global correctionlib cache ---
-import correctionlib
-_GLOBAL_CORRECTION_CACHE = {}
+from modules.LHEWeightSign import LHEWeightSignProducer
+from modules.MuonIDWeight import MuonIDWeightProducer
+from modules.MuonHLTWeight import MuonHLTWeightProducer
+from modules.JetPUIDWeight import jetPUIdWeightProducer
+from modules.bTaggingWeight import bTaggingWeightProducer
+from modules.SelectedObjects import SelectedObjectsProducer
 
-def preload_correctionlib(file_path):
-    """Load a correctionlib file only once in the parent process."""
-    if file_path not in _GLOBAL_CORRECTION_CACHE:
-        logging.info(f"[preload] Loading correctionlib file: {file_path}")
-        _GLOBAL_CORRECTION_CACHE[file_path] = correctionlib.CorrectionSet.from_file(file_path)
-    return _GLOBAL_CORRECTION_CACHE[file_path]
 
-def load_yaml_config(filePath):
-    with open(filePath, "r") as f:
-        config = yaml.safe_load(f)
-    return config
+def _instantiate_module(module_name, era, key, config):
+    if module_name == "lheWeightSign":
+        return LHEWeightSignProducer(config)
+    elif module_name == "muonID":
+        return MuonIDWeightProducer(config)
+    elif module_name == "muonHLT":
+        return MuonHLTWeightProducer(config)
+    elif module_name == "bTagging":
+        return bTaggingWeightProducer(config, key)
+    elif module_name == "jetPUID":
+        return jetPUIdWeightProducer(era, key, config)
+    elif module_name == "selectedObjects":
+        return SelectedObjectsProducer(config)
+    else:
+        logging.error(f"Unknown module: {module_name}")
+        return None
 
-def is_root_file_healthy(filepath: str) -> bool:
-    """Check if a ROOT file is healthy using PyROOT, with logging info."""
-    # General checks
-    if not os.path.exists(filepath):
-        logging.error(f"File does not exist: {filepath}")
-        return False
-    if not os.path.isfile(filepath):
-        logging.error(f"Path is not a file: {filepath}")
-        return False
-    if not os.access(filepath, os.R_OK):
-        logging.error(f"File not readable: {filepath}")
-        return False
-    if os.path.getsize(filepath) == 0:
-        logging.error(f"File is empty: {filepath}")
-        return False
-    try:
-        f = ROOT.TFile.Open(filepath)
-    except OSError as e:
-        logging.error(f"Failed to open ROOT file {filepath}: {e}")
-        return False
-
-    if not f or f.IsZombie():
-        logging.error(f"ROOT file is not openable or is zombie: {filepath}")
-        if f: f.Close()
-        return False
-
-    if f.TestBit(ROOT.TFile.kRecovered):
-        logging.error(f"ROOT file was recovered, may be corrupted: {filepath}")
-        f.Close()
-        return False
-
-    if not f.GetListOfKeys() or f.GetNkeys() == 0:
-        logging.error(f"ROOT file has no keys: {filepath}")
-        f.Close()
-        return False
-
-    f.Close()
-    # logging.info(f"File is healthy: {filepath}")
-    return True
 
 def process_file(data):
-    stage, era, DataMC, key, outputDir, file, configDir = data
-    stage_era_configPath = os.path.join(configDir, f"{stage}_{era}_config.yaml")
-    
-    try:
-        conf = load_yaml_config(stage_era_configPath)
-    except Exception as e:
-        logging.error(f"Failed to load config {stage_era_configPath}: {e}")
-        return None
-    
+    era       = data["era"]
+    DataMC    = data["DataMC"]
+    key       = data["key"]
+    outputDir = data["outputDir"]
+    file      = data["file"]
+    cut_string  = data.get("cut_string", None)
+    goldenJSON  = data.get("goldenJSON", None)
+    branchsel   = data.get("branchsel", None)
+    module_configs = data.get("modules", [])
+    # module_configs: list of {"name": <str>, "config": <dict>}
 
-    files = [file]
-    cuts = conf.get("cuts", None)
-    if cuts is not None:
-        cut_string = " && ".join(cuts)
-    else:
-        cut_string = None
-    branchselector = conf.get("branchsel", None)
-    goldenJSON = None
+    os.makedirs(outputDir, exist_ok=True)
 
-    noOut = False
-    justcount = False
-
-    if not os.path.exists(outputDir):
-        os.makedirs(outputDir)
-
-    # Track modules with their names so we can detect failures to load
     modules_with_names = []
     try:
-        if "Data" in DataMC:
-            goldenJSON = conf.get("goldenJSON", None)
-            if conf["modules"]["Data"] is not None:
-                logging.info(f"Loading Data modules for {key} in {stage}:{era}")
-                for mod in conf["modules"]["Data"]:
-                    module_config_path = os.path.join(configDir, f"{mod}_{era}_config.yaml")
-                    module_conf = load_yaml_config(module_config_path)
-                    loaded = load_module(mod, era, key, module_conf)
-                    modules_with_names.append((mod, loaded))
-        elif "MC" in DataMC:
-            if conf["modules"]["MC"] is not None:
-                logging.info(f"Loading MC modules for {key} in {stage}:{era}")
-                for mod in conf["modules"]["MC"]:
-                    module_config_path = os.path.join(configDir, f"{mod}_{era}_config.yaml")
-                    module_conf = load_yaml_config(module_config_path)
-                    # logging.info(f"Module config for {mod}: {module_conf}")
-                    loaded = load_module(mod, era, key, module_conf)
-                    modules_with_names.append((mod, loaded))
+        for entry in module_configs:
+            mod_name = entry["name"]
+            mod_conf = entry.get("config", {})
+            loaded = _instantiate_module(mod_name, era, key, mod_conf)
+            modules_with_names.append((mod_name, loaded))
     except Exception as e:
-        logging.error(f"Failed to load modules for {key} in {stage}:{era}: {e}")
+        logging.error(f"Failed to instantiate modules for {key} ({DataMC}): {e}")
         return None
 
-    # Filter out any modules that failed to load (None) and warn
     missing_modules = [name for name, m in modules_with_names if m is None]
     if missing_modules:
-        logging.error(f"Failed to load modules {missing_modules} for {key} in {stage}:{era}. Skipping this file.")
+        logging.error(f"Failed to load modules {missing_modules} for {key} ({DataMC}). Skipping.")
         return None
     modules = [m for _, m in modules_with_names]
 
-    # modules = [factory() for factory in modules]
-    # logging.info(f"Processing modules for {file} in {key} of {DataMC} for {stage}:{era}: {[type(m).__name__ for m in modules]}")
-    # Set up the PostProcessor
     try:
         post_processor = PostProcessor(
             outputDir,
-            files,
+            [file],
             cut=cut_string,
             jsonInput=goldenJSON,
-            branchsel=branchselector,
-            modules=modules, 
+            branchsel=branchsel,
+            modules=modules,
             noOut=False,
             justcount=False,
-            compression="ZLIB:9",  # Use ZLIB instead of LZMA for compatibility
-        )   
-        # Run the PostProcessor
+            compression="ZLIB:9",
+        )
         post_processor.run()
-        logging.info(f"Finished processing {file} in {key} of {DataMC} for {stage}:{era}")
+        logging.info(f"Finished processing {file} in {key} of {DataMC}")
         return True
     except Exception as e:
-        logging.error(f"Error processing {file} in {key} of {DataMC} for {stage}:{era}: {e}")
-        import traceback
+        logging.error(f"Error processing {file} in {key} of {DataMC}: {e}")
         logging.error(traceback.format_exc())
         return None
 
+
 if __name__ == "__main__":
-    import sys
     from multiprocessing import set_start_method
-    
+
     # Set multiprocessing start method to 'spawn' for better ROOT compatibility
-    # This ensures each worker gets a fresh Python interpreter
     try:
         set_start_method('spawn')
     except RuntimeError:
-        # Start method already set
         pass
 
     # --- Configure Logging ---
@@ -173,119 +118,39 @@ if __name__ == "__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
     logging.info("Starting selection processing script.")
 
-
     # --- Argument Parser ---
-    parser = argparse.ArgumentParser(description="Process NanoAOD files with specified era and output tag.")
-    parser.add_argument('--outputTag','-t', required=True, help='Tag for the output directory (e.g., April152025)')
-    parser.add_argument('--era', '-e', help='Analysis era (e.g., UL2016preVFP, UL2016postVFP)')
+    parser = argparse.ArgumentParser(description="Run NanoAOD postprocessing from a pre-built process list.")
+    parser.add_argument('--processListJSON', '-i', required=True,
+                        help='Path to a JSON file containing a list of task dicts, each with keys: '
+                             'stage, era, DataMC, key, outputDir, file, configDir')
     parser.add_argument('--workers', '-w', type=int, default=15, help='Number of parallel workers to use')
-    parser.add_argument('--includeKeys', help='Regex pattern: only include keys that match this pattern')
-    parser.add_argument('--excludeKeys', help='Regex pattern: exclude keys that match this pattern')
-    parser.add_argument('--includeTrees', help='Regex pattern to include file paths')
-    parser.add_argument('--excludeTrees', help='Regex pattern to exclude file paths')
-    parser.add_argument('--sample', action='store_true', help='If set, process only a sample of the datasets for testing')
 
     args = parser.parse_args()
-    include_key_pattern = re.compile(args.includeKeys) if args.includeKeys else None
-    exclude_key_pattern = re.compile(args.excludeKeys) if args.excludeKeys else None
-    include_tree_pattern = re.compile(args.includeTrees) if args.includeTrees else None
-    exclude_tree_pattern = re.compile(args.excludeTrees) if args.excludeTrees else None
-    outputTag = args.outputTag
-    runSample = args.sample
-    logging.info(f"Using era: {args.era}")
-    logging.info(f"Using output tag: {outputTag}")
 
-    if runSample:
-        logging.info("Running in sample mode: will process only one file from each dataset")
-    if include_key_pattern:
-        logging.info(f"Including keys matching: {args.includeKeys}")
-    if exclude_key_pattern:
-        logging.info(f"Excluding keys matching: {args.excludeKeys}")
-    if include_tree_pattern:
-        logging.info(f"Including files matching: {args.includeTrees}")
-    if exclude_tree_pattern:
-        logging.info(f"Excluding files matching: {args.excludeTrees}")
+    try:
+        with open(args.processListJSON, 'r') as f:
+            process_list = json.load(f)
+    except FileNotFoundError:
+        logging.error(f"Process list JSON not found: {args.processListJSON}")
+        sys.exit(1)
 
-    configDir = os.path.join("../", f"{outputTag}")
-
-    processFlowPath = os.path.join(configDir, "processFlow_config.yaml")
-
-    config = load_yaml_config(processFlowPath)
-
-    datasetsFolder = config["DatasetJSONFolder"]
-    outputDirBase = config["outputDirBase"]
-    tag = config["tag"]
-    process_list = []
-    for stage in config["processFlow"]:
-        if args.stage and stage != args.stage:
-            logging.info(f"Skipping stage {stage} as it does not match specified stage {args.stage}")
-            continue
-        logging.info(f"Processing stage: {stage}")
-        for era in config["processFlow"][stage]:
-            if args.era and era != args.era:
-                logging.info(f"Skipping era {era} as it does not match specified era {args.era}")
-                continue
-            inputTag = config["processFlow"][stage][era]["inputTag"]
-            inputStage = config["processFlow"][stage][era]["inputStage"]
-            if inputTag == None:
-                logging.warning(f"Skipping Processing {stage}: {era} due to None inputTag")
-                continue
-            logging.info(f"Processing {stage}: {era} with inputTag: {inputTag} and inputStage: {inputStage}")
-            
-            inputJSON = os.path.join(datasetsFolder, f"{inputTag}_{inputStage}_{era}_dataFiles.json")
-            logging.info(f"Loading dataset JSON: {inputJSON}")
-            try:
-                with open(inputJSON, 'r') as json_file:
-                    dicti = json.load(json_file)
-            except FileNotFoundError:
-                logging.error(f"JSON file not found at {inputJSON}")
-                continue
-            for DataMC in dicti:
-                logging.info(f"Processing Data/MC category: {DataMC}")
-                logging.info(f"Processing keys in {DataMC} for {stage}:{era}")
-                for key in dicti[DataMC]:
-                    if include_key_pattern and not include_key_pattern.search(key):
-                        continue
-                    if exclude_key_pattern and exclude_key_pattern.search(key):
-                        continue
-                    logging.info(f"Processing dataset key: {key}")
-                    logging.info(f"Processing files in {key} of {DataMC} for {stage}:{era}")
-                    outputDir = os.path.join(outputDirBase, stage, tag, era, DataMC, key) 
-                    if not os.path.exists(outputDir):
-                        os.makedirs(outputDir)
-                    files = dicti[DataMC][key]
-                    for file in files:
-                        if include_tree_pattern and not include_tree_pattern.search(file):
-                            continue
-                        if exclude_tree_pattern and exclude_tree_pattern.search(file):
-                            continue
-                        if is_root_file_healthy(file):
-                            destFile = os.path.join(outputDir, os.path.basename(file).replace('.root', '_Skim.root'))
-                            if os.path.exists(destFile):
-                                if is_root_file_healthy(destFile):
-                                    logging.info(f"Output file already exists and is healthy: {destFile}. Skipping.")
-                                    continue
-                            process_list.append((stage, era, DataMC, key, outputDir, file, configDir))
-                            if runSample:
-                                logging.info("Sample mode active: processed one file, moving to next dataset.")
-                                break
-                        else:
-                            logging.warning(f"Skipping unhealthy input file: {file}")
-                            
-    logging.info(f"Total files to process: {len(process_list)}")
+    logging.info(f"Loaded {len(process_list)} tasks from {args.processListJSON}")
     if len(process_list) == 0:
         logging.info("No files to process. Exiting.")
         sys.exit(0)
     logging.info("Starting parallel processing of datasets...")
 
-
-    # Use multiprocessing to process datasets in parallel
+    # --- Run the pool ---
+    # maxtasksperchild=1: each worker handles exactly one file then exits.
+    # This gives every file a fresh Python+ROOT process with zero stale
+    # TTreeReader proxy state, eliminating the segfaults seen after ~6-7 files.
     num_cores = args.workers
-
-    with Pool(num_cores) as pool:
+    with Pool(num_cores, maxtasksperchild=1) as pool:
         results = list(tqdm(pool.imap_unordered(process_file, process_list),
                             total=len(process_list),
                             desc="Processing datasets"))
 
+    succeeded = sum(1 for r in results if r is True)
+    failed    = sum(1 for r in results if r is None)
+    logging.info(f"Processing complete: {succeeded} succeeded, {failed} failed out of {len(results)} total.")
     logging.info("Finished all processing.")
-    # print(dataset_list)               

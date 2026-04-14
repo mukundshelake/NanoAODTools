@@ -1,0 +1,311 @@
+[13:36:54] Restricting to single era: UL2016preVFP
+[13:36:54] Systematics mode ON (--syst flag active)
+[13:36:54] ════════════════════════════════════════════════════════
+[13:36:54]   run_all.sh starting
+[13:36:54]   Tag     : midNov
+[13:36:54]   Eras    : UL2016preVFP
+[13:36:54]   BDT cut : 0.55
+[13:36:54]   Syst    : --syst
+[13:36:54]   Outputs : Outputs/midNov/
+[13:36:54] ════════════════════════════════════════════════════════
+
+[13:36:54] ════════════════════════════════════════════════════════
+[13:36:54]   Era: UL2016preVFP  (2369 ROOT files in JSON)
+[13:36:54] ════════════════════════════════════════════════════════
+[13:36:54] START  ▶ getObservables_reco  [UL2016preVFP]
+──────────────────────────────────────────────────────────
+[Skipping group 'Data_mu']
+Era: UL2016preVFP  |  Muon pT threshold: 26 GeV  |  BDT cut: > 0.55
+Systematics: muonIDUp, muonIDDown
+Datasets (28): ['QCD_Pt-30To50_MuEnriched', 'ttbar_SemiLeptonic', 'DYJetsToLL', 'Tchannel', 'QCD_Pt-80To120_MuEnriched', 'QCD_Pt-1000_MuEnriched', 'QCD_Pt-600To800_MuEnriched', 'QCD_Pt-470To600_MuEnriched', 'WJetsToLNu_1J', 'tw_top', 'ZZTo2Q2L', 'Schannel', 'WZTo2Q2L', 'WJetsToLNu_2J', 'QCD_Pt-800To1000_MuEnriched', 'QCD_Pt-15To20_MuEnriched', 'ttbar_FullyLeptonic', 'Tbarchannel', 'QCD_Pt-50To80_MuEnriched', 'WWTolnulnu', 'QCD_Pt-170To300_MuEnriched', 'ZZTo2L2Nu', 'WWTo2L2Nu', 'WJetsToLNu_0J', 'QCD_Pt-120To170_MuEnriched', 'tw_antitop', 'QCD_Pt-300To470_MuEnriched', 'QCD_Pt-20To30_MuEnriched']
+Executor: IterativeExecutor (single-threaded)
+Preprocessing 100% ━━━━━━━━━━━━━━━ 1300/1300 [ 0:00:29 < 0:00:00 | 44.1 file/s ]
+Processing 100% ━━━━━━━━━━━━━━━━━━━ 934/934 [ 0:01:24 < 0:00:00 | 12.9 chunk/s ]
+  [QCD_Pt-30To50_MuEnriched] nTotal=5,  nEvents=2
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-30To50_MuEnriched.coffea
+  [ttbar_SemiLeptonic] nTotal=5968499,  nEvents=3027226
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_ttbar_SemiLeptonic.coffea
+  [DYJetsToLL] nTotal=2599,  nEvents=1360
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_DYJetsToLL.coffea
+  [Tchannel] nTotal=77077,  nEvents=47166
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_Tchannel.coffea
+  [QCD_Pt-80To120_MuEnriched] nTotal=2746,  nEvents=38
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-80To120_MuEnriched.coffea
+  [QCD_Pt-1000_MuEnriched] nTotal=383,  nEvents=242
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-1000_MuEnriched.coffea
+  [QCD_Pt-600To800_MuEnriched] nTotal=488,  nEvents=284
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-600To800_MuEnriched.coffea
+  [QCD_Pt-470To600_MuEnriched] nTotal=330,  nEvents=179
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-470To600_MuEnriched.coffea
+  [WJetsToLNu_1J] nTotal=61591,  nEvents=57
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_1J.coffea
+  [tw_top] nTotal=52557,  nEvents=25223
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_tw_top.coffea
+  [ZZTo2Q2L] nTotal=28038,  nEvents=12231
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_ZZTo2Q2L.coffea
+  [Schannel] nTotal=26306,  nEvents=8172
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_Schannel.coffea
+  [WZTo2Q2L] nTotal=3824,  nEvents=2060
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WZTo2Q2L.coffea
+  [WJetsToLNu_2J] nTotal=6245,  nEvents=2843
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_2J.coffea
+  [QCD_Pt-800To1000_MuEnriched] nTotal=1060,  nEvents=577
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-800To1000_MuEnriched.coffea
+  [QCD_Pt-15To20_MuEnriched] nTotal=19,  nEvents=0
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-15To20_MuEnriched.coffea
+  [ttbar_FullyLeptonic] nTotal=1267744,  nEvents=701265
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_ttbar_FullyLeptonic.coffea
+  [Tbarchannel] nTotal=52699,  nEvents=30273
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_Tbarchannel.coffea
+  [QCD_Pt-50To80_MuEnriched] nTotal=10369,  nEvents=14
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-50To80_MuEnriched.coffea
+  [WWTolnulnu] nTotal=1252,  nEvents=783
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WWTolnulnu.coffea
+  [QCD_Pt-170To300_MuEnriched] nTotal=400,  nEvents=206
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-170To300_MuEnriched.coffea
+  [ZZTo2L2Nu] nTotal=523,  nEvents=234
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_ZZTo2L2Nu.coffea
+  [WWTo2L2Nu] nTotal=129,  nEvents=46
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WWTo2L2Nu.coffea
+  [WJetsToLNu_0J] nTotal=415352,  nEvents=7
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_0J.coffea
+  [QCD_Pt-120To170_MuEnriched] nTotal=205,  nEvents=113
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-120To170_MuEnriched.coffea
+  [tw_antitop] nTotal=50362,  nEvents=23989
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_tw_antitop.coffea
+  [QCD_Pt-300To470_MuEnriched] nTotal=417,  nEvents=216
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-300To470_MuEnriched.coffea
+  [QCD_Pt-20To30_MuEnriched] nTotal=44398,  nEvents=0
+  -> Saved: Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-20To30_MuEnriched.coffea
+
+Done. Processed 8075617 entries across 28 dataset(s).
+
+/home/mukund/miniconda3/envs/latestcoffea/lib/python3.11/site-packages/numpy/_core/_methods.py:222: RuntimeWarning: Degrees of freedom <= 0 for slice
+  ret = _var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/home/mukund/miniconda3/envs/latestcoffea/lib/python3.11/site-packages/numpy/_core/_methods.py:180: RuntimeWarning: invalid value encountered in divide
+  arrmean = um.true_divide(arrmean, div, out=arrmean,
+/home/mukund/miniconda3/envs/latestcoffea/lib/python3.11/site-packages/numpy/_core/_methods.py:211: RuntimeWarning: invalid value encountered in divide
+  ret = um.true_divide(
+
+──────────────────────────────────────────────────────────
+[13:38:51] DONE   ✓ getObservables_reco  [UL2016preVFP] — finished in 117s
+[13:38:51] lumiXinfo found — running extractNs + getAs + makeDatacards for UL2016preVFP
+[13:38:51] START  ▶ extractNs  [UL2016preVFP]
+──────────────────────────────────────────────────────────
+
+  [MC_mu] QCD_Pt-30To50_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-30To50_MuEnriched.coffea
+  [MC_mu] QCD_Pt-30To50_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-30To50_MuEnriched: 2 selected events
+
+  [MC_mu] ttbar_SemiLeptonic: loading Outputs/midNov/reco_bdt/UL2016preVFP_ttbar_SemiLeptonic.coffea
+  [MC_mu] ttbar_SemiLeptonic: 22 syst variations extracted.
+  [MC_mu] ttbar_SemiLeptonic: 2708697 selected events
+
+  [MC_mu] DYJetsToLL: loading Outputs/midNov/reco_bdt/UL2016preVFP_DYJetsToLL.coffea
+  [MC_mu] DYJetsToLL: 22 syst variations extracted.
+  [MC_mu] DYJetsToLL: 1341 selected events
+
+  [MC_mu] Tchannel: loading Outputs/midNov/reco_bdt/UL2016preVFP_Tchannel.coffea
+  [MC_mu] Tchannel: 22 syst variations extracted.
+  [MC_mu] Tchannel: 42042 selected events
+
+  [MC_mu] QCD_Pt-80To120_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-80To120_MuEnriched.coffea
+  [MC_mu] QCD_Pt-80To120_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-80To120_MuEnriched: 30 selected events
+
+  [MC_mu] QCD_Pt-1000_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-1000_MuEnriched.coffea
+  [MC_mu] QCD_Pt-1000_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-1000_MuEnriched: 183 selected events
+
+  [MC_mu] QCD_Pt-600To800_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-600To800_MuEnriched.coffea
+  [MC_mu] QCD_Pt-600To800_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-600To800_MuEnriched: 217 selected events
+
+  [MC_mu] QCD_Pt-470To600_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-470To600_MuEnriched.coffea
+  [MC_mu] QCD_Pt-470To600_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-470To600_MuEnriched: 142 selected events
+
+  [MC_mu] WJetsToLNu_1J: loading Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_1J.coffea
+  [MC_mu] WJetsToLNu_1J: 22 syst variations extracted.
+  [MC_mu] WJetsToLNu_1J: 71 selected events
+
+  [MC_mu] tw_top: loading Outputs/midNov/reco_bdt/UL2016preVFP_tw_top.coffea
+  [MC_mu] tw_top: 22 syst variations extracted.
+  [MC_mu] tw_top: 22560 selected events
+
+  [MC_mu] ZZTo2Q2L: loading Outputs/midNov/reco_bdt/UL2016preVFP_ZZTo2Q2L.coffea
+  [MC_mu] ZZTo2Q2L: 22 syst variations extracted.
+  [MC_mu] ZZTo2Q2L: 10996 selected events
+
+  [MC_mu] Schannel: loading Outputs/midNov/reco_bdt/UL2016preVFP_Schannel.coffea
+  [MC_mu] Schannel: 22 syst variations extracted.
+  [MC_mu] Schannel: 7135 selected events
+
+  [MC_mu] WZTo2Q2L: loading Outputs/midNov/reco_bdt/UL2016preVFP_WZTo2Q2L.coffea
+  [MC_mu] WZTo2Q2L: 22 syst variations extracted.
+  [MC_mu] WZTo2Q2L: 2169 selected events
+
+  [MC_mu] WJetsToLNu_2J: loading Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_2J.coffea
+  [MC_mu] WJetsToLNu_2J: 22 syst variations extracted.
+  [MC_mu] WJetsToLNu_2J: 2857 selected events
+
+  [MC_mu] QCD_Pt-800To1000_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-800To1000_MuEnriched.coffea
+  [MC_mu] QCD_Pt-800To1000_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-800To1000_MuEnriched: 424 selected events
+
+  [MC_mu] QCD_Pt-15To20_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-15To20_MuEnriched.coffea
+  [MC_mu] QCD_Pt-15To20_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-15To20_MuEnriched: 0 selected events
+
+  [MC_mu] ttbar_FullyLeptonic: loading Outputs/midNov/reco_bdt/UL2016preVFP_ttbar_FullyLeptonic.coffea
+  [MC_mu] ttbar_FullyLeptonic: 22 syst variations extracted.
+  [MC_mu] ttbar_FullyLeptonic: 624773 selected events
+
+  [MC_mu] Tbarchannel: loading Outputs/midNov/reco_bdt/UL2016preVFP_Tbarchannel.coffea
+  [MC_mu] Tbarchannel: 22 syst variations extracted.
+  [MC_mu] Tbarchannel: 27154 selected events
+
+  [MC_mu] QCD_Pt-50To80_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-50To80_MuEnriched.coffea
+  [MC_mu] QCD_Pt-50To80_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-50To80_MuEnriched: 14 selected events
+
+  [MC_mu] WWTolnulnu: loading Outputs/midNov/reco_bdt/UL2016preVFP_WWTolnulnu.coffea
+  [MC_mu] WWTolnulnu: 22 syst variations extracted.
+  [MC_mu] WWTolnulnu: 510 selected events
+
+  [MC_mu] QCD_Pt-170To300_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-170To300_MuEnriched.coffea
+  [MC_mu] QCD_Pt-170To300_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-170To300_MuEnriched: 185 selected events
+
+  [MC_mu] ZZTo2L2Nu: loading Outputs/midNov/reco_bdt/UL2016preVFP_ZZTo2L2Nu.coffea
+  [MC_mu] ZZTo2L2Nu: 22 syst variations extracted.
+  [MC_mu] ZZTo2L2Nu: 223 selected events
+
+  [MC_mu] WWTo2L2Nu: loading Outputs/midNov/reco_bdt/UL2016preVFP_WWTo2L2Nu.coffea
+  [MC_mu] WWTo2L2Nu: 22 syst variations extracted.
+  [MC_mu] WWTo2L2Nu: 49 selected events
+
+  [MC_mu] WJetsToLNu_0J: loading Outputs/midNov/reco_bdt/UL2016preVFP_WJetsToLNu_0J.coffea
+  [MC_mu] WJetsToLNu_0J: 22 syst variations extracted.
+  [MC_mu] WJetsToLNu_0J: 10 selected events
+
+  [MC_mu] QCD_Pt-120To170_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-120To170_MuEnriched.coffea
+  [MC_mu] QCD_Pt-120To170_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-120To170_MuEnriched: 105 selected events
+
+  [MC_mu] tw_antitop: loading Outputs/midNov/reco_bdt/UL2016preVFP_tw_antitop.coffea
+  [MC_mu] tw_antitop: 22 syst variations extracted.
+  [MC_mu] tw_antitop: 21515 selected events
+
+  [MC_mu] QCD_Pt-300To470_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-300To470_MuEnriched.coffea
+  [MC_mu] QCD_Pt-300To470_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-300To470_MuEnriched: 171 selected events
+
+  [MC_mu] QCD_Pt-20To30_MuEnriched: loading Outputs/midNov/reco_bdt/UL2016preVFP_QCD_Pt-20To30_MuEnriched.coffea
+  [MC_mu] QCD_Pt-20To30_MuEnriched: 22 syst variations extracted.
+  [MC_mu] QCD_Pt-20To30_MuEnriched: 0 selected events
+  [Data_mu] Run2016E_HIPM_mu: file not found, skipping.
+  [Data_mu] Run2016C_HIPM_mu: file not found, skipping.
+  [Data_mu] Run2016B_ver2_mu: file not found, skipping.
+  [Data_mu] Run2016B_ver1_mu: file not found, skipping.
+  [Data_mu] Run2016D_HIPM_mu: file not found, skipping.
+  [Data_mu] Run2016F_HIPM_mu: file not found, skipping.
+
+Saved to: Outputs/midNov/counts_UL2016preVFP_syst.json
+
+──────────────────────────────────────────────────────────
+[13:38:53] DONE   ✓ extractNs  [UL2016preVFP] — finished in 2s
+[13:38:53] START  ▶ getAs  [UL2016preVFP]
+──────────────────────────────────────────────────────────
+  [MC_mu] QCD_Pt-30To50_MuEnriched: weight=786.246
+  [MC_mu] ttbar_SemiLeptonic: weight=0.0545404
+  [MC_mu] DYJetsToLL: weight=1.31768
+  [MC_mu] Tchannel: weight=0.0499594
+  [MC_mu] QCD_Pt-80To120_MuEnriched: weight=80.0537
+  [MC_mu] QCD_Pt-1000_MuEnriched: weight=0.00192124
+  [MC_mu] QCD_Pt-600To800_MuEnriched: weight=0.0221312
+  [MC_mu] QCD_Pt-470To600_MuEnriched: weight=0.0573382
+  [MC_mu] WJetsToLNu_1J: weight=2.04768
+  [MC_mu] tw_top: weight=0.234943
+  [MC_mu] ZZTo2Q2L: weight=0.00689539
+  [MC_mu] Schannel: weight=0.0120397
+  [MC_mu] WZTo2Q2L: weight=0.0131034
+  [MC_mu] WJetsToLNu_2J: weight=2.32858
+  [MC_mu] QCD_Pt-800To1000_MuEnriched: weight=0.00193659
+  [MC_mu] QCD_Pt-15To20_MuEnriched: weight=11843.3
+  [MC_mu] ttbar_FullyLeptonic: weight=0.046439
+  [MC_mu] Tbarchannel: weight=0.0534719
+  [MC_mu] QCD_Pt-50To80_MuEnriched: weight=343.61
+  [MC_mu] WWTolnulnu: weight=0.0414806
+  [MC_mu] QCD_Pt-170To300_MuEnriched: weight=3.80326
+  [MC_mu] ZZTo2L2Nu: weight=0.00113
+  [MC_mu] WWTo2L2Nu: weight=0.0720051
+  [MC_mu] WJetsToLNu_0J: weight=8.50047
+  [MC_mu] QCD_Pt-120To170_MuEnriched: weight=21.9414
+  [MC_mu] tw_antitop: weight=0.243682
+  [MC_mu] QCD_Pt-300To470_MuEnriched: weight=0.423206
+  [MC_mu] QCD_Pt-20To30_MuEnriched: weight=2236.37
+
+Computed asymmetries for 22 systematic variations.
+
+Saved asymmetries to: Outputs/midNov/asymmetries_UL2016preVFP_syst.json
+
+========== Data ==========
+          Mass bin     A_out      A_in      A_FB       A_c
+         [300,400]    0.0000    0.0000    0.0000    0.0000
+         [400,500]    0.0000    0.0000    0.0000    0.0000
+         [500,600]    0.0000    0.0000    0.0000    0.0000
+         [600,700]    0.0000    0.0000    0.0000    0.0000
+         [700,800]    0.0000    0.0000    0.0000    0.0000
+         [800,900]    0.0000    0.0000    0.0000    0.0000
+        [900,1000]    0.0000    0.0000    0.0000    0.0000
+       [1000,1100]    0.0000    0.0000    0.0000    0.0000
+       [1100,1200]    0.0000    0.0000    0.0000    0.0000
+
+========== MC ==========
+          Mass bin     A_out      A_in      A_FB       A_c
+         [300,400]   -0.0043    0.0009   -0.0302   -0.0304
+         [400,500]   -0.0142    0.0027    0.0076    0.0081
+         [500,600]    0.0031   -0.0008   -0.0352   -0.0351
+         [600,700]   -0.0074    0.0027   -0.0096   -0.0103
+         [700,800]   -0.0027    0.0012   -0.0100   -0.0081
+         [800,900]    0.0041   -0.0024    0.0020   -0.0026
+        [900,1000]   -0.0165    0.0116    0.0111   -0.0023
+       [1000,1100]    0.0464   -0.0377    0.0269    0.0277
+       [1100,1200]   -0.0106    0.0099   -0.0277   -0.0206
+
+/home/mukund/Projects/PhysicsTools/NanoAODTools/006-Results/scripts/getAs.py:79: RuntimeWarning: invalid value encountered in divide
+  result = np.where(denom > 0, (pos - neg) / denom, 0.0)
+
+──────────────────────────────────────────────────────────
+[13:38:55] DONE   ✓ getAs  [UL2016preVFP] — finished in 2s
+[13:38:55] START  ▶ makeDatacards  [UL2016preVFP]
+──────────────────────────────────────────────────────────
+Computing lumi-weighted MC totals...
+  11 systematic source(s): ['bTag', 'l1PreFiring', 'lhePdf', 'lheScaleMuF', 'lheScaleMuR', 'lheScaleMuRmuF', 'muonHLT', 'muonID', 'psFSR', 'psISR', 'pu']
+Copied: Datacards/UL2016preVFP_syst/AsymmetryModel.py
+Wrote: Datacards/UL2016preVFP_syst/run_impacts.sh
+
+36 datacard(s) written  (0 skipped, mc_tot too small)
+Output: Datacards/UL2016preVFP_syst/
+
+Next steps:
+  1. Copy Datacards/UL2016preVFP_syst/ to lxplus (where CMSSW + Combine are installed)
+  2. source /cvmfs/cms.cern.ch/cmsset_default.sh && cd <CMSSW>; cmsenv; cd -
+  3. cd Datacards/UL2016preVFP_syst/ && bash run_impacts.sh
+  4. Impact plots: impact_A_FB_UL2016preVFP_bin*.pdf  etc.
+
+Asimov mode is ON by default (fits MC-predicted pseudo-data).
+Set ASIMOV="" in run_impacts.sh (or remove -t -1) for real data.
+
+──────────────────────────────────────────────────────────
+[13:38:57] DONE   ✓ makeDatacards  [UL2016preVFP] — finished in 2s
+
+[13:38:57] ════════════════════════════════════════════════════════
+[13:38:57]   run_all.sh finished
+[13:38:57]   Eras processed : 1
+[13:38:57]   Eras skipped   : 0  (no input JSON)
+[13:38:57]   Total wall time: 123s  (2m 3s)
+[13:38:57]   Outputs in     : Outputs/midNov/
+[13:38:57]   Datacards in   : Datacards/
+[13:38:57] ════════════════════════════════════════════════════════

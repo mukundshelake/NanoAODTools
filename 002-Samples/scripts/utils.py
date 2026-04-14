@@ -1,286 +1,144 @@
-#!/usr/bin/env python3
-"""
-Utility functions for managing configs, provenance, and outputs.
-"""
+# This is the utils file for the 002-Samples package. It contains utility functions that are used across the package.
 
-import hashlib
-import json
+
 import os
-import subprocess
-import yaml
-from datetime import datetime
-from pathlib import Path
-import urllib.request
-import urllib.error
 
 
-def compute_config_hash(config_path):
+def download_file(url, output_path, output_filename, overwrite=False):
     """
-    Compute SHA256 hash of config file content.
+    Downloads a file from the given URL and saves it to the specified output path.
     
     Args:
-        config_path: Path to config.yaml
+        url (str): The URL of the file to download.
+        output_path (str): The path where the downloaded file should be saved.
+        output_filename (str): The name of the file to save.
+        overwrite (bool): Whether to overwrite the file if it already exists.
+    """
+    import requests
     
+    response = requests.get(url)
+    response.raise_for_status()  # Check if the request was successful
+
+    os.makedirs(output_path, exist_ok=True)
+    file_path = os.path.join(output_path, output_filename)
+    if not overwrite and os.path.exists(file_path):
+        return
+    with open(file_path, 'wb') as f:
+        f.write(response.content)
+
+def read_yaml(file_path):
+    """
+    Reads a YAML file and returns its contents as a dictionary.
+    
+    Args:
+        file_path (str): The path to the YAML file.
     Returns:
-        str: First 12 characters of SHA256 hash
+        dict: The contents of the YAML file as a dictionary.
     """
-    with open(config_path, 'rb') as f:
-        content = f.read()
-    hash_obj = hashlib.sha256(content)
-    return hash_obj.hexdigest()[:12]
-
-
-def get_git_info():
-    """
-    Get current git commit SHA and branch.
+    import yaml
     
-    Returns:
-        dict: Git metadata
-    """
-    try:
-        commit = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'],
-            stderr=subprocess.DEVNULL
-        ).decode().strip()
-        
-        branch = subprocess.check_output(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-            stderr=subprocess.DEVNULL
-        ).decode().strip()
-        
-        # Check for uncommitted changes
-        status = subprocess.check_output(
-            ['git', 'status', '--porcelain'],
-            stderr=subprocess.DEVNULL
-        ).decode().strip()
-        
-        return {
-            'commit': commit,
-            'branch': branch,
-            'has_uncommitted_changes': bool(status)
-        }
-    except:
-        return {
-            'commit': 'unknown',
-            'branch': 'unknown',
-            'has_uncommitted_changes': False
-        }
-
-
-def create_output_directory(base_dir, config_path):
-    """
-    Create hash-based output directory and copy config.
-    
-    Args:
-        base_dir: Base outputs directory
-        config_path: Path to config.yaml
-    
-    Returns:
-        tuple: (output_dir_path, config_hash, is_new_run)
-    """
-    config_hash = compute_config_hash(config_path)
-    output_dir = Path(base_dir) / config_hash
-    
-    is_new_run = not output_dir.exists()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Copy config to output directory
-    import shutil
-    shutil.copy2(config_path, output_dir / 'config.yaml')
-    
-    return output_dir, config_hash, is_new_run
-
-
-def update_run_history(history_file, config_hash, metadata=None):
-    """
-    Append run information to run_history.txt
-    
-    Args:
-        history_file: Path to run_history.txt
-        config_hash: Config hash for this run
-        metadata: Optional dict with additional info
-    """
-    timestamp = datetime.now().isoformat()
-    user = os.environ.get('USER', 'unknown')
-    
-    git_info = get_git_info()
-    
-    entry = {
-        'timestamp': timestamp,
-        'config_hash': config_hash,
-        'user': user,
-        'git_commit': git_info['commit'],
-        'git_branch': git_info['branch'],
-        'uncommitted_changes': git_info['has_uncommitted_changes']
-    }
-    
-    if metadata:
-        entry.update(metadata)
-    
-    with open(history_file, 'a') as f:
-        f.write(json.dumps(entry) + '\n')
-
-
-def update_latest_symlink(base_dir, config_hash):
-    """
-    Update 'latest' symlink to point to current output directory.
-    
-    Args:
-        base_dir: Base outputs directory
-        config_hash: Config hash for current run
-    """
-    latest_link = Path(base_dir) / 'latest'
-    target = Path(config_hash)
-    
-    # Remove old symlink if exists
-    if latest_link.exists() or latest_link.is_symlink():
-        latest_link.unlink()
-    
-    # Create new symlink
-    latest_link.symlink_to(target)
-
-
-def create_output_metadata(config_hash, script_name, status='generated'):
-    """
-    Create metadata dict for output JSON files.
-    
-    Args:
-        config_hash: Config hash used for this run
-        script_name: Name of script that generated output
-        status: Output status (placeholder/generated/validated)
-    
-    Returns:
-        dict: Metadata dictionary
-    """
-    git_info = get_git_info()
-    
-    return {
-        'status': status,
-        'version': '0.1',
-        'provenance': {
-            'config_hash': config_hash,
-            'git_commit': git_info['commit'],
-            'git_branch': git_info['branch'],
-            'uncommitted_changes': git_info['has_uncommitted_changes'],
-            'script': script_name,
-            'timestamp': datetime.now().isoformat(),
-            'user': os.environ.get('USER', 'unknown')
-        }
-    }
-
-
-def save_output_json(output_path, data, table_id, caption, config_hash, script_name):
-    """
-    Save output JSON with metadata.
-    
-    Args:
-        output_path: Path to save JSON
-        data: Data payload
-        table_id: LaTeX table label
-        caption: Table caption
-        config_hash: Config hash
-        script_name: Script name
-    """
-    output = {
-        'table_id': table_id,
-        'caption': caption,
-        'data': data,
-        'metadata': create_output_metadata(config_hash, script_name)
-    }
-    
-    with open(output_path, 'w') as f:
-        json.dump(output, f, indent=2)
-
-
-def load_config(config_path):
-    """Load YAML config file."""
-    with open(config_path, 'r') as f:
+    with open(file_path, 'r') as f:
         return yaml.safe_load(f)
 
-
-def validate_output_status(outputs_dir, current_config_hash):
+def generate_hash(file_path):
     """
-    Check which outputs exist and their status relative to current config.
+    Generates a hash for the given file.
     
     Args:
-        outputs_dir: Base outputs directory
-        current_config_hash: Hash of current config.yaml
-    
+        file_path (str): The path to the file for which to generate the hash.
     Returns:
-        dict: Status information
+        str: The generated hash for the file.
     """
-    outputs_path = Path(outputs_dir)
+    import hashlib
     
-    # Find all output directories (12-char hex names)
-    output_dirs = [d for d in outputs_path.iterdir() 
-                   if d.is_dir() and len(d.name) == 12 and d.name != 'placeholder']
-    
-    status = {
-        'current_hash': current_config_hash,
-        'current_exists': (outputs_path / current_config_hash).exists(),
-        'total_runs': len(output_dirs),
-        'all_hashes': [d.name for d in sorted(output_dirs, key=lambda x: x.stat().st_mtime)]
-    }
-    
-    return status
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
-
-def download_golden_jsons(config):
+def txt_to_json(txt_file, json_file_dir, json_file):
     """
-    Download golden JSON files from URLs specified in config.
+    Converts a text file containing JSON-like data to a proper JSON file.
     
     Args:
-        config: Configuration dict from config.yaml
+        txt_file (str): The path to the input text file.
+        json_file_dir (str): The directory where the output JSON file should be saved.
+        json_file (str): The name of the output JSON file.
     """
-    golden_jsons = config.get('golden_jsons', {})
+    import json
     
-    if not golden_jsons:
-        print("  Warning: No golden JSONs configured")
-        return
+    with open(txt_file, 'r') as f:
+        data = f.read()
+    os.makedirs(json_file_dir, exist_ok=True)
+    json_file_path = os.path.join(json_file_dir, json_file)
     
-    # Create data/golden_jsons directory
-    output_dir = Path('data/golden_jsons')
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Convert the string to a JSON object
+    json_data = json.loads(data)
     
-    for year, json_info in golden_jsons.items():
-        filename = json_info['filename']
-        url = json_info['url']
-        # Change extension to .json regardless of source extension
-        filename_json = Path(filename).stem + '.json'
-        filepath = output_dir / filename_json
-        
-        try:
-            print(f"    Downloading {filename} for {year}...", end=' ', flush=True)
-            urllib.request.urlretrieve(url, filepath)
-            print(f"✓ ({filepath.stat().st_size} bytes) -> {filename_json}")
-        except urllib.error.URLError as e:
-            print(f"✗ Error: {e}")
-        except Exception as e:
-            print(f"✗ Error: {e}")
+    with open(json_file_path, 'w') as f:
+        json.dump(json_data, f, indent=4)
 
-
-def validate_golden_jsons(config):
+def get_lumi_info(golden_json_file, brilcalc_path="brilcalc", lumi_unit="/pb", output_csv_file="lumi_info.csv", normtag="/cvmfs/cms-bril.cern.ch/cms-lumi-pog/Normtags/normtag_PHYSICS.json"):
     """
-    Check if all golden JSON files exist locally.
+    Calculates the total luminosity from a golden JSON file using brilcalc tool.
     
     Args:
-        config: Configuration dict from config.yaml
-    
+        golden_json_file (str): The path to the golden JSON file.
+        brilcalc_path (str or list): The brilcalc executable or full command string
+            (e.g. a singularity invocation). A string is split with shlex.split.
+        lumi_unit (str): The luminosity unit to pass to brilcalc -u (e.g. /pb, /fb, /nb).
+        output_csv_file (str): Path for the output CSV file.
+        normtag (str): Path to the normtag JSON file. Must be accessible inside the
+            execution environment (e.g. bind-mounted into singularity with --bind /cvmfs:/cvmfs).
     Returns:
-        dict: Status of each golden JSON file
+        float: The total luminosity calculated from the golden JSON file.
     """
-    golden_jsons = config.get('golden_jsons', {})
-    status = {}
+    import subprocess
+    import shlex
+    import shutil
+    import tempfile
     
-    for year, json_info in golden_jsons.items():
-        filename = json_info['filename']
-        # Check for .json extension version
-        filename_json = Path(filename).stem + '.json'
-        filepath = Path('data/golden_jsons') / filename_json
-        status[year] = {
-            'filename': filename_json,
-            'exists': filepath.exists(),
-            'path': str(filepath)
-        }
+    if isinstance(brilcalc_path, str):
+        brilcalc_cmd = shlex.split(brilcalc_path)
+    else:
+        brilcalc_cmd = list(brilcalc_path)
+
+    output_csv_abs = os.path.abspath(output_csv_file)
+    os.makedirs(os.path.dirname(output_csv_abs), exist_ok=True)
+
+    # brilcalc runs inside a singularity container that may not have /eos or
+    # paths with leading-zero segments (e.g. "002-Samples") mounted/parseable.
+    # Use temp files for both input and output so the container only sees /tmp paths,
+    # then copy the result to the intended destination afterwards.
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp_in:
+        tmp_in_path = tmp_in.name
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp_out:
+        tmp_out_path = tmp_out.name
+    try:
+        shutil.copy2(os.path.abspath(golden_json_file), tmp_in_path)
+        command = brilcalc_cmd + ["lumi", "--normtag", normtag, "-u", lumi_unit, "-i", tmp_in_path, "-o", tmp_out_path]
+        subprocess.run(command, check=True)
+        shutil.copy2(tmp_out_path, output_csv_abs)
+    finally:
+        os.unlink(tmp_in_path)
+        if os.path.exists(tmp_out_path):
+            os.unlink(tmp_out_path)
+
+def get_DAS_file_list(dataset, das_client_path="dasgoclient"):
+    """
+    Retrieves a list of files from a given dataset using the DAS client.
     
-    return status
+    Args:
+        dataset (str): The dataset path to query (e.g. /Sample/.../NANOAODSIM).
+        das_client_path (str): The path to the DAS client executable.
+    Returns:
+        list: A list of file paths retrieved from the DAS query.
+    """
+    import subprocess
+    
+    command = [das_client_path, f"-query=file dataset={dataset}"]
+    result = subprocess.run(command, stdout=subprocess.PIPE, check=True)
+    
+    return [line for line in result.stdout.decode().splitlines() if line.strip()]
+

@@ -22,13 +22,22 @@ Output:
                 "A_out": [v0, ..., v8],   # one value per ttbar_mass bin
                 "A_in":  [...],
                 "A_FB":  [...],
-                "A_c":   [...]
+                "A_c":   [...],
+                "totals": {...}
             },
             "MC": {
-                "A_out": [...],
+                "A_out": [...],           # nominal
                 "A_in":  [...],
                 "A_FB":  [...],
-                "A_c":   [...]
+                "A_c":   [...],
+                "totals": {...},
+
+                # Only present when counts file was produced from --syst coffea output:
+                "syst": {
+                    "puUp":   { "A_out": [...], "A_in": [...], "A_FB": [...], "A_c": [...] },
+                    "puDown": { ... },
+                    ...  # one entry per variation
+                }
             }
         }
 
@@ -109,10 +118,22 @@ def main():
     if n_bins is None:
         raise RuntimeError("No valid dataset found in counts file.")
 
+    # Collect all systematic variation names present in MC datasets
+    all_syst_names = set()
+    for group_name, group_datasets in counts.items():
+        if group_name.startswith("MC"):
+            for dataset_counts in group_datasets.values():
+                if isinstance(dataset_counts, dict):
+                    all_syst_names.update(dataset_counts.get("syst", {}).keys())
+
     # Accumulators: Data (unweighted sum) and MC (lumi-weighted sum)
     totals = {
         "Data": {k: np.zeros(n_bins) for k in COUNT_KEYS},
         "MC":   {k: np.zeros(n_bins) for k in COUNT_KEYS},
+    }
+    syst_totals = {
+        var_name: {k: np.zeros(n_bins) for k in COUNT_KEYS}
+        for var_name in all_syst_names
     }
 
     for group_name, group_datasets in counts.items():
@@ -146,9 +167,15 @@ def main():
             for k in COUNT_KEYS:
                 totals[tag][k] += weight * np.array(dataset_counts[k])
 
+            # Accumulate syst variations for MC
+            if tag == "MC" and all_syst_names:
+                for var_name, var_counts in dataset_counts.get("syst", {}).items():
+                    for k in COUNT_KEYS:
+                        syst_totals[var_name][k] += weight * np.array(var_counts[k])
+
             print(f"  [{group_name}] {dataset_name}: weight={weight:.6g}")
 
-    # Compute asymmetries
+    # Compute nominal asymmetries
     output = {}
     for tag in ("Data", "MC"):
         output[tag] = {}
@@ -159,6 +186,19 @@ def main():
             )
         # Also store the totals for reference
         output[tag]["totals"] = {k: totals[tag][k].tolist() for k in COUNT_KEYS}
+
+    # Compute per-variation asymmetries (MC only)
+    if all_syst_names:
+        output["MC"]["syst"] = {}
+        for var_name in sorted(all_syst_names):
+            var_asym = {}
+            for asym_name, (pos_key, neg_key) in ASYMMETRY_MAP.items():
+                var_asym[asym_name] = asymmetry(
+                    syst_totals[var_name][pos_key],
+                    syst_totals[var_name][neg_key],
+                )
+            output["MC"]["syst"][var_name] = var_asym
+        print(f"\nComputed asymmetries for {len(all_syst_names)} systematic variations.")
 
     os.makedirs(args.output_folder, exist_ok=True)
     out_path = os.path.join(args.output_folder, f"{args.output_name}.json")

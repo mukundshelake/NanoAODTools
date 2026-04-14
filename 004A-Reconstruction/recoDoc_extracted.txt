@@ -1,0 +1,1185 @@
+2.3
+
+Kinematic reconstruction of the tt system
+
+11
+
+measured in a corresponding cluster in the electromagnetic calorimeter (ECAL), and the sum
+of all bremsstrahlung photons compatible with the electron trajectory. Muons are reconstructed
+from hits in the tracker and muon system. Charged hadrons are measured by a combination
+of tracker and the connected energy clusters in the ECAL and hadronic calorimeter (HCAL).
+Photons and neutral hadrons are reconstructed from energy clusters in the ECAL and a combination of ECAL and HCAL, respectively.
+The primary pp interaction vertex is taken to be the vertex corresponding to the hardest scattering in the event, evaluated using tracking information alone, as described in Section 9.4.1 of
+Ref. [94]. In order to reduce effects from additional pp collisions in each event, we use pileup
+mitigation tools that act on the list and remove PF candidates that can be associated with a
+pileup vertex. The CMS Collaboration uses two algorithms for pileup mitigation. The chargehadron subtraction (CHS) [95] technique removes charged hadrons that are associated with a
+pileup vertex by calculating the distance of closest approach of each track to the reconstructed
+primary vertices. The PU-per-particle identification (PUPPI) [96, 97] algorithm goes one step
+further and also acts on neutral PF candidates. Each PF candidate is assigned a weight between
+0 and 1 that scales the four-momentum according to the probability of the particle to originate
+from a pileup interaction. The weight is calculated as a function of a variable defined by the
+energy deposits in the vicinity of the PF candidate. The PUPPI algorithm makes the additional
+pileup corrections to jets unnecessary, and has improved the performance and pileup stability
+of jet substructure tagging.
+The modified list of PF candidates is subsequently used as input for jet clustering algorithms,
+such that hadronic decay products of the top quark can be identified with jets. In CMS, the
+anti-kT [98] jet clustering algorithm is commonly used, as implemented in the FAST J ET software
+package [99] using a distance parameter of R = 0.4. The missing transverse momentum vector
+⃗pTmiss is computed as the negative vector sum of the transverse momenta of all the PF candidates in an event, and its magnitude is denoted as pmiss
+[100]. The jet energy scale (JES) [101] is
+T
+corrected for pileup effects, detector effects, and residual differences between data and simulation. The jet energy resolution (JER) [101] is smeared in simulated events in order to match the
+resolution observed in data. Both corrections are propagated to pmiss
+in each event.
+T
+Jets originating from b quarks are identified (tagged) with multivariate approaches that make
+use of global event, secondary vertex, displaced track, and jet constituent information [102].
+
+2.3
+
+Kinematic reconstruction of the tt system
+
+The top quarks are investigated experimentally by measuring their decay products and their
+kinematic properties. In the all-jets decay channel, all decay products are reconstructed. In the
+dilepton channel, however, the two neutrinos from the W boson decay are not measured, thus
+leading to ambiguities in the reconstruction of neutrino momenta. The lepton+jets channel
+exhibits intermediate properties with only one neutrino in the final state, leading to fewer ambiguities. Several methods of kinematic reconstruction of tt pairs have been developed, which
+are described in the following.
+2.3.1
+
+Reconstruction in the lepton+jets and all-jets channels
+
+In the lepton+jets and all-jets channels, kinematic fits [103, 104] are employed to check the compatibility of an event with the tt hypothesis and to improve the resolution of the reconstructed
+quantities. The fit parameters are the three-vectors of the momenta of the six decay products
+resulting in 18 unknowns. The following constraints are applied in the fit: the invariant masses
+of the two top quark candidates should be the same and the invariant masses of both W boson
+
+12
+candidates should be 80.4 GeV [1].
+In the lepton+jets channel, the four-momenta of the lepton and the four highest-pT (leading) jets, and ⃗pTmiss are the inputs that are fed together with their resolutions to the fit algorithm [103]. With these input values, the fit has two degrees of freedom. In the all-jets channel,
+the momenta and resolutions of the six leading jets are the inputs to the fitter [104] resulting in
+a fit with three degrees of freedom. The kinematic fit then minimises χ2 ≡ (x − xm )T G (x − xm ),
+where xm and x are the vectors of the measured and fitted momenta, respectively, and G is
+the inverse covariance matrix, which is constructed from the uncertainties in the measured
+momenta. The above-mentioned constraints are added to the minimisation procedure with
+Lagrange multipliers.
+The fit is performed for all possible assignments of the jets to the decay products. To reduce
+combinatorics, exactly two of the selected leading jets are required to be identified as originating from a b quark (b tagged). In the lepton+jets channel, the two b-tagged jets are candidates
+for the b quarks in the tt hypothesis, while the two jets that are not b tagged serve as candidates for the light quarks from the hadronically decaying W boson. In addition, there are
+two solutions for the start value of the longitudinal component of the neutrino momentum per
+parton-jet assignment. Hence, the fit is performed for four different permutations per event. In
+the all-jets channel, the two b-tagged jets are the candidates for the b quarks and the four jets
+that are not b tagged serve as candidates for the light quarks from the hadronically decaying
+W bosons. Hence, the fit is performed for six different permutations.
+The χ2 probability Pgof of the kinematic fits is used to rank the permutations, since the permutations with wrongly assigned jets typically have very low Pgof values. For simulated tt
+events, the parton-jet assignments can be classified as correct, wrong, and unmatched permutations.
+In the first case, all quarks from the tt decay are matched within a distance of
+√
+∆R = (∆η )2 + (∆ϕ)2 < 0.3, where ϕ is the azimuthal angle and η is the pseudorapidity, to
+a selected jet and assigned with the correct flavour assumption to the correct top quark. If all
+quarks are matched to a selected jet, but the wrong permutation is chosen, it is labelled ‘wrong’,
+while ‘unmatched’ indicates that not all quarks are matched unambiguously to a selected jet.
+Due to the constraints, the kinematic fits improve the resolution of the reconstructed mass of the
+top quark candidates. The resolution of the reconstructed mass of the top quark with and without applying the kinematic fit is presented in Fig. 3 for the lepton+jets (multiple permutations)
+and all-jets channels (permutation with lowest χ2 ). In the all-jets channel, only the permutation with the lowest χ2 in each event is considered for further analysis. The resolution σpeak is
+gen
+extracted by fitting a Gaussian distribution within the range −40 < mrec
+< +40 GeV.
+t − mt
+Without a kinematic fit, the resolution of the reconstructed top quark mass is relatively poor
+in the case of the lepton+jets channel, while the peak is hardly discernible at all in the all-jets
+channel. In both tt decay channels, the kinematic fit improves the resolution using either all
+jet-parton permutations or the one with the lowest χ2 . Finally, a cut on Pgof > 0.2 (0.1) is used
+in the lepton+jets (all-jets) channel, which matches the resolution of the case where only correct
+permutations are considered with their pre-fit momenta. The selection efficiency of the Pgof cut
+is 27.4 (5.3)% in the lepton+jets (all-jets) channel. Besides the mass, the kinematic fits can also
+improve the reconstruction of other kinematic variables of the tt system, such as its invariant
+gen
+mass mtt . The bias and resolution of the reconstructed mrec
+with regard to the generated mtt is
+tt
+shown for the lepton+jets channel in Fig. 4 and for the all-jets channel in Fig. 5. The resolution
+is defined as the root-mean-square (RMS) of the difference between the reconstructed and the
+generated parton-level quantity, and the bias as its mean. The kinematic fit with a Pgof cutoff
+gen
+improves the resolution and is almost free of bias over the examined range in mtt .
+
+13
+
+Kinematic reconstruction of the tt system
+
+(13 TeV)
+
+Fraction of permutations
+
+0.45
+
+CMS
+
+HitFit correct
+σpeak = 13 GeV
+HitFit Pgof > 0.2
+σpeak = 16 GeV
+HitFit lowest χ2
+σpeak = 21 GeV
+HitFit all
+σpeak = 25 GeV
+No fit, inclusive
+σpeak = 30 GeV
+No fit, correct
+σpeak = 19 GeV
+
+0.4 Simulation
+0.35 Lepton+jets
+0.3
+0.25
+0.2
+0.15
+0.1
+
+Fraction of events
+
+2.3
+
+Lowest χ2
+permutation
+
+CMS
+
+0.4 Simulation
+0.35 All-jets
+
+KinFitter correct
+σpeak = 10 GeV
+KinFitter Pgof > 0.1
+peak
+σ
+= 10 GeV
+KinFitter
+σpeak = 22 GeV
+No fit, inclusive
+σpeak n/a
+No fit, correct
+σpeak = 12 GeV
+
+0.3
+0.25
+0.2
+0.15
+0.1
+
+0.05
+0
+
+(13 TeV)
+
+0.45
+
+0.05
+0
+
+−40 −20 0 20 40 60 80 100 120 140
+
+gen
+mrec
+[GeV]
+t -mt
+
+−40 −20 0 20 40 60 80 100 120 140
+
+gen
+mrec
+[GeV]
+t -mt
+
+(13 TeV)
+
+400
+
+CMS
+
+HitFit correct
+HitFit Pgof > 0.2
+
+300
+
+HitFit lowest χ
+
+200
+
+Simulation
+Lepton+jets
+
+2
+
+HitFit all
+No kinematic fit
+
+100
+
+No fit, correct
+
+0
+
+−100
+−200
+
+RMS of m rec
+− mgen
+[GeV]
+tt
+tt
+
+Mean of mrec
+− mgen
+[GeV]
+tt
+tt
+
+Figure 3: Reconstructed top quark mass resolution with and without the H IT F IT/K IN F ITTER
+kinematic reconstruction in the lepton+jets (left) and all-jets (right) channels. Multiple reconstruction options with and without kinematic fit are represented by lines of different
+colour, and “correct” denotes the correct parton-jet assignments as discussed in the text. The
+H IT F IT/K IN F ITTER reconstruction with a cutoff on Pgof is used for measuring the top quark
+mass [61, 62].
+
+(13 TeV)
+
+400
+HitFit correct
+
+350
+
+HitFit Pgof > 0.2
+HitFit lowest χ2
+
+300
+
+CMS
+Simulation
+Lepton+jets
+
+HitFit all
+
+250
+
+No kinematic fit
+
+200
+
+No fit, correct
+
+150
+100
+50
+
+400
+
+600
+
+800
+
+1000 1200 1400
+
+mgen
+tt
+
+[GeV]
+
+0
+
+400
+
+600
+
+800
+
+1000 1200 1400
+
+mgen
+[GeV]
+tt
+
+Figure 4: Reconstructed tt mass bias (left) and resolution (right) with and without the H IT F IT
+kinematic reconstruction in the lepton+jets channel, as functions of the tt invariant mass at generator level. Multiple reconstruction options with and without kinematic fit are represented by
+lines of different colour, and “correct” denotes the correct parton-jet assignments as discussed
+in the text. The H IT F IT reconstruction with a cutoff on Pgof is used for measuring the top quark
+mass [61].
+
+14
+(13 TeV)
+Lowest χ permutation
+
+CMS
+
+2
+
+1000
+800
+600
+
+Simulation
+
+KinFitter correct
+
+All-jets
+
+KinFitter Pgof > 0.1
+KinFitter
+No kinematic fit
+No fit, correct
+
+400
+200
+0
+
+RMS of m rec
+− mgen
+[GeV]
+tt
+tt
+
+Mean of mrec
+− mgen
+[GeV]
+tt
+tt
+
+1200
+
+−200
+−400
+400
+
+400
+
+(13 TeV)
+Lowest χ permutation
+
+CMS
+
+2
+
+350
+300
+250
+
+Simulation
+
+KinFitter correct
+
+All-jets
+
+KinFitter Pgof > 0.1
+KinFitter
+No kinematic fit
+No fit, correct
+
+200
+150
+100
+50
+
+600
+
+800
+
+1000
+
+1200
+
+1400
+
+mgen
+[GeV]
+tt
+
+400
+
+600
+
+800
+
+1000
+
+1200
+
+1400
+
+mgen
+[GeV]
+tt
+
+Figure 5: Reconstructed tt mass bias (left) and resolution (right) with and without the
+K IN F ITTER kinematic reconstruction in the all-jet channel, as functions of the tt invariant mass
+at generator level. Multiple reconstruction options with and without kinematic fit are represented by lines of different colour, and “correct” denotes the correct parton-jet assignments as
+discussed in the text. The K IN F ITTER reconstruction with a cutoff on Pgof is used for measuring
+the top quark mass [62].
+2.3.2
+
+Reconstruction in the dilepton channel
+
+In contrast to the lepton+jets channel, direct measurements of mt in the dilepton channel are
+challenging because of the ambiguity due to the two neutrinos in the final state, reconstructed
+as ⃗pTmiss . Therefore, the dilepton tt events are mostly used for extraction of the Lagrangian
+mt through comparisons of the measurements of inclusive or differential tt cross sections [64,
+65, 69] to the theoretical predictions, as explained in Section 4. In this case, the reconstruction
+method aims to obtain good resolution of the observable of interest and a high reconstruction
+efficiency.
+For the tt reconstruction in the dilepton channel, several methods have been developed, with
+the primary task of obtaining solutions for the two unknown neutrino momenta. Depending
+on the observable of interest, either the individual top quark and antiquark, e.g. in the measurement of single-particle kinematics, or only the tt system, e.g. in the measurement of mtt
+distribution, are reconstructed.
+The full kinematic reconstruction (FKR) of the tt pair is based on the algebraic approach suggested in Ref. [105]. A system of kinematic equations describing the tt system is solved using
+the four-momenta of the six final-state particles, i.e. two leptons, two b jets, and the two neutrinos. It is assumed that the total measured missing transverse momentum is due to the two
+neutrinos and can be decomposed as follows:
+pmiss
+= p x,ν + p x,ν ,
+x
+
+pmiss
+= py,ν + py,ν .
+y
+
+(1)
+
+The invariant mass of the lepton and the neutrino from the same top quark should correspond
+to the mass of the W boson, resulting in the following equations:
+m2W + = ( Eℓ + + Eν )2 − ( p x,ℓ + + p x,ν )2 − ( py,ℓ + + py,ν )2 − ( pz,ℓ + + pz,ν )2 ,
+
+m2W − = ( Eℓ − + Eν )2 − ( p x,ℓ − + p x,ν )2 − ( py,ℓ − + py,ν )2 − ( pz,ℓ − + pz,ν )2 .
+
+(2)
+(3)
+
+2.3
+
+15
+
+Kinematic reconstruction of the tt system
+
+Finally, the masses of the top quark and antiquark are given, respectively, by:
+m2t = ( Eℓ + + Eν + Eb )2 − ( p x,ℓ + + p x,ν + p x,b )2 − ( py,ℓ + + py,ν + py,b )2
+
+(4)
+
+m2t = ( Eℓ − + Eν + Eb )2 − ( p x,ℓ − + p x,ν + p x,b )2 − ( py,ℓ − + py,ν + py,b )2
+
+(5)
+
+−( pz,ℓ + + pz,ν + pz,b )2 ,
+−( pz,ℓ − + pz,ν + pz,b )2 .
+
+The masses of the b quarks are set to the values used in the simulation, while lepton masses
+are assumed to be negligible. The masses of the top quark and of the W boson need to be
+fixed in order to solve the system of equations (1)–(5). For analyses where the choice does not
+directly affect the result of the measurement, they are typically fixed to the default values of
+mt = 172.5 GeV and mW = 80.4 GeV. The equation system can then be solved analytically with
+a maximum four-fold ambiguity. Selected is the solution which yields the minimum invariant mass of the tt system, as it was shown that this choice provides the best solution in most
+cases. In analyses that target direct reconstruction of mt in the dilepton channel, a dedicated
+method [47, 49, 53] is used that tests different mt hypotheses. In contrast, in differential measurements of the tt cross section, the dependence on the choice of mt in the reconstruction is
+usually estimated by varying the top quark mass assumption in the MC simulation.
+To capture the effects of the finite detector resolution, the kinematic reconstruction is repeated
+100 times, each time randomly smearing the measured energies and directions of the reconstructed leptons and jets within their resolutions. This smearing procedure recovers events that
+initially yielded no solution because of limited experimental resolution. Further, in the same
+smearing procedure, the mass of the W boson is varied according to a relativistic Breit–Wigner
+function, estimated using the generator-level W boson mass distribution. For each solution,
+a weight is calculated based on the expected true spectrum of the invariant mass of a lepton
+and a b jet (mℓ b ) stemming from the decay of a top quark and taking the product of the two
+weights for the top quark and antiquark decay chains: w = wmℓ b wmℓ b . The final three-momenta
+of the top quarks j and k are then determined as a weighted average over all smeared solutions
+summing over all 100 kinematic reconstructions:
+k,j
+
+⟨⃗pt ⟩ =
+
+1
+ws
+
+100
+
+∑ wi⃗pt,i ,
+
+i =1
+
+k,j
+
+100
+
+with
+
+ws =
+
+∑ wi .
+
+(6)
+
+i =1
+
+All possible lepton-jet combinations in the event that satisfy the requirement for the invariant
+mass of the lepton and jet mℓ b < 180 GeV are considered. Combinations are ranked, based on
+the presence of b-tagged jets in the assignments, i.e. a combination with both leptons assigned
+to b-tagged jets is preferred over those with one or zero b-tagged jet. Among assignments with
+an equal number of b-tagged jets, the one with the highest sum of weights is chosen. Events
+with no solution after smearing are discarded. The four-momentum vector of the top quark is
+determined by its energy, which is calculated from ⟨⃗pt ⟩, and the top quark mass of 172.5 GeV.
+The kinematic properties of the top antiquark are determined analogously. The efficiency of the
+kinematic reconstruction, defined as the number of events where a solution is found divided by
+is studied in data and simulation, and consistent results
+the total number of selected tt events, √
+of about 90% are found in analyses at s = 13 TeV.
+The value of the invariant mass mtt of the tt pair obtained using FKR is highly sensitive to the
+predefined value of the top quark mass used as a kinematic constraint. However, the objective
+of the analyses described in this paper is the extraction of mt , in some cases exploiting the mtt
+distribution or related observables. For such cases, the loose kinematic reconstruction (LKR)
+
+16
+was developed [64], where the value of the top quark mass is not constrained. In this algorithm,
+the νν system is reconstructed, rather than the individual ν and ν . As a consequence, only the
+tt system can be reconstructed in LKR, but not the individual top quark and antiquark. As
+in FKR, all possible lepton-jet combinations in the event that satisfy the requirement for the
+invariant mass of the lepton and jet mℓ b < 180 GeV are considered. Combinations are ranked,
+based on the presence of b-tagged jets in the assignments, but from all the combinations with an
+equal number of the b-tagged jets, the ones with the highest pT jets are chosen. The kinematic
+variables of the νν system are derived as follows:
+1. the transverse momentum ⃗pT of the νν system is set equal to ⃗pTmiss ;
+2. the νν longitudinal momentum pz,νν is set to that of the lepton pair, pz,νν = pz,ℓℓ , for
+pT,νν < Eℓℓ , and to zero otherwise;
+3. the energy of the νν system Eνν is defined as Eνν = Eℓℓ for pνν < Eℓℓ , and Eνν = pℓℓ
+otherwise, ensuring that mνν ≥ 0;
+4. the four-momentum sum of ℓℓ νν is calculated;
+5. for mℓℓ νν < 2mW = 2 × 80.4 GeV, the mass component of the four-momentum of ℓℓ νν is
+set to 2mW , ensuring that mW + W − ≥ 2mW ;
+6. the four-momentum of the tt system is calculated by using the four-momenta of the ℓℓ νν
+system and of the two b jets as ℓℓ νν +bb.
+The additional constraints that are applied on the invariant mass of the neutrino pair, mνν ≥ 0
+(item 3) and on the invariant mass of the W bosons, mW + W − ≥ 2mW (item 5) have only minor
+effects on the performance of the reconstruction. The method yields similar tt kinematic resolutions and reconstruction efficiency as for the FKR method. In the CMS analysis [64], the LKR
+was exclusively used to measure triple-differential tt cross sections as functions of the invariant
+mass and rapidity of the tt system, and the additional-jet multiplicity.
+For the presented performance studies, the POWHEG+PYTHIA8 [106–110] tt simulated samples
+are used, which are explained in detail in Section 2.4. The reconstruction efficiency for both
+methods is shown in Fig. 6 as a function of the reconstructed tt kinematic variables mtt , pT,tt ,
+and ytt . An event is considered as reconstructed if the reconstruction method yields at least one
+solution as described above. The overall efficiency for the LKR is about 4% higher than for the
+FKR, and shows the same kinematic properties. The maximum efficiency is achieved for low
+mtt , central ytt , and low pT,tt . The efficiency drops rapidly with increasing pT,tt as the leptons
+and jets become less separated. For Lorentz-boosted configurations with pT,tt > 700 GeV, the
+reconstruction fails in 20% of the cases.
+The resolution and bias for both algorithms are shown in Figs. 7 and 8, respectively, as functions
+of the same three observables at the generator level. As described above for the lepton+jets
+decay channel, the resolution is defined as the RMS of the difference between the reconstructed
+and the parton-level quantity, and the bias as its mean. As in the case of the efficiencies, the LKR
+shows better performance. Its bias is often closer to zero in the low-mtt regime, but becomes
+larger than in the case of the FKR for very large values of mtt . The LKR shows better resolution
+over the whole spectra, but it should be noted that the resolution definition is sensitive to
+outliers, e.g. in the tails of the distribution, affecting the performance of the FKR, e.g. in the
+low-mtt region. For probing mt in the dilepton channel, the resolution at low mtt , close to the
+
+17
+
+Kinematic reconstruction of the tt system
+
+1.05
+1
+
+Generated distribution
+Parton level
+Normalised to unity
+
+CMS
+
+Simulation
+
+Dilepton
+
+FKR
+
+1
+
+LKR
+
+10−1
+
+0.95
+10−2
+
+0.9
+
+Reconstruction efficiency
+
+1.1
+
+0.85
+10−3
+
+0.8
+0.75
+
+500
+
+1000
+
+(13 TeV)
+
+1.15
+Generated distribution
+Parton level
+Normalised to unity
+
+1.1
+
+Dilepton 1
+
+FKR
+
+1.05
+
+LKR
+
+1
+
+10−1
+
+0.95
+10−2
+
+0.9
+0.85
+
+10−3
+
+0.8
+0.75
+0
+
+1500
+
+200
+
+400
+
+600
+
+10−4
+800
+
+pgen [GeV]
+
+mgen
+[GeV]
+tt
+
+T,t t
+
+(13 TeV)
+
+1.15
+Generated distribution
+Parton level
+Normalised to unity
+
+1.1
+
+CMS
+
+Simulation 1
+Dilepton
+
+FKR
+
+1.05
+
+10−1
+
+LKR
+
+1
+0.95
+
+10−2
+
+0.9
+0.85
+
+Generated rate [a.u.]
+
+Reconstruction efficiency
+
+CMS 10
+
+Simulation
+
+Generated rate [a.u.]
+
+(13 TeV)
+
+1.15
+
+Generated rate [a.u.]
+
+Reconstruction efficiency
+
+2.3
+
+10−3
+
+0.8
+0.75
+
+−2
+
+−1
+
+0
+
+1
+
+10−4
+
+2
+
+ygen
+tt
+
+Figure 6: The reconstruction efficiencies for the full kinematic reconstruction (FKR, blue circles)
+and loose kinematic reconstruction (LKR, orange squares) are shown as functions of the invariant mass, transverse momentum, and rapidity of the reconstructed tt system. The averaged
+efficiencies are 92 (96)% for the FKR (LKR). The corresponding parton-generator-level distributions, normalised to unit area, for tt production are represented by the grey shaded areas,
+shown on the logarithmic scale (right y axis). The POWHEG+PYTHIA8 tt simulated samples are
+used.
+
+18
+
+LKR
+
+10−1
+
+100
+50
+
+10−2
+
+0
+
+Generated distribution
+Parton level
+Normalised to unity
+
+80
+
+CMS 10
+
+Simulation
+
+Dilepton
+
+FKR
+
+1
+
+LKR
+
+60
+
+10−1
+40
+10−2
+
+20
+
+−50
+
+10−3
+
+0
+
+−3
+
+Generated rate [a.u.]
+
+150
+
+Dilepton 1
+
+bias [GeV]
+
+FKR
+
+Simulation
+
+100
+
+T,t t
+
+200
+
+CMS
+
+p
+
+Generated distribution
+Parton level
+Normalised to unity
+
+250
+
+(13 TeV)
+
+Generated rate [a.u.]
+
+mtt bias [GeV]
+
+(13 TeV)
+
+10
+
+−100
+400
+
+600
+
+−20
+0
+
+800 1000 1200 1400
+
+200
+
+400
+
+600
+
+10−4
+800
+
+pgen [GeV]
+
+mgen
+[GeV]
+tt
+
+T,t t
+
+Generated distribution
+Parton level
+Normalised to unity
+
+1
+0.8
+
+FKR
+
+0.6
+
+LKR
+
+CMS
+
+Simulation 1
+Dilepton
+
+10−1
+
+0.4
+10−2
+
+0.2
+0
+−0.2
+
+Generated rate [a.u.]
+
+1.2
+
+tt
+
+y bias
+
+(13 TeV)
+
+10−3
+
+−0.4
+−0.6
+−2
+
+−1
+
+0
+
+1
+
+2
+
+10−4
+
+ygen
+tt
+
+Figure 7: The biases (solid lines), as defined in the text, for the full kinematic reconstruction
+(FKR, blue) and loose kinematic reconstruction (LKR, orange) are shown for the invariant mass,
+transverse momentum, and rapidity of the tt system, as a function of the same variables at the
+generator level. The corresponding parton-generator-level distributions, normalised to unit
+area, for tt production are represented by the grey shaded areas, shown on the logarithmic
+scale (right y axis). The POWHEG+PYTHIA8 tt simulated samples are used.
+production threshold, is of key importance. The resolution is about 100–150 GeV, which defines
+the minimal bin width in the differential mtt measurement.
+Since the FKR and LKR methods are developed to be agnostic to additional radiation for tt
+production, a multivariate method was developed in CMS [69] to optimise the resolution for
+an observable related to the invariant mass of the tt+jet system, denoted as ρ, which is defined
+for tt events with at least one additional jet:
+ρ=
+
+340 GeV
+.
+mtt +jet
+
+(7)
+
+In the definition of ρ, the leading jet is considered and mtt +jet is the invariant mass of the tt+jet
+system. This observable shows a large mt sensitivity and is measured in a CMS analysis [69]
+
+19
+
+Kinematic reconstruction of the tt system
+
+Dilepton 1
+
+FKR
+
+400
+
+LKR
+
+350
+
+10−1
+
+300
+250
+
+10−2
+
+200
+
+resolution [GeV]
+
+CMS
+
+Simulation
+
+180
+
+Generated distribution
+Parton level
+Normalised to unity
+
+160
+
+CMS 10
+
+Simulation
+
+Dilepton
+
+FKR
+
+140
+
+10−1
+
+100
+10−2
+
+80
+60
+
+150
+10−3
+
+100
+400
+
+600
+
+10−3
+
+40
+20
+0
+
+800 1000 1200 1400
+
+mgen
+tt
+
+1
+
+LKR
+
+120
+
+T,t t
+
+Generated distribution
+Parton level
+Normalised to unity
+
+450
+
+p
+
+500
+
+(13 TeV)
+
+Generated rate [a.u.]
+
+mtt resolution [GeV]
+
+(13 TeV)
+
+Generated rate [a.u.]
+
+2.3
+
+200
+
+400
+
+600
+gen
+
+p
+
+[GeV]
+
+T,t t
+
+10−4
+800
+
+[GeV]
+
+CMS
+
+Simulation 1
+Dilepton
+
+FKR
+
+0.8
+
+10−1
+
+LKR
+
+0.7
+0.6
+
+10−2
+
+0.5
+
+Generated rate [a.u.]
+
+Generated distribution
+Parton level
+Normalised to unity
+
+0.9
+
+tt
+
+y resolution
+
+(13 TeV)
+1
+
+10−3
+
+0.4
+0.3
+0.2
+
+−2
+
+−1
+
+0
+
+1
+
+2
+
+10−4
+
+ygen
+tt
+
+Figure 8: The resolutions (solid lines), as defined in the text, for the full kinematic reconstruction (FKR, blue) and loose kinematic reconstruction (LKR, orange) are shown as functions of
+the invariant mass, transverse momentum, and rapidity of the tt system at the generator level.
+The corresponding parton-generator-level distributions, normalised to unit area, for tt production are represented by the grey shaded areas, shown on the logarithmic scale (right y axis).
+The POWHEG+PYTHIA8 tt simulated samples are used.
+
+20
+pole
+
+described in Section 4.5 to extract mt . The result of the measurement is independent of the
+choice of the scaling constant in the numerator, which is introduced to define ρ dimensionless,
+and is on the order of two times mt . Set up as a regressional neural network (NN), a fully
+connected feed-forward NN is trained. The benefit of using a regression NN is the maximised
+reconstruction efficiency, increasing the acceptance of the measurement, as it yields a solution
+for every event. The NN uses a set of low-level inputs, e.g. particle four-momenta, and highlevel input variables, such as geometric and kinematic properties of the systems of the finalstate objects. Starting from a set of 100 variables, the ten variables with the highest impact on
+the output of the NN are selected. These also include solutions of the LKR and FKR algorithms.
+Simulated events are used for the training of the regression NN if they contain at least three
+reconstructed jets with pT > 30 GeV and |η | < 2.4. The ten input variables, ordered by their
+impact, used for the regression NN are:
+
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+
+the calculation for ρ using the LKR;
+the calculation for ρ using the FKR;
+the invariant mass of the dilepton and subleading jet system;
+the invariant mass of the leading lepton and subleading jet system;
+the pT of the subleading lepton;
+the invariant mass of the dilepton system;
+the invariant mass of the subleading lepton and subleading jet system;
+the invariant mass of the subleading lepton and leading jet system;
+the invariant mass of the dilepton and leading jet system;
+pmiss
+T .
+
+The training is performed using an independent data set, which is produced with the M AD G RAPH5 aMC @ NLO [111] event generator at NLO accuracy, interfaced with PYTHIA8 [110]. Afterwards, the resulting performance is also evaluated using the POWHEG+PYTHIA8 simulation,
+and is checked for possible overtraining.
+The performance of the NN regression is shown in Fig. 9. The left plot shows the correlation between the parton-level value (ρgen ) and the reconstructed value (ρreco ). The correlation
+coefficient for the regression is 0.87, compared to 0.78 (0.84) for the loose (full) kinematic reconstruction.
+The resolution of the regression NN is compared to that of the FKR and LKR in Fig. 9 (right).
+The resolution is defined as the RMS of the difference between the true value ρgen at parton
+level and the reconstructed value ρreco of the regression NN in a given ρgen bin, divided by
+1 + ⟨ρgen − ρreco ⟩ to account for the bias in the reconstruction and to evaluate the response
+corrected resolution. The advantage of the multivariate method is the final resolution ranging
+between 0.05 and 0.08 in the full spectrum, which is an improvement by as much as a factor of
+two with respect to earlier approaches. The most significant improvement is achieved for the
+values of ρgen close to unity. Since this kinematic regime corresponds to small values for the
+invariant mass of the tt+jet system, it is the most sensitive region for the mt measurement. An
+additional advantage is the 10–15% higher reconstruction efficiency since the described method
+is 100% efficient.
+
+2.4
+
+Monte Carlo simulations and modelling uncertainties
+
+Physics generator configurations for top quark mass measurements
+Proton-proton
+collisions are modelled and studied using MC event generators, which split the prediction into
+
+

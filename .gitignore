@@ -51,3 +51,5 @@ SEGFAULT_FIX_GUIDE.md
 *.json
 *.yaml
 *.coffea
+*.md
+006-Results/Datacards/*
