@@ -30,9 +30,6 @@ python/
 .idea/
 *.swp
 *.swo
-MULTI_MACHINE_SETUP.md
-MULTI_MACHINE_SUMMARY.md
-SETUP_GUIDE.md
 002-Samples/outputs/
 004A-Reconstruction/configs/
 004A-Reconstruction/outputs/
