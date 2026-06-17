@@ -161,8 +161,10 @@ class PostProcessor:
 
             # get input tree
             inTree = inFile.Get("Events")
-            if inTree is None:
+            if inTree is None or not isinstance(inTree, ROOT.TTree):
                 inTree = inFile.Get("Friends")
+            if inTree is None or not isinstance(inTree, ROOT.TTree):
+                raise RuntimeError("Could not find Events or Friends TTree in %s (file may be corrupted or empty)" % fname)
             nEntries = min(inTree.GetEntries() -
                            self.firstEntry, self.maxEntries)
             totEntriesRead += nEntries

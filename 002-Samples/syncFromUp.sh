@@ -1,0 +1,1 @@
+rsync -avz --progress --exclude='**/crab_preselection/' --exclude='**/scripts/' --exclude='**/notebooks/' mshelake@lxplus.cern.ch:/eos/user/m/mshelake/PhysicsTools/NanoAODTools/002-Samples/* ~/Projects/PhysicsTools/NanoAODTools/002-Samples/

@@ -67,13 +67,17 @@ def get_git_info():
         }
 
 
-def create_output_directory(base_dir, config_path):
+def create_output_directory(base_dir, config_path, inputs_folder, sfs_folder=None):
     """
     Create hash-based output directory and copy config.
     
     Args:
         base_dir: Base outputs directory
         config_path: Path to config.yaml
+        inputs_folder: Path to inputs folder
+        sfs_folder: Path to SFs folder (optional). Copied to output_dir/SFs/ so
+                    relative SF paths in processListJSON configs resolve correctly
+                    when runSelectionII.py chdirs to the run folder.
     
     Returns:
         tuple: (output_dir_path, config_hash, is_new_run)
@@ -87,6 +91,16 @@ def create_output_directory(base_dir, config_path):
     # Copy config to output directory
     import shutil
     shutil.copy2(config_path, output_dir / 'config.yaml')
+    
+    # Copy inputs folder to output directory
+    if inputs_folder.exists():
+        shutil.copytree(inputs_folder, output_dir / 'inputs', dirs_exist_ok=True)
+
+    # Copy SFs folder to output directory so relative SF paths work from the run folder
+    if sfs_folder is not None and Path(sfs_folder).exists():
+        sfs_dst = output_dir / 'SFs'
+        if not sfs_dst.exists():
+            shutil.copytree(sfs_folder, sfs_dst, symlinks=True)
     
     return output_dir, config_hash, is_new_run
 

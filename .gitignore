@@ -53,3 +53,5 @@ SEGFAULT_FIX_GUIDE.md
 *.coffea
 *.md
 006-Results/Datacards/*
+**/outputs/*
+*.log

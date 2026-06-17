@@ -41,7 +41,8 @@ class SelectedObjectsProducer(Module):
     _MUON_FLOAT_FIELDS = ["pt", "eta", "phi", "mass", "pfRelIso04_all"]
     _MUON_INT_FIELDS   = ["charge"]
     _JET_FLOAT_FIELDS  = ["pt", "eta", "phi", "mass", "btagDeepFlavB"]
-    _JET_INT_FIELDS    = ["hadronFlavour", "jetId", "puId"]
+    _JET_INT_FIELDS    = ["jetId", "puId"]
+    _JET_INT_FIELDS_MC = ["hadronFlavour"]  # MC-only branches
     _JET_KEYS          = ["leadingbJet", "subleadingbJet", "leadingJet", "subleadingJet"]
 
     def __init__(self, config):
@@ -59,6 +60,7 @@ class SelectedObjectsProducer(Module):
         self._jet_pt_min  = float(self.jetCut['pt_min'])
         self._jet_eta_max = float(self.jetCut['eta_max'])
         self._jet_jetId   = int(self.jetCut['jetId'])
+        self._is_mc       = bool(config.get('is_mc', True))
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         self.out = wrappedOutputTree
@@ -76,6 +78,9 @@ class SelectedObjectsProducer(Module):
                 self.out.branch(f"{prefix}_{field}", "F")
             for field in self._JET_INT_FIELDS:
                 self.out.branch(f"{prefix}_{field}", "I")
+            if self._is_mc:
+                for field in self._JET_INT_FIELDS_MC:
+                    self.out.branch(f"{prefix}_{field}", "I")
 
     def analyze(self, event):
         self._fill_muon(event)
@@ -156,7 +161,8 @@ class SelectedObjectsProducer(Module):
                 self.out.fillBranch(f"{prefix}_phi",           jet.phi)
                 self.out.fillBranch(f"{prefix}_mass",          jet.mass)
                 self.out.fillBranch(f"{prefix}_btagDeepFlavB", jet.btagDeepFlavB)
-                self.out.fillBranch(f"{prefix}_hadronFlavour", jet.hadronFlavour)
+                if self._is_mc:
+                    self.out.fillBranch(f"{prefix}_hadronFlavour", jet.hadronFlavour)
                 self.out.fillBranch(f"{prefix}_jetId",         jet.jetId)
                 self.out.fillBranch(f"{prefix}_puId",          jet.puId)
             else:
@@ -165,9 +171,10 @@ class SelectedObjectsProducer(Module):
                 self.out.fillBranch(f"{prefix}_phi",           0.0)
                 self.out.fillBranch(f"{prefix}_mass",          0.0)
                 self.out.fillBranch(f"{prefix}_btagDeepFlavB", 0.0)
-                self.out.fillBranch(f"{prefix}_hadronFlavour", -1)
+                if self._is_mc:
+                    self.out.fillBranch(f"{prefix}_hadronFlavour", -1)
                 self.out.fillBranch(f"{prefix}_jetId",         -1)
-                self.out.fillBranch(f"{prefix}_puId",         -1)
+                self.out.fillBranch(f"{prefix}_puId",          -1)
 
     def _passes_muon_cuts(self, muon):
         for var, cut in self.muonCut["lohi"].items():
