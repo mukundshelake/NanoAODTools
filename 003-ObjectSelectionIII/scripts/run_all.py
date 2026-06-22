@@ -62,6 +62,8 @@ def main():
                        help='Run buildSelectionHists.py to create histograms for selection optimization')
     parser.add_argument('--aggregrateGroupHists', action='store_true',
                        help='Stack up histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea')
+    parser.add_argument('--printHash', action='store_true',
+                       help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
                        help='Only add the first file of each dataset to the process list JSON (for testing purposes)')
     parser.add_argument('--workers', type=int, default=15,
@@ -79,6 +81,7 @@ def main():
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
+    print(f"  --printHash: {args.printHash}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -100,6 +103,10 @@ def main():
         print(f"Config file has changed. Created new output directory: {output_dir}")
     else:
         print(f"No changes in config. Output directory already exists: {output_dir}")
+    
+    if args.printHash:
+        print(f"Config hash: {config_hash}")
+        sys.exit(0)
     
     storageBase = config.get('STORAGE', '/path/to/storage')
     print(f"Using storage base: {storageBase}")
@@ -204,6 +211,7 @@ def main():
                                 hist_ = histData[key]['hists'][histInfo] * weight
                             else:
                                 hist_ += histData[key]['hists'][histInfo] * weight
+                            print(f"        Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
                         if hist_ is not None:
                             groupHists[f'{era}_{DataMC}_{group}'][histInfo] = hist_
                     # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea

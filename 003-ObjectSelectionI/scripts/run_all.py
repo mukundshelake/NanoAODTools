@@ -11,7 +11,6 @@ Options:
 """
 
 import argparse
-import copy
 import os
 import sys
 from pathlib import Path
@@ -62,6 +61,8 @@ def main():
                        help='[2] Write a bash script with all runSelection.py commands instead of executing them directly')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
+    parser.add_argument('--printHash', action='store_true',
+                       help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
                        help='Only add the first file of each dataset to the process list JSON (for testing purposes)')
     parser.add_argument('--workers', type=int, default=15,
@@ -78,6 +79,7 @@ def main():
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
+    print(f"  --printHash: {args.printHash}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -101,6 +103,12 @@ def main():
     
     storageBase = config.get('STORAGE', '/path/to/storage')
     print(f"Using storage base: {storageBase}")
+
+    # Print config hash if asked for
+    if args.printHash:
+        print(f"Config hash: {config_hash}")
+        return 0
+
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:

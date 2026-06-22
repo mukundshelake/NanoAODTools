@@ -52,3 +52,4 @@ SEGFAULT_FIX_GUIDE.md
 006-Results/Datacards/*
 **/outputs/*
 *.log
+003-ObjectSelectionI/scripts/run_all_earlyApril.sh

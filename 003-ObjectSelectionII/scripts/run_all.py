@@ -63,6 +63,8 @@ def main():
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
     parser.add_argument('--prepareFileset', action='store_true',
                        help='[4] Prepare the fileset for coffea processing.')
+    parser.add_argument('--printHash', action='store_true',
+                       help='Print config hash and exit (for testing purposes)')
     parser.add_argument('--sample', action='store_true',
                        help='Only add the first file of each dataset to the process list JSON (for testing purposes)')
     parser.add_argument('--workers', type=int, default=15,
@@ -80,6 +82,7 @@ def main():
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
+    print(f"  --printHash: {args.printHash}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -104,6 +107,10 @@ def main():
     
     storageBase = config.get('STORAGE', '/path/to/storage')
     print(f"Using storage base: {storageBase}")
+
+    if args.printHash:
+        print(f"Config hash: {config_hash}")
+        return 0
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
