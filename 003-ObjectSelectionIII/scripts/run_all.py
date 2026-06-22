@@ -190,6 +190,7 @@ def main():
                     for histInfo in config['histDetails']:
                         # create empty hist histogram for incrementing later
                         hist_ = None
+                        print(f"        Working on histogram {histInfo}")
                         for dataset in config['NgenandXsec'][era][DataMC][group]:
                             if not matches_filter(args.filter, era, DataMC, group, dataset):
                                 continue
@@ -211,7 +212,7 @@ def main():
                                 hist_ = histData[key]['hists'][histInfo] * weight
                             else:
                                 hist_ += histData[key]['hists'][histInfo] * weight
-                            print(f"        Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
+                            print(f"            Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
                         if hist_ is not None:
                             groupHists[f'{era}_{DataMC}_{group}'][histInfo] = hist_
                     # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea
