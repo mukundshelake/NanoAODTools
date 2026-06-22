@@ -61,7 +61,9 @@ def main():
     parser.add_argument('--buildSelectionHists', action='store_true',
                        help='Run buildSelectionHists.py to create histograms for selection optimization')
     parser.add_argument('--aggregrateGroupHists', action='store_true',
-                       help='Stack up histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea')
+                       help='Stack up histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}[...]')
+    parser.add_argument('--makeplots', action='store_true',
+                       help='Run rootHists.py to create publication-ready Data/MC comparison plots')
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
@@ -78,6 +80,7 @@ def main():
     print(f"  --selectionIIHash: {args.selectionIIHash}")
     print(f"  --buildSelectionHists: {args.buildSelectionHists}")
     print(f"  --aggregrateGroupHists: {args.aggregrateGroupHists}")
+    print(f"  --makeplots: {args.makeplots}")
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
@@ -111,7 +114,7 @@ def main():
     storageBase = config.get('STORAGE', '/path/to/storage')
     print(f"Using storage base: {storageBase}")
 
-    # If  --copyOutputsFromSelectionII is set, copy outputs from 003-ObjectSelectionII. From 003-ObjectSelectionII's outputs/{tag}/{args.selectionIIHash}/*** to 003-ObjectSelectionIII's outputs/{tag}/{config_hash}/
+    # If  --copyOutputsFromSelectionII is set, copy outputs from 003-ObjectSelectionII. From 003-ObjectSelectionII's outputs/{tag}/{args.selectionIIHash}/*** to 003-ObjectSelectionIII's outputs/{[...]
     if args.copyOutputsFromSelectionII:
         if not args.selectionIIHash:
             print("Error: --selectionIIHash must be provided when --copyOutputsFromSelectionII is set.")
@@ -169,7 +172,7 @@ def main():
                         ]
                         subprocess.run(command, check=True)
                         print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
-    # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea
+    # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
     if args.aggregrateGroupHists:
         print(f"Aggregating histograms at the group level for group: {args.aggregrateGroupHists}...")
         for era in config['NgenandXsec']:
@@ -222,6 +225,33 @@ def main():
                         continue
                     save(groupHists, output_file)
                     print(f"Finished aggregating histograms for {era}/{DataMC}/{group}. Output saved to {output_file}")
+    
+    # If --makeplots is set, run rootHists.py to create publication-ready plots
+    if args.makeplots:
+        print("Creating plots from aggregated histograms...")
+        root_hists_script = base_dir / 'scripts' / 'rootHists.py'
+        if not root_hists_script.exists():
+            print(f"Error: rootHists.py script not found at {root_hists_script}")
+            sys.exit(1)
+        
+        plots_dir = output_dir / 'plots'
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        
+        command = [
+            'python', str(root_hists_script),
+            '--tag', args.tag,
+            '--hash', config_hash,
+            '--outputDir', str(plots_dir),
+            '--configFile', str(config_path)
+        ]
+        
+        # Add filter argument if provided
+        if args.filter:
+            command.extend(['--filter'] + args.filter)
+        
+        subprocess.run(command, check=True)
+        print(f"Finished creating plots. Output saved to {plots_dir}")
+    
     print("All tasks completed.")
 
 
