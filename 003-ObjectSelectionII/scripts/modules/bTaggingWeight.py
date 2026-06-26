@@ -6,12 +6,51 @@ import os
 import awkward as ak
 from coffea.lookup_tools import extractor
 class bTaggingWeightProducer(Module):
+    @staticmethod
+    def _resolve_efficiency_file(effi_folder, era, channel):
+        base_dir = os.path.join(effi_folder, era)
+        direct = os.path.join(base_dir, f"{channel}.root")
+        if os.path.isfile(direct):
+            return direct
+
+        candidates = []
+        if "TuneCPup" in channel:
+            candidates.append(channel.replace("TuneCPup", "TuneCP5up"))
+        if "TuneCPdown" in channel:
+            candidates.append(channel.replace("TuneCPdown", "TuneCP5down"))
+        if "TuneCP5up" in channel:
+            candidates.append(channel.replace("TuneCP5up", "TuneCPup"))
+        if "TuneCP5down" in channel:
+            candidates.append(channel.replace("TuneCP5down", "TuneCPdown"))
+
+        # Last-resort fallback to nominal sample histogram if a dedicated
+        # systematic efficiency file is unavailable.
+        for marker in ["_TuneCPup", "_TuneCPdown", "_TuneCP5up", "_TuneCP5down"]:
+            if marker in channel:
+                candidates.append(channel.split(marker)[0])
+
+        seen = {direct}
+        checked = [direct]
+        for name in candidates:
+            path = os.path.join(base_dir, f"{name}.root")
+            if path in seen:
+                continue
+            seen.add(path)
+            checked.append(path)
+            if os.path.isfile(path):
+                return path
+
+        raise FileNotFoundError(
+            f"No efficiency ROOT file found for channel '{channel}' in '{base_dir}'. "
+            f"Checked: {', '.join(checked)}"
+        )
+
     def __init__(self, config, channel):
         super().__init__()
         self.era = config['era']
         self.channel = channel
         effiFolder = config['efficiencyFolder']
-        effiFile = os.path.join(effiFolder, config['era'], f"{channel}.root")
+        effiFile = self._resolve_efficiency_file(effiFolder, config['era'], channel)
         bTaggingFile = config['bTagSFFile']
         self.bTageval = correctionlib.CorrectionSet.from_file(bTaggingFile)
         b_eff_ext = extractor()
