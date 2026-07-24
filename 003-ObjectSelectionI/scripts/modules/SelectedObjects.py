@@ -81,10 +81,15 @@ class SelectedObjectsProducer(Module):
             if self._is_mc:
                 for field in self._JET_INT_FIELDS_MC:
                     self.out.branch(f"{prefix}_{field}", "I")
+        
+        # Branches for counting selected jets
+        self.out.branch("sel_nJet", "I")
+        self.out.branch("sel_nbjet", "I")
 
     def analyze(self, event):
         self._fill_muon(event)
         self._fill_jets(event)
+        self._fill_jet_counts(event)
         return True
 
     # ------------------------------------------------------------------
@@ -192,6 +197,19 @@ class SelectedObjectsProducer(Module):
             and jet.jetId == self._jet_jetId
             and (jet.pt > 50 or jet.puId > 0)
         )
+
+    def _fill_jet_counts(self, event):
+        """Count all selected jets and b-tagged jets."""
+        jets = Collection(event, "Jet")
+        
+        # Count all jets passing selection
+        sel_nJet = sum(1 for j in jets if self._passes_jet_cuts(j))
+        
+        # Count all jets passing both selection and b-tag criteria
+        sel_nbjet = sum(1 for j in jets if self._passes_jet_cuts(j) and j.btagDeepFlavB > self.bTagThreshold)
+        
+        self.out.fillBranch("sel_nJet", sel_nJet)
+        self.out.fillBranch("sel_nbjet", sel_nbjet)
 
 
 def selectedObjectsModule(config):

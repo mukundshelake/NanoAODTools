@@ -140,9 +140,19 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
     mc_stack.GetYaxis().SetTitleOffset(0.95)
     mc_stack.GetYaxis().SetLabelSize(0.05)
 
-    # Auto y-range: max of data or stack, with generous headroom
-    y_max = max(h_data.GetMaximum(), mc_stack.GetMaximum()) * 10
-    y_min = 0.5
+    # Y-range: use ylimits from config if provided, otherwise auto-scale
+    ylimits = hist_cfg.get('ylimits', [None, None])
+    if ylimits[0] is not None:
+        y_min = ylimits[0]
+    else:
+        y_min = 0.5
+    
+    if ylimits[1] is not None:
+        y_max = ylimits[1]
+    else:
+        # Auto y-range: max of data or stack, with generous headroom
+        y_max = max(h_data.GetMaximum(), mc_stack.GetMaximum()) * 30
+    
     mc_stack.SetMinimum(y_min)
     mc_stack.SetMaximum(y_max)
 
@@ -153,11 +163,12 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
     h_data.SetLineColor(ROOT.kBlack)
     h_data.Draw("E SAME")
 
-    # Legend
-    legend = TLegend(0.62, 0.45, 0.93, 0.90)
+    # Legend - 3 columns to avoid overlap with plot
+    legend = TLegend(0.38, 0.68, 0.93, 0.90)
     legend.SetBorderSize(0)
     legend.SetFillStyle(0)
-    legend.SetTextSize(0.042)
+    legend.SetTextSize(0.038)
+    legend.SetNColumns(3)
     legend.AddEntry(h_data, "Data", "lep")
     # Add MC entries in reverse stack order (top-most first in legend)
     mc_hists_for_legend = []
@@ -168,23 +179,24 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
         legend.AddEntry(h, h.GetTitle(), "f")
     legend.Draw()
 
-    # CMS labels
+    # CMS labels - positioned outside plot box in top margin
     latex = TLatex()
     latex.SetNDC()
     latex.SetTextFont(62)
-    latex.SetTextSize(0.065)
-    latex.DrawLatex(0.14, 0.87, "CMS")
+    latex.SetTextSize(0.060)
+    latex.DrawLatex(0.14, 0.945, "CMS")
     latex.SetTextFont(52)
-    latex.SetTextSize(0.050)
-    latex.DrawLatex(0.27, 0.87, "Preliminary")
-    latex.SetTextFont(42)
-    latex.SetTextSize(0.048)
-    latex.DrawLatex(0.14, 0.80, channel)
+    latex.SetTextSize(0.046)
+    latex.DrawLatex(0.245, 0.945, "Preliminary")
     # Luminosity (top-right)
     latex.SetTextAlign(31)
     lumi_str = f"{lumi / 1000.0:.1f} fb^{{-1}} (13 TeV, {era})"
-    latex.DrawLatex(0.94, 0.935, lumi_str)
+    latex.DrawLatex(0.95, 0.945, lumi_str)
     latex.SetTextAlign(11)  # reset
+    # Channel label - below CMS Preliminary inside plot box
+    latex.SetTextFont(42)
+    latex.SetTextSize(0.042)
+    latex.DrawLatex(0.14, 0.88, channel)
 
     # ---- Lower pad (ratio) -----------------------------------------------
     pad_bot.cd()
@@ -290,9 +302,10 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
         root_file.Close()
         return
 
-    # Sort MC groups by stackOrder (lowest first = bottom of stack)
+    # Sort MC groups by order (lowest first = bottom of stack).
+    # Keep backward compatibility with legacy stackOrder key.
     def stack_order(g):
-        return mc_mu_plot.get(g, {}).get('stackOrder', 99)
+        return mc_mu_plot.get(g, {}).get('order', mc_mu_plot.get(g, {}).get('stackOrder', 99))
     sorted_groups = sorted(mc_coffea.keys(), key=stack_order)
 
     # Loop over histograms
