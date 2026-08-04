@@ -151,10 +151,12 @@ def main():
                 # continue
                 # continue
                 for group in datasetJSON[DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
                     print(f"  Processing {era} / {DataMC} / {group}...")
                     # continue
                     for dataset in datasetJSON[DataMC][group]:
-                        if not matches_filter(args.filter, era, DataMC, dataset):
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
                         print (f"  Processing {era} / {DataMC} / {group} / {dataset}...")
                         # continue
@@ -240,8 +242,8 @@ def main():
                             f"python {base_dir / 'scripts' / 'runSelection.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
-                            f"{'--force' if args.force else ''}"
-                            f"{'--sample' if args.sample else ''}"
+                            f"{'--force ' if args.force else ''}"
+                            f"{'--sample ' if args.sample else ''}"
                             f"{'--filter ' + era + '/' + DataMC + '/' + group}"
                             f"{' 2>&1 | tee -a ' + str(output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}.log')}"
                         )
