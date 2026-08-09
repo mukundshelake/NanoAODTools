@@ -53,3 +53,4 @@ SEGFAULT_FIX_GUIDE.md
 **/outputs/*
 *.log
 **/*.sh
+**/*.parquet

@@ -100,7 +100,14 @@ def process_file(path, is_signal):
         return None
 
     branches = RECO_BRANCHES + WEIGHT_BRANCHES + (GEN_BRANCHES if is_signal else [])
-    arrays = tree.arrays(branches)
+    
+    # Filter to only branches that exist in the file
+    available_branches = [b for b in branches if b in tree.keys()]
+    arrays = tree.arrays(available_branches)
+    
+    # If LHEWeightSign is missing, create it as ones
+    if "LHEWeightSign" not in available_branches:
+        arrays["LHEWeightSign"] = np.ones(tree.num_entries)
 
     result = {
         "yt":       arrays["yt"],

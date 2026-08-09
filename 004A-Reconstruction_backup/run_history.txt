@@ -1,0 +1,342 @@
+
+================================================================================
+Timestamp: 2026-01-23 15:40:32
+Config Hash: d6eca6e4bc99
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d6eca6e4bc99/
+
+================================================================================
+Timestamp: 2026-01-23 16:08:56
+Config Hash: d6eca6e4bc99
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d6eca6e4bc99/
+
+================================================================================
+Timestamp: 2026-01-23 16:23:15
+Config Hash: d6eca6e4bc99
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d6eca6e4bc99/
+
+================================================================================
+Timestamp: 2026-01-23 17:03:52
+Config Hash: d6eca6e4bc99
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d6eca6e4bc99/
+
+================================================================================
+Timestamp: 2026-01-23 19:12:57
+Config Hash: 508016eec245
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/508016eec245/
+
+================================================================================
+Timestamp: 2026-01-23 20:45:53
+Config Hash: bc1fb383cff0
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/bc1fb383cff0/
+
+================================================================================
+Timestamp: 2026-01-23 22:23:32
+Config Hash: 9dd6cffe84a0
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/9dd6cffe84a0/
+
+================================================================================
+Timestamp: 2026-01-23 23:28:09
+Config Hash: 240bb58ab776
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/240bb58ab776/
+
+================================================================================
+Timestamp: 2026-01-23 23:57:29
+Config Hash: 240bb58ab776
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/240bb58ab776/
+
+================================================================================
+Timestamp: 2026-01-26 15:34:45
+Config Hash: 24a7f5712bf1
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/24a7f5712bf1/
+
+================================================================================
+Timestamp: 2026-01-26 16:07:52
+Config Hash: 24a7f5712bf1
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/24a7f5712bf1/
+
+================================================================================
+Timestamp: 2026-01-26 18:10:28
+Config Hash: 24a7f5712bf1
+Era: UL2016preVFP
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/24a7f5712bf1/
+
+================================================================================
+Timestamp: 2026-01-27 05:19:16
+Config Hash: bca14aa41526
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/bca14aa41526/
+
+================================================================================
+Timestamp: 2026-01-27 05:22:22
+Config Hash: bca14aa41526
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/bca14aa41526/
+
+================================================================================
+Timestamp: 2026-01-27 05:52:18
+Config Hash: bca14aa41526
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/bca14aa41526/
+
+================================================================================
+Timestamp: 2026-01-27 06:11:06
+Config Hash: bca14aa41526
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/bca14aa41526/
+
+================================================================================
+Timestamp: 2026-01-27 06:47:01
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-27 06:59:27
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-27 07:06:00
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-27 07:06:01
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-27 07:30:35
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-27 07:42:21
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-28 21:30:15
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-28 21:48:42
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 01:21:37
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:01:54
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:23:30
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:35:10
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:38:12
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:43:00
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 02:45:39
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 04:08:59
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-29 04:25:10
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-30 15:10:26
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-01-30 16:23:18
+Config Hash: d00903b49b02
+Era: UL2016preVFP
+Tag: midNov
+Variables: JetHT, pTSum, FW1, FW2, FW3, AL, Sxx, Syy, Sxy, Sxz, Syz, Szz, S, P, A, p2in, p2out
+Chi2 Filter: False
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-02-10 14:11:11
+Config Hash: d00903b49b02
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/d00903b49b02/
+
+================================================================================
+Timestamp: 2026-02-10 14:41:54
+Config Hash: 95f8cc47ca65
+Era: UL2016postVFP
+Tag: midNov
+Variables: Top_lep_pt, Top_lep_eta, Top_lep_phi, Top_lep_mass, Top_had_pt, Top_had_eta, Top_had_phi, Top_had_mass, Chi2_prefit, Chi2, Pgof, chi2_status
+Chi2 Filter: True
+Output Dir: outputs/95f8cc47ca65/
+
+================================================================================
+Timestamp: 2026-02-12 03:07:55
+Config Hash: 7d436a851ec9
+Era: UL2018
+Tag: midNov
+Variables: cosTheta, anticosTheta, LabcosTheta, yt, ytbar, ttbar_pz, ttbar_mass
+Chi2 Filter: False
+Output Dir: outputs/7d436a851ec9/

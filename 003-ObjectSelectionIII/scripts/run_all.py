@@ -259,6 +259,27 @@ def main():
         
         subprocess.run(command, check=True)
         print(f"Finished creating plots. Output saved to {plots_dir}")
+        
+        # Create comprehensive PDF report with all plots and config details
+        print("Creating comprehensive PDF report...")
+        create_pdf_script = base_dir / 'scripts' / 'createPlotsPDF.py'
+        if not create_pdf_script.exists():
+            print(f"Warning: createPlotsPDF.py script not found at {create_pdf_script}. Skipping PDF creation.")
+        else:
+            try:
+                command = [
+                    'python', str(create_pdf_script),
+                    '--configFile', str(config_path),
+                    '--hash', config_hash,
+                    '--tag', args.tag,
+                    '--outputDir', str(output_dir)
+                ]
+                subprocess.run(command, check=True)
+                pdf_file = output_dir / f'{args.tag}_{config_hash}_report.pdf'
+                print(f"PDF report successfully created: {pdf_file}")
+            except subprocess.CalledProcessError as e:
+                print(f"Error creating PDF report: {e}")
+                print("Continuing without PDF creation...")
     
     print("All tasks completed.")
 
