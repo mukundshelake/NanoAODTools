@@ -8,6 +8,7 @@ Usage:
 Options:
     --force: Regenerate outputs even if output files already exist
     --tag:   Create a named tag symlink to this run (e.g., "earlyApril")
+    --makeDeltaPlots: Create reconstructed-vs-generator top-mass residual plots
 """
 
 import argparse
@@ -44,6 +45,47 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
     return False
 
 
+def run_delta_plots(base_dir, output_dir, era, tag, storage_base, config_hash,
+                    generate_dataset_json_script):
+    """Generate the reconstruction dataset map if needed, then make delta plots."""
+    era_output_dir = output_dir / era
+    dataset_json = era_output_dir / f"reconstruction_{tag}_{era}_datasets.json"
+    reconstruction_base = Path(storage_base) / "reconstruction" / tag / config_hash / era
+
+    if not dataset_json.exists():
+        print(f"  Dataset JSON not found for {era}; generating it from reconstruction outputs...")
+        era_output_dir.mkdir(parents=True, exist_ok=True)
+        generate_cmd = [
+            sys.executable, str(generate_dataset_json_script),
+            "--outputDirectory", str(era_output_dir),
+            "--outputFileName", dataset_json.name,
+            "--baseDirectory", str(reconstruction_base),
+        ]
+        result = subprocess.run(generate_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error generating dataset JSON for {era}:\n{result.stderr}")
+            return False
+
+    delta_script = base_dir / "scripts" / "deltaMassPlots.py"
+    plots_dir = era_output_dir / "plots" / "deltaMass"
+    cmd = [
+        sys.executable, str(delta_script),
+        "--json", str(dataset_json),
+        "--outDir", str(plots_dir),
+    ]
+    print(f"Running command: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error running deltaMassPlots.py for {era}:\n{result.stderr}")
+        return False
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip())
+    print(f"Delta-mass plots saved to: {plots_dir}")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate all outputs for 004A-Reconstruction')
     parser.add_argument('-t', '--tag', type=str,
@@ -60,6 +102,8 @@ def main():
                        help='[2] Write a bash script with all runReco.py commands instead of executing them directly')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON by scanning the reconstruction output directory')
+    parser.add_argument('--makeDeltaPlots', action='store_true',
+                       help='[4] Generate hadronic and leptonic delta-mass plots from reconstruction outputs')
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit')
     parser.add_argument('--sample', action='store_true',
@@ -73,6 +117,7 @@ def main():
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
+    print(f"  --makeDeltaPlots: {args.makeDeltaPlots}")
     print(f"  --sample: {args.sample}")
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
@@ -219,6 +264,30 @@ def main():
                             f"{' 2>&1 | tee -a ' + str(output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}.log')}"
                         )
                         f.write(cmd + "\n")
+            if args.makeDeltaPlots:
+                # These commands are appended after all runReco commands so
+                # the reconstruction files exist before the dataset map and
+                # delta plots are produced.
+                for era in config['NgenandXsec']:
+                    if not matches_filter(args.filter, era):
+                        continue
+                    era_output_dir = output_dir / era
+                    dataset_json = era_output_dir / f"reconstruction_{args.tag}_{era}_datasets.json"
+                    reconstruction_base = (
+                        Path(storageBase) / "reconstruction" / args.tag / config_hash / era
+                    )
+                    delta_dir = era_output_dir / "plots" / "deltaMass"
+                    f.write(f"mkdir -p {era_output_dir}\n")
+                    f.write(
+                        f"python {base_dir / 'scripts' / 'generateDatasetJSON.py'} "
+                        f"--outputDirectory {era_output_dir} "
+                        f"--outputFileName {dataset_json.name} "
+                        f"--baseDirectory {reconstruction_base}\n"
+                    )
+                    f.write(
+                        f"python {base_dir / 'scripts' / 'deltaMassPlots.py'} "
+                        f"--json {dataset_json} --outDir {delta_dir}\n"
+                    )
         os.chmod(bash_script_path, 0o755)
         print(f"\nBash script written to: {bash_script_path}")
 
@@ -250,6 +319,32 @@ def main():
             else:
                 print(f"Successfully generated dataset JSON for era {era}: "
                       f"{outputDirectory / outputFileName}")
+
+    # --makeDeltaPlots
+    # run_all.py normally prepares commands rather than running reconstruction
+    # itself.  This step therefore operates on already-produced reconstruction
+    # files, creating the per-era dataset JSON on demand when necessary.
+    if args.makeDeltaPlots:
+        print("\nGenerating delta-mass plots...")
+        delta_script = base_dir / 'scripts' / 'deltaMassPlots.py'
+        generate_dataset_json_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not delta_script.exists():
+            print(f"Error: Script not found: {delta_script}")
+            return 1
+        if not generate_dataset_json_script.exists():
+            print(f"Error: Script not found: {generate_dataset_json_script}")
+            return 1
+
+        delta_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            if not run_delta_plots(
+                    base_dir, output_dir, era, args.tag, storageBase, config_hash,
+                    generate_dataset_json_script):
+                delta_failed = True
+        if delta_failed:
+            return 1
 
 
 if __name__ == '__main__':

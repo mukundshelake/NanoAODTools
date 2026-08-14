@@ -1,204 +1,256 @@
 #!/usr/bin/env python3
 """
-Utility functions for 004-Reconstruction Data/MC plotting workflow
-
-Provides:
-- Config hashing for reproducible outputs
-- Output directory management
-- Run history logging
-- Helper functions following 002-Samples pattern
+Utility functions for managing configs, provenance, and outputs.
 """
 
 import hashlib
 import json
+import os
+import subprocess
 import yaml
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import urllib.request
+import urllib.error
 
 
 def compute_config_hash(config_path):
     """
-    Compute SHA256 hash of config.yaml file
+    Compute SHA256 hash of config file content.
     
     Args:
         config_path: Path to config.yaml
-        
-    Returns:
-        First 12 characters of hex digest (e.g., 'a1b2c3d4e5f6')
-    """
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
     
+    Returns:
+        str: First 12 characters of SHA256 hash
+    """
     with open(config_path, 'rb') as f:
         content = f.read()
-    
     hash_obj = hashlib.sha256(content)
     return hash_obj.hexdigest()[:12]
 
 
-def setup_output_dir(base_dir, config_hash, config_path):
+def get_git_info():
     """
-    Create hash-based output directory and copy config for reproducibility
+    Get current git commit SHA and branch.
     
-    Args:
-        base_dir: Base outputs directory (e.g., 'outputs/')
-        config_hash: Hash string from compute_config_hash()
-        config_path: Path to config.yaml to copy
-        
     Returns:
-        Path object to the created output directory
+        dict: Git metadata
     """
-    base_dir = Path(base_dir)
-    base_dir.mkdir(exist_ok=True)
-    
-    output_dir = base_dir / config_hash
-    output_dir.mkdir(exist_ok=True)
-    
-    # Copy config.yaml to output directory for reproducibility
-    config_copy = output_dir / 'config.yaml'
-    if not config_copy.exists():
-        import shutil
-        shutil.copy(config_path, config_copy)
-    
-    return output_dir
+    try:
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        
+        # Check for uncommitted changes
+        status = subprocess.check_output(
+            ['git', 'status', '--porcelain'],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        
+        return {
+            'commit': commit,
+            'branch': branch,
+            'has_uncommitted_changes': bool(status)
+        }
+    except:
+        return {
+            'commit': 'unknown',
+            'branch': 'unknown',
+            'has_uncommitted_changes': False
+        }
 
 
-def update_latest_symlink(base_dir, config_hash):
+def create_output_directory(base_dir, config_path, inputs_folder):
     """
-    Update 'latest' symlink to point to most recent run
+    Create hash-based output directory and copy config.
     
     Args:
-        base_dir: Base outputs directory (e.g., 'outputs/')
-        config_hash: Hash string of the current run
+        base_dir: Base outputs directory
+        config_path: Path to config.yaml
+        inputs_folder: Path to inputs folder
+    
+    Returns:
+        tuple: (output_dir_path, config_hash, is_new_run)
     """
-    base_dir = Path(base_dir)
-    latest_link = base_dir / 'latest'
+    config_hash = compute_config_hash(config_path)
+    output_dir = Path(base_dir) / config_hash
     
-    # Remove existing symlink if present
-    if latest_link.exists() or latest_link.is_symlink():
-        latest_link.unlink()
+    is_new_run = not output_dir.exists()
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create new symlink
-    latest_link.symlink_to(config_hash, target_is_directory=True)
+    # Copy config to output directory
+    import shutil
+    shutil.copy2(config_path, output_dir / 'config.yaml')
+    
+    # Copy inputs folder to output directory
+    if inputs_folder.exists():
+        shutil.copytree(inputs_folder, output_dir / 'inputs', dirs_exist_ok=True)
+    
+    return output_dir, config_hash, is_new_run
 
 
-def log_run(run_history_path, config_hash, config_summary):
+def update_run_history(history_file, config_hash, metadata=None):
     """
     Append run information to run_history.txt
     
     Args:
-        run_history_path: Path to run_history.txt
-        config_hash: Hash string of this run
-        config_summary: Dict with run details (era, tag, variables, etc.)
+        history_file: Path to run_history.txt
+        config_hash: Config hash for this run
+        metadata: Optional dict with additional info
     """
-    run_history_path = Path(run_history_path)
-    run_history_path.parent.mkdir(exist_ok=True)
+    timestamp = datetime.now().isoformat()
+    user = os.environ.get('USER', 'unknown')
     
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    git_info = get_git_info()
     
-    with open(run_history_path, 'a') as f:
-        f.write(f"\n{'='*80}\n")
-        f.write(f"Timestamp: {timestamp}\n")
-        f.write(f"Config Hash: {config_hash}\n")
-        f.write(f"Era: {config_summary.get('era', 'N/A')}\n")
-        f.write(f"Tag: {config_summary.get('tag', 'N/A')}\n")
-        f.write(f"Variables: {', '.join(config_summary.get('variables', []))}\n")
-        f.write(f"Chi2 Filter: {config_summary.get('apply_chi2_filter', 'N/A')}\n")
-        f.write(f"Output Dir: outputs/{config_hash}/\n")
+    entry = {
+        'timestamp': timestamp,
+        'config_hash': config_hash,
+        'user': user,
+        'git_commit': git_info['commit'],
+        'git_branch': git_info['branch'],
+        'uncommitted_changes': git_info['has_uncommitted_changes']
+    }
+    
+    if metadata:
+        entry.update(metadata)
+    
+    with open(history_file, 'a') as f:
+        f.write(json.dumps(entry) + '\n')
+
+
+def update_latest_symlink(base_dir, config_hash):
+    """
+    Update 'latest' symlink to point to current output directory.
+    
+    Args:
+        base_dir: Base outputs directory
+        config_hash: Config hash for current run
+    """
+    latest_link = Path(base_dir) / 'latest'
+    target = Path(config_hash)
+    
+    # Remove old symlink if exists
+    if latest_link.exists() or latest_link.is_symlink():
+        latest_link.unlink()
+    
+    # Create new symlink
+    latest_link.symlink_to(target)
+
+
+def create_output_metadata(config_hash, script_name, status='generated'):
+    """
+    Create metadata dict for output JSON files.
+    
+    Args:
+        config_hash: Config hash used for this run
+        script_name: Name of script that generated output
+        status: Output status (placeholder/generated/validated)
+    
+    Returns:
+        dict: Metadata dictionary
+    """
+    git_info = get_git_info()
+    
+    return {
+        'status': status,
+        'version': '0.1',
+        'provenance': {
+            'config_hash': config_hash,
+            'git_commit': git_info['commit'],
+            'git_branch': git_info['branch'],
+            'uncommitted_changes': git_info['has_uncommitted_changes'],
+            'script': script_name,
+            'timestamp': datetime.now().isoformat(),
+            'user': os.environ.get('USER', 'unknown')
+        }
+    }
+
+
+def save_output_json(output_path, data, table_id, caption, config_hash, script_name):
+    """
+    Save output JSON with metadata.
+    
+    Args:
+        output_path: Path to save JSON
+        data: Data payload
+        table_id: LaTeX table label
+        caption: Table caption
+        config_hash: Config hash
+        script_name: Script name
+    """
+    output = {
+        'table_id': table_id,
+        'caption': caption,
+        'data': data,
+        'metadata': create_output_metadata(config_hash, script_name)
+    }
+    
+    with open(output_path, 'w') as f:
+        json.dump(output, f, indent=2)
 
 
 def load_config(config_path):
-    """
-    Load and validate config.yaml
-    
-    Args:
-        config_path: Path to config.yaml
-        
-    Returns:
-        Dict containing configuration
-    """
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    
+    """Load YAML config file."""
     with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
-    # Validate required fields (updated for new structure with reco and observables)
-    required_sections = ['analysis', 'outputs']
-    for section in required_sections:
-        if section not in config:
-            raise ValueError(f"Missing required section in config.yaml: {section}")
-    
-    # Check for at least one analysis type (reco, observables, bdtvariables, or bdtvariables_parton)
-    if 'reco' not in config and 'observables' not in config and 'bdtvariables' not in config and 'bdtvariables_parton' not in config:
-        raise ValueError("Config must contain at least one of 'reco', 'observables', 'bdtvariables', or 'bdtvariables_parton' sections")
-    
-    return config
+        return yaml.safe_load(f)
 
 
-def get_variables_to_plot(config):
+def validate_output_status(outputs_dir, current_config_hash):
     """
-    Get list of variables to plot from config
+    Check which outputs exist and their status relative to current config.
     
     Args:
-        config: Dict from load_config()
-        
+        outputs_dir: Base outputs directory
+        current_config_hash: Hash of current config.yaml
+    
     Returns:
-        List of variable names
+        dict: Status information
     """
-    variables = config.get('variables', [])
+    outputs_path = Path(outputs_dir)
     
-    if variables == "all" or variables == ["all"]:
-        # Return all 13 reconstruction variables
-        return [
-            "Top_lep_pt", "Top_lep_eta", "Top_lep_phi", "Top_lep_mass",
-            "Top_had_pt", "Top_had_eta", "Top_had_phi", "Top_had_mass",
-            "Chi2_prefit", "Chi2", "Pgof", "chi2_status"
-        ]
+    # Find all output directories (12-char hex names)
+    output_dirs = [d for d in outputs_path.iterdir() 
+                   if d.is_dir() and len(d.name) == 12 and d.name != 'placeholder']
     
-    return variables
-
-
-def format_coffea_filename(tag, era):
+    status = {
+        'current_hash': current_config_hash,
+        'current_exists': (outputs_path / current_config_hash).exists(),
+        'total_runs': len(output_dirs),
+        'all_hashes': [d.name for d in sorted(output_dirs, key=lambda x: x.stat().st_mtime)]
+    }
+    
+    return status
+    
+def validate_golden_jsons(config):
     """
-    Format the .coffea output filename
+    Check if all golden JSON files exist locally.
     
     Args:
-        tag: Tag string (e.g., 'midNov')
-        era: Era string (e.g., 'UL2017')
-        
+        config: Configuration dict from config.yaml
+    
     Returns:
-        Formatted filename string
+        dict: Status of each golden JSON file
     """
-    return f"{tag}_{era}_reco.coffea"
-
-
-def find_coffea_files(output_dir, pattern="*_reco.coffea"):
-    """
-    Find all .coffea files in output directory
+    golden_jsons = config.get('golden_jsons', {})
+    status = {}
     
-    Args:
-        output_dir: Path to search
-        pattern: Glob pattern for filenames
-        
-    Returns:
-        List of Path objects
-    """
-    output_dir = Path(output_dir)
-    return list(output_dir.glob(pattern))
-
-
-if __name__ == '__main__':
-    # Simple test
-    print("Testing utils.py...")
+    for year, json_info in golden_jsons.items():
+        filename = json_info['filename']
+        # Check for .json extension version
+        filename_json = Path(filename).stem + '.json'
+        filepath = Path('data/golden_jsons') / filename_json
+        status[year] = {
+            'filename': filename_json,
+            'exists': filepath.exists(),
+            'path': str(filepath)
+        }
     
-    # Test config hashing
-    try:
-        config_hash = compute_config_hash('../config.yaml')
-        print(f"✓ Config hash: {config_hash}")
-    except Exception as e:
-        print(f"✗ Config hash failed: {e}")
-    
-    print("Utils module ready.")
+    return status
