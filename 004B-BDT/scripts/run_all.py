@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """
-Master script to generate all outputs for 004A-Reconstruction.
+Master script to generate all outputs for 004B-BDT.
+
+This script orchestrates the BDT variable computation workflow:
+1. Fetches reconstruction dataset JSONs from 004A outputs (optional)
+2. Generates a process list JSON for runBDTVariables.py
+3. Writes a bash script to execute the processing, or runs it directly
+4. Generates dataset JSON from the BDT outputs (optional)
 
 Usage:
     python scripts/run_all.py [--force] [--tag TAG_NAME]
 
 Options:
     --force: Regenerate outputs even if output files already exist
-    --tag:   Create a named tag symlink to this run (e.g., "earlyApril")
-    --makeDeltaPlots: Create reconstructed-vs-generator top-mass residual plots
+    --tag:   Create a named tag for this run (e.g., "earlyApril")
+    --fetchReconstructionJSON: Fetch reconstruction JSONs from 004A outputs
+    --generateProcessListJSON: Generate process list for runBDTVariables.py
+    --writeBashScript: Create a bash script instead of running directly
+    --generateDatasetJSON: Create dataset JSON from BDT outputs
 """
 
 import argparse
@@ -17,6 +26,7 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+from coffea.util import load, save
 
 sys.path.insert(0, str(Path(__file__).parent))
 import utils
@@ -55,9 +65,9 @@ def main():
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
     parser.add_argument('--fetchReconstructionJSON', action='store_true',
-                       help='Fetch reconstruction dataset JSONs from storage and save to inputs folder')
+                       help='[0] Fetch reconstruction dataset JSONs from storage and save to inputs folder')
     parser.add_argument('--reconstructionHash', type=str, default=None,
-                       help='Specify a reconstruction hash to fetch dataset JSONs from storage')
+                       help='[0] Specify a reconstruction hash to fetch dataset JSONs from storage')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runBDTVariables.py by reading per-era '
                             'reconstruction dataset JSONs from the inputs folder')
@@ -70,7 +80,13 @@ def main():
     parser.add_argument('--sample', action='store_true',
                        help='Only add the first file of each dataset to the process list JSON (for testing)')
     parser.add_argument('--workers', type=int, default=15,
-                       help='Number of parallel workers passed to runReco.py (default: 15)')
+                       help='Number of parallel workers passed to runBDTVariables.py (default: 15)')
+    parser.add_argument('--buildBDTVariableHists', action='store_true',
+                       help='Run buildBDTVariableHists.py to create histograms for BDT variables')
+    parser.add_argument('--aggregateBDTVariableHists', action='store_true',
+                       help='Aggregate BDT variable histograms at the group level')
+    parser.add_argument('--makeBDTVariablePlots', action='store_true',
+                       help='Run BDTvariablesHistPlotter.py to create Data/MC comparison plots')
     args = parser.parse_args()
 
     print("Arguments:")
@@ -80,6 +96,9 @@ def main():
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
+    print(f"  --buildBDTVariableHists: {args.buildBDTVariableHists}")
+    print(f"  --aggregateBDTVariableHists: {args.aggregateBDTVariableHists}")
+    print(f"  --makeBDTVariablePlots: {args.makeBDTVariablePlots}")
     print(f"  --sample: {args.sample}")
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
@@ -123,6 +142,9 @@ def main():
             source_dir = Path(reconstruction_outputs_folder) / args.tag / args.reconstructionHash / era
             filename = f'reconstruction_{args.tag}_{era}_datasets.json'
             local_path = inputs_folder / filename
+            # We keep one copy in outputs too, for consistency with the other outputs
+            output_path = output_dir / 'inputs' / filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             print(f"  Fetching from {source_dir} to {local_path}...")
             if not source_dir.exists():
                 print(f"  Error: Source directory does not exist: {source_dir}. Skipping era {era}.")
@@ -130,36 +152,36 @@ def main():
             if not (source_dir / filename).exists():
                 print(f"  Error: Source file does not exist: {source_dir / filename}. Skipping era {era}.")
                 continue
-            fetch_command = f"cp {source_dir}/{filename} {local_path}"
+            fetch_command = f"cp {source_dir}/{filename} {local_path} && cp {source_dir}/{filename} {output_path}"
             print(f"  Command: {fetch_command}")
             # Actually run the command
             subprocess.run(fetch_command, shell=True, check=True)
-            if local_path.exists():
-                print(f"  Successfully fetched: {local_path}")
+            if local_path.exists() and output_path.exists():
+                print(f"  Successfully fetched: {local_path} and {output_path}")
             else:
-                print(f"  Error: Failed to fetch {local_path}.")
+                print(f"  Error: Failed to fetch {local_path} or {output_path}.")
         print("Finished fetching reconstruction dataset JSONs.")
 
     # --generateProcessListJSON
     if args.generateProcessListJSON:
-        print("\nGenerating process list JSON for runReco.py...")
+        print("\nGenerating process list JSON for runBDTVariables.py...")
         total_tasks = 0
 
         for era in config['NgenandXsec']:
-            print(f"\nProcessing era: {era}")
             if not matches_filter(args.filter, era):
                 continue
+            print(f"\nProcessing era: {era}")
 
-            selectionII_dataset_json = (
+            reconstruction_dataset_json = (
                 output_dir / 'inputs' /
-                f'selectionII_{args.tag}_{era}_datasets.json'
+                f'reconstruction_{args.tag}_{era}_datasets.json'
             )
 
-            if not selectionII_dataset_json.exists():
-                print(f"  Warning: Dataset JSON not found: {selectionII_dataset_json}. Skipping era {era}.")
+            if not reconstruction_dataset_json.exists():
+                print(f"  Warning: Dataset JSON not found: {reconstruction_dataset_json}. Skipping era {era}.")
                 continue
 
-            with open(selectionII_dataset_json) as f:
+            with open(reconstruction_dataset_json) as f:
                 datasetJSON = json.load(f)
 
             era_process_list = []
@@ -184,10 +206,10 @@ def main():
                         print(f"  Processing {era} / {DataMC} / {group} / {dataset}...")
 
                         outputDir = os.path.join(
-                            storageBase, "reconstruction", args.tag, config_hash, era, DataMC, group, dataset
+                            storageBase, "BDTVariables", args.tag, config_hash, era, DataMC, group, dataset
                         )
 
-                        # Build module configs; era is passed at runtime by runReco.py
+                        # Build module configs; era is passed at runtime by runBDTVariables.py
                         module_configs = []
                         for mod_name in module_names:
                             mod_cfg = config.get("Modules", {}).get(mod_name, {})
@@ -195,11 +217,11 @@ def main():
 
                         isSample = True
                         for filePath in datasetJSON[DataMC][group][dataset]:
-                            skim_name = os.path.basename(filePath).replace(".root", "_Skim.root")
-                            skim_path = os.path.join(outputDir, skim_name)
-                            if not args.force and os.path.exists(skim_path):
+                            bdt_name = os.path.basename(filePath).replace(".root", "_BDTVars.root")
+                            bdt_path = os.path.join(outputDir, bdt_name)
+                            if not args.force and os.path.exists(bdt_path):
                                 era_skipped += 1
-                                print(f"    Skim output already exists, skipping: {skim_path}")
+                                print(f"    BDT output already exists, skipping: {bdt_path}")
                                 continue
                             task = {
                                 "era":        era,
@@ -222,6 +244,7 @@ def main():
             with open(era_output_path, 'w') as f:
                 json.dump(era_process_list, f, indent=2)
             total_tasks += len(era_process_list)
+            print(f"  Era {era}: {len(era_process_list)} tasks added, {era_skipped} skipped (output already exists).")
 
         print(f"\nTotal tasks across all eras: {total_tasks}")
 
@@ -247,7 +270,7 @@ def main():
                         log_dir.mkdir(parents=True, exist_ok=True)
                         f.write(f"mkdir -p {log_dir}\n")
                         cmd = (
-                            f"python {base_dir / 'scripts' / 'runReco.py'} "
+                            f"python {base_dir / 'scripts' / 'runBDTVariables.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
                             f"{'--force ' if args.force else ''}"
@@ -256,30 +279,8 @@ def main():
                             f"{' 2>&1 | tee -a ' + str(output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}.log')}"
                         )
                         f.write(cmd + "\n")
-            if args.makeDeltaPlots:
-                # These commands are appended after all runReco commands so
-                # the reconstruction files exist before the dataset map and
-                # delta plots are produced.
-                for era in config['NgenandXsec']:
-                    if not matches_filter(args.filter, era):
-                        continue
-                    era_output_dir = output_dir / era
-                    dataset_json = era_output_dir / f"reconstruction_{args.tag}_{era}_datasets.json"
-                    reconstruction_base = (
-                        Path(storageBase) / "reconstruction" / args.tag / config_hash / era
-                    )
-                    delta_dir = era_output_dir / "plots" / "deltaMass"
-                    f.write(f"mkdir -p {era_output_dir}\n")
-                    f.write(
-                        f"python {base_dir / 'scripts' / 'generateDatasetJSON.py'} "
-                        f"--outputDirectory {era_output_dir} "
-                        f"--outputFileName {dataset_json.name} "
-                        f"--baseDirectory {reconstruction_base}\n"
-                    )
-                    f.write(
-                        f"python {base_dir / 'scripts' / 'deltaMassPlots.py'} "
-                        f"--json {dataset_json} --outDir {delta_dir}\n"
-                    )
+            # (Placeholder: delta-plot generation commands can be appended here
+            #  once a --generateDeltaPlots argument is wired up.)
         os.chmod(bash_script_path, 0o755)
         print(f"\nBash script written to: {bash_script_path}")
 
@@ -295,8 +296,8 @@ def main():
                 continue
             outputDirectory = output_dir / era
             outputDirectory.mkdir(parents=True, exist_ok=True)
-            outputFileName  = f"reconstruction_{args.tag}_{era}_datasets.json"
-            baseDirectory   = f'{storageBase}/reconstruction/{args.tag}/{config_hash}/{era}'
+            outputFileName  = f"BDTVariables_{args.tag}_{era}_datasets.json"
+            baseDirectory   = f'{storageBase}/BDTVariables/{args.tag}/{config_hash}/{era}'
             cmd = [
                 'python', str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
@@ -311,6 +312,204 @@ def main():
             else:
                 print(f"Successfully generated dataset JSON for era {era}: "
                       f"{outputDirectory / outputFileName}")
+    
+    # --buildBDTVariableHists
+    if args.buildBDTVariableHists:
+        print("\nBuilding BDT variable histograms...")
+        build_bdt_hists_script = base_dir / 'scripts' / 'buildBDTVariableHists.py'
+        if not build_bdt_hists_script.exists():
+            print(f"Error: buildBDTVariableHists.py script not found at {build_bdt_hists_script}")
+            return 1
+        
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"Processing era: {era}")
+            
+            # Load the generated dataset JSON for this era
+            dataset_json_file = output_dir / era / f"BDTVariables_{args.tag}_{era}_datasets.json"
+            if not dataset_json_file.exists():
+                print(f"  Error: Dataset JSON not found at {dataset_json_file}")
+                print(f"  Please run --generateDatasetJSON first.")
+                continue
+            
+            with open(dataset_json_file) as f:
+                dataset_json = json.load(f)
+            
+            for DataMC in dataset_json:
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                print(f"  Data/MC: {DataMC}")
+                
+                for group in dataset_json[DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    print(f"    Group: {group}")
+                    
+                    for dataset in dataset_json[DataMC][group]:
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        print(f"      Dataset: {dataset}")
+                        
+                        # Create fileset for this dataset
+                        fileset = {
+                            f"{era}_{DataMC}_{group}_{dataset}": {
+                                "files": {file: "Events" for file in dataset_json[DataMC][group][dataset]}
+                            }
+                        }
+                        
+                        # Create temporary fileset JSON
+                        fileset_json_path = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_bdtvariables_fileset.json'
+                        fileset_json_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(fileset_json_path, 'w') as f:
+                            json.dump(fileset, f, indent=2)
+                        
+                        # Output histogram file path
+                        output_hists_dir = output_dir / era / DataMC / group / dataset
+                        output_hists_dir.mkdir(parents=True, exist_ok=True)
+                        output_hists_file = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_bdtvariableHists.coffea'
+                        
+                        # Skip if output file already exists and --force is not set
+                        if (output_hists_dir / output_hists_file).exists() and not args.force:
+                            print(f"        Output file already exists: {output_hists_dir / output_hists_file}. Skipping (use --force to overwrite).")
+                            continue
+                        
+                        # Run buildBDTVariableHists.py
+                        command = [
+                            'python', str(build_bdt_hists_script),
+                            '--fileSet', str(fileset_json_path),
+                            '--configFile', str(config_path),
+                            '--outputDir', str(output_hists_dir),
+                            '--outputFileName', output_hists_file
+                        ]
+                        print(f"        Running: {' '.join(command)}")
+                        result = subprocess.run(command, capture_output=True, text=True)
+                        if result.returncode != 0:
+                            print(f"        Error: {result.stderr}")
+                            return 1
+                        print(f"        Successfully built histograms: {output_hists_dir / output_hists_file}")
+    
+    # --aggregateBDTVariableHists
+    if args.aggregateBDTVariableHists:
+        print("\nAggregating BDT variable histograms at group level...")
+        from coffea.util import load, save
+        
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"Processing era: {era}")
+            
+            for DataMC in config['NgenandXsec'][era]:
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                print(f"  Data/MC: {DataMC}")
+                
+                for group in config['NgenandXsec'][era][DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    print(f"    Group: {group}")
+                    
+                    # Dictionary to store aggregated histograms
+                    group_hists = {}
+                    group_hists[f'{era}_{DataMC}_{group}'] = {}
+                    
+                    # Loop over histDetails keys
+                    for hist_name in config.get('histDetails', {}):
+                        print(f"      Working on histogram: {hist_name}")
+                        aggregated_hist = None
+                        
+                        for dataset in config['NgenandXsec'][era][DataMC][group]:
+                            if not matches_filter(args.filter, era, DataMC, group, dataset):
+                                continue
+                            
+                            hist_file = (output_dir / era / DataMC / group / dataset / 
+                                        f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_bdtvariableHists.coffea')
+                            
+                            if not hist_file.exists():
+                                print(f"        Histogram file not found: {hist_file}. Skipping.")
+                                continue
+                            
+                            hist_data = load(hist_file)
+                            dataset_key = f"{era}_{DataMC}_{group}_{dataset}"
+                            
+                            # Get luminosity, Ngen, and Xsec for weighting
+                            Lumi = config['DataLumiInfo'][era]['Lumi']
+                            Ngen = config['NgenandXsec'][era][DataMC][group][dataset].get('Ngen', 1)
+                            Xsec = config['NgenandXsec'][era][DataMC][group][dataset].get('Xsec', -1)
+                            
+                            # Calculate weight
+                            if 'MC' in DataMC:
+                                weight = (Lumi * Xsec / Ngen) if Ngen > 0 else 0
+                            else:
+                                weight = 1
+                            
+                            # Add to aggregated histogram
+                            if hist_name in hist_data[dataset_key]['hists']:
+                                if aggregated_hist is None:
+                                    aggregated_hist = hist_data[dataset_key]['hists'][hist_name] * weight
+                                else:
+                                    aggregated_hist += hist_data[dataset_key]['hists'][hist_name] * weight
+                                print(f"        Added {dataset} with weight {weight}")
+                        
+                        if aggregated_hist is not None:
+                            group_hists[f'{era}_{DataMC}_{group}'][hist_name] = aggregated_hist
+                    
+                    # Save aggregated histograms
+                    output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}_bdtvariableHists.coffea'
+                    output_file.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    if output_file.exists() and not args.force:
+                        print(f"      Aggregated histogram file already exists: {output_file}. Skipping (use --force to overwrite).")
+                        continue
+                    
+                    save(group_hists, output_file)
+                    print(f"      Saved aggregated histograms: {output_file}")
+    
+    # --makeBDTVariablePlots
+    if args.makeBDTVariablePlots:
+        print("\nCreating BDT variable Data/MC comparison plots...")
+        bdt_plotter_script = base_dir / 'scripts' / 'BDTvariablesHistPlotter.py'
+        if not bdt_plotter_script.exists():
+            print(f"Error: BDTvariablesHistPlotter.py script not found at {bdt_plotter_script}")
+            return 1
+
+        plots_dir = output_dir / 'plots'
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
+        command = [
+            'python', str(bdt_plotter_script),
+            '--tag', args.tag,
+            '--hash', config_hash,
+            '--outputDir', str(plots_dir),
+            '--configFile', str(config_path)
+        ]
+
+        if args.filter:
+            command.extend(['--filter'] + args.filter)
+
+        subprocess.run(command, check=True)
+        print(f"Finished creating BDT variable plots. Output saved to {plots_dir}")
+
+        # Create comprehensive PDF report with all plots and config details
+        print("Creating comprehensive PDF report...")
+        create_pdf_script = base_dir / 'scripts' / 'createPlotsPDF.py'
+        if not create_pdf_script.exists():
+            print(f"Warning: createPlotsPDF.py script not found at {create_pdf_script}. Skipping PDF creation.")
+        else:
+            try:
+                command = [
+                    'python', str(create_pdf_script),
+                    '--configFile', str(config_path),
+                    '--hash', config_hash,
+                    '--tag', args.tag,
+                    '--outputDir', str(output_dir)
+                ]
+                subprocess.run(command, check=True)
+                pdf_file = output_dir / f'{args.tag}_{config_hash}_report.pdf'
+                print(f"PDF report successfully created: {pdf_file}")
+            except subprocess.CalledProcessError as e:
+                print(f"Error creating PDF report: {e}")
+                print("Continuing without PDF creation...")
 
 if __name__ == '__main__':
     sys.exit(main())
