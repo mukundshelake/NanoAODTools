@@ -4,10 +4,11 @@ import numpy as np
 from PhysicsTools.NanoAODTools.postprocessing.framework.eventloop import Module
 from scipy.optimize import minimize
 
+
 class TTbarSemilepReconstructor(Module):
     def __init__(self, era, cfg={}):
-        self.mW     = cfg.get("mW",      80.4)
-        self.mt     = cfg.get("mt",     172.5)
+        self.mW      = cfg.get("mW",      80.4)
+        self.mt      = cfg.get("mt",     172.5)
         self.sigmaW  = cfg.get("sigmaW",  10.0)
         self.sigmatt = cfg.get("sigmatt", 13.0)
 
@@ -25,9 +26,17 @@ class TTbarSemilepReconstructor(Module):
         met_px = event.MET_pt * math.cos(event.MET_phi)
         met_py = event.MET_pt * math.sin(event.MET_phi)
 
-        chi2_status = 0
-        best_chi2_prefit = float('inf')
-        best_perm = None
+        # Guard against upstream selection failure: SelectedObjectsProducer fills
+        # sentinel pt = -1 when no qualifying muon, or no 2-b-tagged + 2-light
+        # split among the selected jets, was found. In production this never
+        # fires -- 003-ObjectSelectionI skims out events failing those cuts
+        # before any module runs -- but it's a cheap safety net against silently
+        # "reconstructing" from garbage momenta if that skim is ever relaxed.
+        if (event.SelMuon_pt < 0 or event.leadingbJet_pt < 0 or
+                event.subleadingbJet_pt < 0 or event.leadingJet_pt < 0 or
+                event.subleadingJet_pt < 0):
+            self._fill_failure(1)
+            return True
 
         # Read pre-selected objects from upstream scalar branches
         mu_p4 = ROOT.TLorentzVector()
@@ -45,94 +54,87 @@ class TTbarSemilepReconstructor(Module):
         q2_p4 = ROOT.TLorentzVector()
         q2_p4.SetPtEtaPhiM(event.subleadingJet_pt, event.subleadingJet_eta, event.subleadingJet_phi, event.subleadingJet_mass)
 
-        # Neutrino solutions
-        def nu_pz_solutions():
-            px, py = met_px, met_py
-            pxl, pyl, pzl = mu_p4.Px(), mu_p4.Py(), mu_p4.Pz()
-            El = mu_p4.E()
-            a = self.mW**2 + 2*(pxl*px + pyl*py)
-            A = 4*(El**2 - pzl**2)
-            B = -4*a*pzl
-            C = 4*El**2*(px**2+py**2) - a**2
-            disc = B*B - 4*A*C
-            if disc < 0:
-                return [-B/(2*A)]
-            sqrt_disc = math.sqrt(disc)
-            return [(-B+sqrt_disc)/(2*A), (-B-sqrt_disc)/(2*A)]
+        pz_list = self._nu_pz_solutions(mu_p4, met_px, met_py)
+        if not pz_list:
+            # Degenerate quadratic (El == |pzl|); essentially unreachable for a
+            # muon passing the pt cuts, kept as a defensive fallback.
+            self._fill_failure(2)
+            return True
 
-        pz_list = nu_pz_solutions()
-
+        # Build all 2 (b-assignment) x len(pz_list) permutations (4 in the
+        # normal case), each carrying its pre-fit (no-fit) chi2 for diagnostics.
+        permutations = []
         for br, bh in [(lb_p4, slb_p4), (slb_p4, lb_p4)]:
-            for q1, q2 in [(q1_p4, q2_p4)]:
-                w_had_p4 = q1 + q2
-                top_had_p4 = w_had_p4 + bh
-                chi2_jets = ((w_had_p4.M()-self.mW)/self.sigmaW)**2
+            w_had_p4 = q1_p4 + q2_p4
+            top_had_p4 = w_had_p4 + bh
+            chi2_jets = ((w_had_p4.M() - self.mW) / self.sigmaW) ** 2
 
-                for pz in pz_list:
-                    E_nu = math.sqrt(met_px**2 + met_py**2 + pz**2)
-                    nu_p4 = ROOT.TLorentzVector(met_px, met_py, pz, E_nu)
+            for pz in pz_list:
+                E_nu = math.sqrt(met_px**2 + met_py**2 + pz**2)
+                nu_p4 = ROOT.TLorentzVector(met_px, met_py, pz, E_nu)
 
-                    w_lep_p4 = mu_p4 + nu_p4
-                    top_lep_p4 = w_lep_p4 + br
+                w_lep_p4 = mu_p4 + nu_p4
+                top_lep_p4 = w_lep_p4 + br
 
-                    chi2_wlep = ((w_lep_p4.M()-self.mW)/self.sigmaW)**2
-                    chi2_top = ((top_lep_p4.M()-top_had_p4.M())/self.sigmatt)**2
-                    total_chi2 = chi2_jets + chi2_wlep + chi2_top
-                    if total_chi2 < best_chi2_prefit:
-                        best_chi2_prefit = total_chi2
-                        best_perm = {
-                            "mu_p4": mu_p4,
-                            "br_p4": br,
-                            "bh_p4": bh,
-                            "q1_p4": q1,
-                            "q2_p4": q2,
-                            "nu_p4": nu_p4
-                        }
+                chi2_wlep = ((w_lep_p4.M() - self.mW) / self.sigmaW) ** 2
+                chi2_top  = ((top_lep_p4.M() - top_had_p4.M()) / self.sigmatt) ** 2
 
-        self.out.fillBranch("Chi2_prefit", best_chi2_prefit if best_perm else -1)
-        if not best_perm:
-            chi2_status = 2
-            self.out.fillBranch("Chi2", -1)
-            self.out.fillBranch("Pgof", -1)
-            self.out.fillBranch("chi2_status", chi2_status)
-            for prefix in ["Top_lep", "Top_had"]:
-                self.out.fillBranch(f"{prefix}_pt",   -1)
-                self.out.fillBranch(f"{prefix}_eta",  -1)
-                self.out.fillBranch(f"{prefix}_phi",  -1)
-                self.out.fillBranch(f"{prefix}_mass", -1)
+                permutations.append({
+                    "mu_p4": mu_p4, "br_p4": br, "bh_p4": bh,
+                    "q1_p4": q1_p4, "q2_p4": q2_p4, "nu_p4": nu_p4,
+                    "prefit_chi2": chi2_jets + chi2_wlep + chi2_top,
+                })
+
+        # Doc prescription (Sec. 2.3.1): run the full kinematic fit for *all*
+        # permutations and rank by the post-fit chi2/Pgof -- not by the cheap
+        # pre-fit proxy above, which is kept only as a diagnostic (Chi2_prefit).
+        best_fit = None
+        best_fit_perm = None
+        for perm in permutations:
+            res = self.full_chi2_fit_soft_constraints(perm)
+            perm["fit_result"] = res
+            if res["success"] and (best_fit is None or res["chi2"] < best_fit["chi2"]):
+                best_fit = res
+                best_fit_perm = perm
+
+        if best_fit is not None:
+            self.out.fillBranch("Chi2_prefit", best_fit_perm["prefit_chi2"])
+            pgof = math.exp(-0.5 * best_fit["chi2"])
+            self._fill_success(best_fit["lep_top"], best_fit["had_top"], best_fit["chi2"], pgof, chi2_status=0)
             return True
 
-        res = self.full_chi2_fit_soft_constraints(best_perm)
-        if not res["success"]:
-            # Use prefit best guess instead
-            chi2_status = 3  # New status code to indicate fallback
-
-            # Extract TLorentzVectors from best_perm dict
-            mu_p4 = best_perm["mu_p4"]
-            br_p4 = best_perm["br_p4"]
-            bh_p4 = best_perm["bh_p4"]
-            q1_p4 = best_perm["q1_p4"]
-            q2_p4 = best_perm["q2_p4"]
-            nu_p4 = best_perm["nu_p4"]
-
-            lep_top = mu_p4 + nu_p4 + br_p4
-            had_top = q1_p4 + q2_p4 + bh_p4
-            chi2 = best_chi2_prefit
-            pgof = math.exp(-0.5 * chi2)
-
-            for prefix, obj in [("Top_lep", lep_top), ("Top_had", had_top)]:
-                self.out.fillBranch(f"{prefix}_pt",   obj.Pt())
-                self.out.fillBranch(f"{prefix}_eta",  obj.Eta())
-                self.out.fillBranch(f"{prefix}_phi",  obj.Phi())
-                self.out.fillBranch(f"{prefix}_mass", obj.M())
-            self.out.fillBranch("Chi2", chi2)
-            self.out.fillBranch("Pgof", pgof)
-            self.out.fillBranch("chi2_status", chi2_status)
-            return True
-
-        lep_top, had_top, chi2 = res["lep_top"], res["had_top"], res["chi2"]
+        # None of the permutations converged: fall back to the one with the
+        # lowest chi2 evaluated at the *measured* (unfit) momenta, using the
+        # exact same chi2 formula as the successful-fit branch above so that
+        # "Chi2"/"Pgof" mean the same thing regardless of chi2_status.
+        fallback_perm = min(permutations, key=lambda p: p["fit_result"]["chi2_at_meas"])
+        lep_top = fallback_perm["mu_p4"] + fallback_perm["nu_p4"] + fallback_perm["br_p4"]
+        had_top = fallback_perm["q1_p4"] + fallback_perm["q2_p4"] + fallback_perm["bh_p4"]
+        chi2 = fallback_perm["fit_result"]["chi2_at_meas"]
         pgof = math.exp(-0.5 * chi2)
 
+        self.out.fillBranch("Chi2_prefit", fallback_perm["prefit_chi2"])
+        self._fill_success(lep_top, had_top, chi2, pgof, chi2_status=3)
+        return True
+
+    def _nu_pz_solutions(self, mu_p4, met_px, met_py):
+        pxl, pyl, pzl = mu_p4.Px(), mu_p4.Py(), mu_p4.Pz()
+        El = mu_p4.E()
+        a = self.mW**2 + 2 * (pxl * met_px + pyl * met_py)
+        A = 4 * (El**2 - pzl**2)
+        B = -4 * a * pzl
+        C = 4 * El**2 * (met_px**2 + met_py**2) - a**2
+
+        if abs(A) < 1e-9:
+            return []
+
+        disc = B * B - 4 * A * C
+        if disc < 0:
+            return [-B / (2 * A)]
+        sqrt_disc = math.sqrt(disc)
+        return [(-B + sqrt_disc) / (2 * A), (-B - sqrt_disc) / (2 * A)]
+
+    def _fill_success(self, lep_top, had_top, chi2, pgof, chi2_status):
         for prefix, obj in [("Top_lep", lep_top), ("Top_had", had_top)]:
             self.out.fillBranch(f"{prefix}_pt",   obj.Pt())
             self.out.fillBranch(f"{prefix}_eta",  obj.Eta())
@@ -141,15 +143,26 @@ class TTbarSemilepReconstructor(Module):
         self.out.fillBranch("Chi2", chi2)
         self.out.fillBranch("Pgof", pgof)
         self.out.fillBranch("chi2_status", chi2_status)
-        return True
 
-    def full_chi2_fit_soft_constraints(self, best_perm):
-        mu_p4 = best_perm["mu_p4"]
-        br_p4 = best_perm["br_p4"]
-        bh_p4 = best_perm["bh_p4"]
-        q1_p4 = best_perm["q1_p4"]
-        q2_p4 = best_perm["q2_p4"]
-        nu_p4 = best_perm["nu_p4"]
+    def _fill_failure(self, chi2_status):
+        """Fill all output branches with sentinel values for failed events."""
+        self.out.fillBranch("Chi2_prefit", -1)
+        self.out.fillBranch("Chi2",        -1)
+        self.out.fillBranch("Pgof",        -1)
+        self.out.fillBranch("chi2_status", chi2_status)
+        for prefix in ["Top_lep", "Top_had"]:
+            self.out.fillBranch(f"{prefix}_pt",   -1)
+            self.out.fillBranch(f"{prefix}_eta",  -1)
+            self.out.fillBranch(f"{prefix}_phi",  -1)
+            self.out.fillBranch(f"{prefix}_mass", -1)
+
+    def full_chi2_fit_soft_constraints(self, perm):
+        mu_p4 = perm["mu_p4"]
+        br_p4 = perm["br_p4"]
+        bh_p4 = perm["bh_p4"]
+        q1_p4 = perm["q1_p4"]
+        q2_p4 = perm["q2_p4"]
+        nu_p4 = perm["nu_p4"]
 
         particles = [mu_p4, nu_p4, br_p4, bh_p4, q1_p4, q2_p4]
 
@@ -160,11 +173,12 @@ class TTbarSemilepReconstructor(Module):
 
         def get_sigma(idx, val):
             if idx < 3:        # muon
-                return 0.05 * abs(val)
+                rel_sigma = 0.05 * abs(val)
             elif idx < 6:      # neutrino
-                return 0.10 * abs(val)
+                rel_sigma = 0.10 * abs(val)
             else:              # jets
-                return 0.15 * abs(val)
+                rel_sigma = 0.15 * abs(val)
+            return max(rel_sigma, 1e-3)
 
         sigma = np.array([get_sigma(i, p_meas[i]) for i in range(len(p_meas))])
 
@@ -185,24 +199,33 @@ class TTbarSemilepReconstructor(Module):
             q1_vec = get_p4(*p[12:15], q1_p4.M())
             q2_vec = get_p4(*p[15:18], q2_p4.M())
 
-            chi2 += (( (mu_vec + nu_vec).M() - self.mW ) / self.sigmaW) ** 2
-            chi2 += (( (q1_vec + q2_vec).M() - self.mW ) / self.sigmaW) ** 2
+            chi2 += (((mu_vec + nu_vec).M() - self.mW) / self.sigmaW) ** 2
+            chi2 += (((q1_vec + q2_vec).M() - self.mW) / self.sigmaW) ** 2
 
-            chi2 += (( (mu_vec + nu_vec + br_vec).M() - self.mt ) / self.sigmatt) ** 2
-            chi2 += (( (q1_vec + q2_vec + bh_vec).M() - self.mt ) / self.sigmatt) ** 2
+            # Equal-top-mass constraint (Sec. 2.3.1): the two top candidates'
+            # invariant masses must match each other -- the top mass itself is
+            # a free parameter of the fit, not pinned to an external value
+            # such as 172.5 GeV.
+            top_lep_mass = (mu_vec + nu_vec + br_vec).M()
+            top_had_mass = (q1_vec + q2_vec + bh_vec).M()
+            chi2 += ((top_lep_mass - top_had_mass) / self.sigmatt) ** 2
 
             return chi2
 
-        # Run optimization without constraints
-        result = minimize(
-            chi2_fn,
-            p_meas,
-            method='SLSQP',
-            options={'maxiter': 1000, 'ftol': 1e-6}
-        )
+        chi2_at_meas = float(chi2_fn(p_meas))
+
+        try:
+            result = minimize(
+                chi2_fn,
+                p_meas,
+                method='SLSQP',
+                options={'maxiter': 1000, 'ftol': 1e-6}
+            )
+        except Exception:
+            return {'success': False, 'chi2_at_meas': chi2_at_meas}
 
         if not result.success:
-            return {'success': False}
+            return {'success': False, 'chi2_at_meas': chi2_at_meas}
 
         p_fit = result.x
         mu_fit = get_p4(*p_fit[0:3], mu_p4.M())
@@ -216,7 +239,8 @@ class TTbarSemilepReconstructor(Module):
             'success': True,
             'lep_top': mu_fit + nu_fit + br_fit,
             'had_top': q1_fit + q2_fit + bh_fit,
-            'chi2': float(result.fun)
+            'chi2': float(result.fun),
+            'chi2_at_meas': chi2_at_meas,
         }
 
 

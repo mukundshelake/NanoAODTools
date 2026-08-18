@@ -112,7 +112,7 @@ def process_file(data):
                         f"    0 events pass cut string in {file} "
                         f"(dataset={key}, {DataMC}, {era}); skipping to avoid ROOT segfault."
                     )
-                    return None
+                    return False
         except Exception as _e:
             logging.warning(f"    Pre-check failed for {file}: {_e}; proceeding anyway.")
 
@@ -251,7 +251,8 @@ if __name__ == "__main__":
                             desc="Processing datasets"))
 
     succeeded = sum(1 for r in results if r is True)
+    zero_ev   = sum(1 for r in results if r is False)
     failed    = sum(1 for r in results if r is None)
-    logging.info(f"Processing complete: {succeeded} succeeded, {failed} failed out of {len(results)} total "
-                 f"({pre_skipped} pre-skipped).")
+    logging.info(f"Processing complete: {succeeded} succeeded, {failed} failed, {zero_ev} skipped (0 events) "
+                 f"out of {len(results)} total ({pre_skipped} pre-skipped).")
     logging.info("Finished all processing.")

@@ -100,8 +100,15 @@ def main():
         print(f"Config file has changed. Created new output directory: {output_dir}")
     else:
         print(f"No changes in config. Output directory already exists: {output_dir}")
-    
-    storageBase = config.get('STORAGE', '/path/to/storage')
+
+    # Create or update the 'latest' symlink to point to the current output directory
+    latest_link = outputs_base / 'latest'
+    if latest_link.exists() or latest_link.is_symlink():
+        latest_link.unlink()
+    latest_link.symlink_to(output_dir.name)
+    print(f"Updated symlink: {latest_link} -> {output_dir.name}")
+
+    storageBase = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
     # Print config hash if asked for
@@ -162,7 +169,7 @@ def main():
                         # continue
                         # print(storageBase, args.tag, era, DataMC, group, dataset)
                         outputDir = os.path.join(
-                            storageBase, "selectionI", args.tag, era, DataMC, group, dataset
+                            storageBase, "selectionI", args.tag, config_hash, era, DataMC, group, dataset
                         )
                         isSample = True
                         for filePath in datasetJSON[DataMC][group][dataset]:
@@ -264,7 +271,7 @@ def main():
             outputDirectory = output_dir / era 
             outputDirectory.mkdir(parents=True, exist_ok=True)
             outputFileName = f"selectionI_{args.tag}_{era}_datasets.json"
-            baseDirectory = f'/mnt/disk2/mukund/DataFiles/selectionI/{args.tag}/{era}'
+            baseDirectory = os.path.join(storageBase, "selectionI", args.tag, config_hash, era)
             cmd = [
                 'python', str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),

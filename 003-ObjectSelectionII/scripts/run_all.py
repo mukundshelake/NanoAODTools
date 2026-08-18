@@ -104,8 +104,15 @@ def main():
         print(f"Config file has changed. Created new output directory: {output_dir}")
     else:
         print(f"No changes in config. Output directory already exists: {output_dir}")
-    
-    storageBase = config.get('STORAGE', '/path/to/storage')
+
+    # Create or update the 'latest' symlink to point to the current output directory
+    latest_link = outputs_base / 'latest'
+    if latest_link.exists() or latest_link.is_symlink():
+        latest_link.unlink()
+    latest_link.symlink_to(output_dir.name)
+    print(f"Updated symlink: {latest_link} -> {output_dir.name}")
+
+    storageBase = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
     if args.printHash:
@@ -164,7 +171,7 @@ def main():
                         # continue
                         # print(storageBase, args.tag, era, DataMC, group, dataset)
                         outputDir = os.path.join(
-                            storageBase, "selectionII", args.tag, era, DataMC, group, dataset
+                            storageBase, "selectionII", args.tag, config_hash, era, DataMC, group, dataset
                         )
                         isSample = True
                         for filePath in datasetJSON[DataMC][group][dataset]:
@@ -212,7 +219,7 @@ def main():
     # If --writeBashScript is set, write all runSelection.py commands to a bash script instead of executing them
     if args.writeBashScript:
         # place the script in the scripts folder itself (where this run_all.py is located)
-        bash_script_path = base_dir / f"run_all_{args.tag}.sh"      
+        bash_script_path = base_dir / 'scripts' / f"run_all_{args.tag}.sh"
         with open(bash_script_path, 'w') as f:
             f.write("#!/bin/bash\n\n")
             for era in config['NgenandXsec']:
@@ -254,7 +261,7 @@ def main():
             outputDirectory = output_dir / era 
             outputDirectory.mkdir(parents=True, exist_ok=True)
             outputFileName = f"selectionII_{args.tag}_{era}_datasets.json"
-            baseDirectory = f'/mnt/disk2/mukund/DataFiles/selectionII/{args.tag}/{era}'
+            baseDirectory = os.path.join(storageBase, "selectionII", args.tag, config_hash, era)
             cmd = [
                 'python', str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),

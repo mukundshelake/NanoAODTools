@@ -123,7 +123,14 @@ def main():
     else:
         print(f"No changes in config. Output directory already exists: {output_dir}")
 
-    storageBase     = config.get('STORAGE', '/path/to/storage')
+    # Create or update the 'latest' symlink to point to the current output directory
+    latest_link = outputs_base / 'latest'
+    if latest_link.exists() or latest_link.is_symlink():
+        latest_link.unlink()
+    latest_link.symlink_to(output_dir.name)
+    print(f"Updated symlink: {latest_link} -> {output_dir.name}")
+
+    storageBase     = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
     if args.printHash:

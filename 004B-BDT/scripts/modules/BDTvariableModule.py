@@ -6,6 +6,8 @@ import numpy as np
 class BDTvariableProducer(Module):
     def __init__(self):
         super().__init__()
+        self.warn_once = False
+        self.is_data = False
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         """Initialize output branches before event loop starts"""
@@ -15,6 +17,15 @@ class BDTvariableProducer(Module):
                      "Sxx", "Syy", "Sxy", "Sxz", "Syz", "Szz",
                      "S", "P", "A", "p2in", "p2out"]:
             self.out.branch(name, "F")
+
+        # Truth-level hard-scattering classification (BDT training label), MC only.
+        # y: 1=qqbar, 2=gg, 3=qg, 4=qq' (different flavour), 5=qq (same flavour), 0=undefined/data
+        # qDir: +1/-1 = incoming quark direction for the qqbar case, else 0
+        if not inputTree.GetBranch("nGenPart"):
+            self.is_data = True
+            print("INFO: GenPart branch not found. This appears to be data - skipping parton classification.")
+        self.out.branch("y", "I")
+        self.out.branch("qDir", "I")
 
     def analyze(self, event):
         """
@@ -143,7 +154,73 @@ class BDTvariableProducer(Module):
         self.out.fillBranch("p2in", p2in)
         self.out.fillBranch("p2out", p2out)
 
+        self._fill_partonClassification(event)
+
         return True  # keep event
+
+    def _fill_partonClassification(self, event):
+        """Classify the hard-scattering initial state from GenPart (MC only)."""
+        if self.is_data:
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return
+
+        try:
+            genparts = Collection(event, "GenPart")
+        except Exception as e:
+            if not self.warn_once:
+                print(f"WARNING: Could not access GenPart collection: {e}")
+                self.warn_once = True
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return
+
+        if len(genparts) < 2:
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return
+
+        try:
+            pdgIds = np.array([p.pdgId for p in genparts])
+            status = np.array([p.status for p in genparts])
+        except AttributeError as e:
+            if not self.warn_once:
+                print(f"WARNING: Could not access GenPart attributes: {e}")
+                self.warn_once = True
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return
+
+        # Incoming partons typically have status == 21 in Pythia
+        incoming = pdgIds[status == 21]
+
+        if len(incoming) < 2:
+            self.out.fillBranch("y", 0)
+            self.out.fillBranch("qDir", 0)
+            return
+
+        dir_value = 0
+        id1, id2 = int(incoming[0]), int(incoming[1])
+        abs1, abs2 = abs(id1), abs(id2)
+
+        # Classification: 1=qqbar, 2=gg, 3=qg, 4=qq' (diff. flavour), 5=qq (same flavour), 0=other
+        if abs1 == 21 and abs2 == 21:
+            y_val = 2  # gg
+        elif (abs1 == 21 and abs2 <= 6) or (abs2 == 21 and abs1 <= 6):
+            y_val = 3  # qg
+        elif abs1 <= 6 and abs2 <= 6:
+            if id1 == -id2:
+                y_val = 1  # qqbar
+                dir_value = 1 if id1 > 0 else -1
+            elif abs1 != abs2:
+                y_val = 4  # qq'
+            else:
+                y_val = 5  # qq (same flavour)
+        else:
+            y_val = 0  # undefined or something else
+
+        self.out.fillBranch("y", y_val)
+        self.out.fillBranch("qDir", dir_value)
 
 
 def BDTvariableModule():

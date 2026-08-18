@@ -118,7 +118,7 @@ def main():
         print(f"Config hash: {config_hash}")
         sys.exit(0)
     
-    storageBase = config.get('STORAGE', '/path/to/storage')
+    storageBase = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
     # If  --copyOutputsFromSelectionII is set, copy outputs from 003-ObjectSelectionII. From 003-ObjectSelectionII's outputs/{tag}/{args.selectionIIHash}/*** to 003-ObjectSelectionIII's outputs/{[...]
