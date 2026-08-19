@@ -5,8 +5,9 @@ kinematic cuts are applied — object selection already happened in 003-ObjectSe
 
 ## Inputs
 
-- `inputs/selectionI_earlyApril_{era}_datasets.json` — file lists from 003-ObjectSelectionI.
-- `inputs/{era}_goldenJSON.json` — unused here (no cuts), kept for parity with other chapters.
+- `selectionI_{tag}_{era}_datasets.json` and `{era}_goldenJSON.json` (unused here — no
+  cuts — but kept for parity/pass-through to later chapters), fetched from
+  003-ObjectSelectionI into `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
 - `SFs/` (repo root, one level up) — correctionlib JSON files for muon ID/HLT, jet PU ID,
   and b-tagging, plus PU-ID/b-tag efficiency ROOT files. Snapshotted into
   `outputs/{tag}/{hash}/SFs/` by `utils.create_output_directory` so the worker script's
@@ -35,9 +36,14 @@ Data gets no modules (`ModuleList.Data: []`).
 
 ## Running it
 
-Same four-step pattern as 003-ObjectSelectionI:
-`--generateProcessListJSON` → `--writeBashScript` → run the generated
-`scripts/run_all_{tag}.sh` → `--generateDatasetJSON` (+ `--prepareFileset`).
+```
+run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateProcessListJSON
+run_all.py --writeBashScript
+scripts/run_all_{tag}.sh
+run_all.py --generateDatasetJSON
+run_all.py --prepareFileset
+```
 
 `--filter ERA[/DataMC[/group[/dataset]]]` and `--force` work the same way as in 003-I.
 

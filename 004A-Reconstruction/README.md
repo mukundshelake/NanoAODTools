@@ -6,7 +6,8 @@ already handled upstream.
 
 ## Inputs
 
-- `inputs/selectionII_earlyApril_{era}_datasets.json` — file lists from 003-ObjectSelectionII.
+- `selectionII_{tag}_{era}_datasets.json` from 003-ObjectSelectionII, fetched into
+  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
 
 ## What it does
 
@@ -33,9 +34,13 @@ equal-top-mass vs. pinned-172.5 constraint).
 
 ## Running it
 
-Same four-step pattern as the earlier chapters:
-`--generateProcessListJSON` → `--writeBashScript` → run the generated
-`scripts/run_all_{tag}.sh` → `--generateDatasetJSON`.
+```
+run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateProcessListJSON
+run_all.py --writeBashScript
+scripts/run_all_{tag}.sh
+run_all.py --generateDatasetJSON
+```
 
 `--filter`, `--force`, `--sample`, `--workers` work as in the other chapters. Note:
 reconstruction is CPU-heavy (one SLSQP minimisation per permutation per event), so

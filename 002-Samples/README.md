@@ -1,18 +1,22 @@
 # 002-Samples — Dataset Discovery, Golden JSONs & CRAB Preselection
 
 This chapter is the entry point of the analysis: it discovers datasets on DAS, downloads
-golden JSONs and luminosity info, submits the CRAB preselection jobs, and (once those
-outputs are copied down from EOS) produces `preselection_{era}_datasets.json`, the input
-003-ObjectSelectionI expects.
+golden JSONs and luminosity info, submits the CRAB preselection jobs, and produces
+`preselection_{era}_datasets.json`, the input 003-ObjectSelectionI expects.
 
 It spans two environments, driven by the same `scripts/run_all.py` in both:
 
 - **lxplus** — DAS querying, golden JSON download, `brilcalc` luminosity info, and CRAB
-  job submission/monitoring. CRAB output ROOT files land on EOS under `LFN_Base`.
-- **wherever the rest of the analysis runs** (e.g. `cms2`) — once the CRAB output has
-  been copied/staged to local disk under `{STORAGE}/preselection/{tag}/{era}/...`,
-  `--generatePreselectionDatasetJSON` scans it and writes the dataset JSON for the next
-  chapter.
+  job submission/monitoring. CRAB output ROOT files land on EOS under
+  `{LFN_Base}/preselection/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/` —
+  deliberately the same layout as `{STORAGE}/preselection/{tag}/{config_hash}/{era}/...`,
+  since `STORAGE.lxplus` and `LFN_Base` point at the same physical EOS area. So on lxplus
+  itself, no copy step is needed: `--generatePreselectionDatasetJSON` can scan CRAB's
+  output in place.
+- **wherever the rest of the analysis runs** (e.g. `cms2`) — if that's a *different*
+  machine without direct EOS access, copy/stage the CRAB output down to local disk under
+  the same `{STORAGE}/preselection/{tag}/{config_hash}/{era}/...` path first, then run
+  `--generatePreselectionDatasetJSON` there.
 
 Cloning this repo onto lxplus and running `scripts/run_all.py` there (with CRAB and
 `voms-proxy-init` set up) is expected to just work — no lxplus-only scripts live outside
@@ -31,6 +35,10 @@ this chapter's `scripts/` folder.
 | `btag_threshold` | Per-era DeepFlavour WP, referenced by `Pre-SelectionCuts` via YAML anchors |
 
 ## Workflow
+
+`-t/--tag` defaults to `Dump` (like every other chapter) if omitted. `--printHash` prints
+the config hash and exits before any step runs, useful for checking what a run would be
+versioned under.
 
 ### 1. lxplus — DAS discovery, golden JSONs, lumi info
 
@@ -63,26 +71,30 @@ python scripts/run_all.py -t earlyApril --checkCrabStatus [--resubmitFailedCrabJ
 `crab_preselection.sh`, and `crab_script_preselection.py` as the job payload; the worker
 node applies `Pre-SelectionCuts` and `branch_selection` from `config.yaml` (sent along as
 a CRAB input file) via NanoAODTools' `PostProcessor`. Output lands on EOS under
-`{LFN_Base}/{era}/{DataMC}/{group}/{dataset}`.
+`{LFN_Base}/preselection/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}`.
 
 `scripts/crab/getcrabReady.sh` is a convenience one-liner for `cmsenv` + CRAB env +
 `voms-proxy-init` + a status/resubmit pass — edit the hardcoded CMSSW path at the top for
 your own release area before using it.
 
-### 3. Copy output down, then build the dataset JSON
+### 3. Build the dataset JSON
 
-Once CRAB jobs finish, copy/xrdcp the EOS output down to
-`{STORAGE}/preselection/{tag}/{era}/{DataMC}/{group}/{dataset}/` on whichever machine
-runs the rest of the analysis (this copy step is manual — not automated here), then:
+Once CRAB jobs finish:
 
 ```bash
 python scripts/run_all.py -t earlyApril --generatePreselectionDatasetJSON
 ```
 
 This runs `scripts/generateDatasetJSON.py` (the same local-disk-scan script used by every
-later chapter) against `{STORAGE}/preselection/{tag}/{era}`, validating each ROOT file
-and writing `outputs/{tag}/{hash}/{era}/preselection_{era}_datasets.json` — copy this into
-003-ObjectSelectionI's `inputs/` folder.
+later chapter) against `{STORAGE}/preselection/{tag}/{config_hash}/{era}`, validating each
+ROOT file and writing `outputs/{tag}/{hash}/{era}/preselection_{era}_datasets.json`.
+`003-ObjectSelectionI --fetchFromPreviousChapter --previousHash <hash>` pulls this straight
+from there — no manual copy needed.
+
+If you're running this step on a machine that isn't lxplus and doesn't have EOS mounted
+(so `STORAGE` for that machine can't point at the CRAB output directly), copy/xrdcp the
+EOS output down to `{STORAGE}/preselection/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/`
+on that machine first (this copy step is manual — not automated here).
 
 ### 4. Status check
 

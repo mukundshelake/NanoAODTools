@@ -97,6 +97,31 @@ def create_output_directory(base_dir, config_path, inputs_folder):
     return output_dir, config_hash, is_new_run
 
 
+def fetch_and_snapshot(source_path, inputs_folder, output_dir, filename):
+    """
+    Copy a file fetched from a previous chapter into both the local inputs/
+    folder and this run's hash-versioned outputs/inputs/ snapshot.
+
+    create_output_directory() only snapshots inputs_folder -> output_dir/inputs
+    as it exists at the start of a run_all.py invocation, which is before any
+    --fetchFromPreviousChapter step runs within that same invocation. Without
+    this explicit dual-write, the file just fetched in this invocation would be
+    missing from that invocation's own outputs/inputs/ snapshot (it would only
+    show up in the snapshot on a later, separate invocation).
+
+    Returns:
+        tuple: (local_path, output_path)
+    """
+    import shutil
+    local_path = Path(inputs_folder) / filename
+    output_path = Path(output_dir) / 'inputs' / filename
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, local_path)
+    shutil.copy2(source_path, output_path)
+    return local_path, output_path
+
+
 def update_run_history(history_file, config_hash, metadata=None):
     """
     Append run information to run_history.txt
@@ -230,6 +255,28 @@ def resolve_storage_path(config):
         f"Could not resolve STORAGE path: hostname '{hostname}' does not match "
         f"any key in config STORAGE ({list(storage.keys())})."
     )
+
+
+def lfn_path_for_local_file(local_path, storage_base, lfn_base):
+    """
+    Translate an absolute file path under storage_base (the resolved STORAGE
+    path for the current machine) into its /store/... LFN equivalent under
+    lfn_base, for CRAB's Data.userInputFiles.
+
+    Only meaningful when storage_base is itself an EOS mount of lfn_base, i.e.
+    when running on lxplus with STORAGE.lxplus pointing at the EOS mount of
+    LFN_Base -- CRAB submission only makes sense there anyway.
+    """
+    local_path = str(local_path)
+    storage_base = str(storage_base).rstrip('/')
+    lfn_base = str(lfn_base).rstrip('/')
+    if not local_path.startswith(storage_base + '/'):
+        raise ValueError(
+            f"File path '{local_path}' is not under STORAGE base '{storage_base}'; "
+            f"cannot derive its LFN. CRAB submission must run on lxplus, with "
+            f"STORAGE resolving to the EOS mount of LFN_Base."
+        )
+    return lfn_base + local_path[len(storage_base):]
 
 
 def validate_output_status(outputs_dir, current_config_hash):

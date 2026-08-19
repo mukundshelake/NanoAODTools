@@ -54,17 +54,38 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
+    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
+                       help='[0] Fetch preselection_{era}_datasets.json and {era}_goldenJSON.json from '
+                            '002-Samples outputs into inputs/ (and this run\'s outputs/inputs/ snapshot). '
+                            'Requires --previousHash.')
+    parser.add_argument('--previousHash', type=str, default=None,
+                       help='[0] Config hash of the 002-Samples run to fetch from (its outputs/{tag}/{hash}/ '
+                            'directory). Required by --fetchFromPreviousChapter.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
     parser.add_argument('--writeBashScript', action='store_true',
                        help='[2] Write a bash script with all runSelection.py commands instead of executing them directly')
+    parser.add_argument('--submitSelectionJobs', action='store_true',
+                       help='[2alt][lxplus][CRAB] Submit object-selection jobs to CRAB instead of running them '
+                            'locally -- an alternative to --writeBashScript + local execution. Processes the same '
+                            'preselection skims (via Data.userInputFiles, since they are not DBS-registered) and '
+                            'writes output to the same {STORAGE}/selectionI/{tag}/{hash}/... layout, so downstream '
+                            'steps work unchanged either way. Uses scripts/crab/submit_selection_flexible.py.')
+    parser.add_argument('--checkCrabStatus', action='store_true',
+                       help='[lxplus][CRAB] Check CRAB job status for jobs submitted with --submitSelectionJobs. '
+                            'Uses scripts/crab/checkStatus.py.')
+    parser.add_argument('--resubmitFailedCrabJobs', action='store_true',
+                       help='[lxplus][CRAB] With --checkCrabStatus: resubmit failed CRAB jobs.')
+    parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
+                       help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
-                       help='Only add the first file of each dataset to the process list JSON (for testing purposes)')
+                       help='Only add the first file of each dataset to the process list JSON (for testing purposes). '
+                            'For --submitSelectionJobs, only submits the first file of each dataset via CRAB.')
     parser.add_argument('--workers', type=int, default=15,
                        help='Number of parallel workers passed to runSelection.py (default: 15)')
     args = parser.parse_args()
@@ -72,8 +93,14 @@ def main():
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
+    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
+    print(f"  --previousHash: {args.previousHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
+    print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
+    print(f"  --checkCrabStatus: {args.checkCrabStatus}")
+    print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
+    print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
     print(f"  --sample: {args.sample}")
     print(f"  --workers: {args.workers}")
@@ -116,6 +143,26 @@ def main():
         print(f"Config hash: {config_hash}")
         return 0
 
+    # Fetch preselection dataset JSON + golden JSON from 002-Samples into inputs/
+    if args.fetchFromPreviousChapter:
+        if not args.previousHash:
+            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+            return 1
+        print(f"\nFetching inputs from 002-Samples (hash: {args.previousHash})...")
+        previous_chapter_outputs = base_dir.parent / '002-Samples' / 'outputs' / args.tag / args.previousHash
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"  Era: {era}")
+            source_dir = previous_chapter_outputs / era
+            for filename in (f'preselection_{era}_datasets.json', f'{era}_goldenJSON.json'):
+                source_path = source_dir / filename
+                if not source_path.exists():
+                    print(f"    Error: Source file not found: {source_path}. Skipping.")
+                    continue
+                local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
+                print(f"    Fetched {filename} -> {local_path} and {output_path}")
+        print("Finished fetching inputs from 002-Samples.")
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
@@ -257,6 +304,85 @@ def main():
                         f.write(cmd + "\n")
         os.chmod(bash_script_path, 0o755)
         print(f"\nBash script with runSelection.py commands written to: {bash_script_path}")
+
+    # Submit object-selection jobs to CRAB, as an alternative to --writeBashScript +
+    # local execution. lxplus only (needs STORAGE to resolve to the EOS mount of LFN_Base).
+    if args.submitSelectionJobs:
+        print("\nSubmitting object-selection jobs to CRAB...")
+        submit_selection_script = base_dir / 'scripts' / 'crab' / 'submit_selection_flexible.py'
+        if not submit_selection_script.exists():
+            print(f"Error: {submit_selection_script} not found!")
+            return 1
+        lfn_base = config.get('LFN_Base', '').rstrip('/')
+        if not lfn_base:
+            print("Error: LFN_Base not set in config.yaml; required for --submitSelectionJobs.")
+            return 1
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nSubmitting object-selection jobs for era: {era}")
+            dataset_json_path = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+            if not dataset_json_path.exists():
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                continue
+            golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
+            for DataMC in config['NgenandXsec'][era]:
+                print(f"  DataMC: {DataMC}")
+                for group in config['NgenandXsec'][era][DataMC]:
+                    print(f"    Group: {group}")
+                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                        print(f"      Dataset: {dataset}")
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        lfn_output_path = f"{lfn_base}/selectionI/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
+                        work_area = output_dir / era / DataMC / group / dataset / "crab_selection"
+                        command = (
+                            f"python3 {submit_selection_script} --submit --era {era} "
+                            f"--dataset-json {dataset_json_path} --golden-json {golden_json_path} "
+                            f"--output-lfn {lfn_output_path} --work-area {work_area} "
+                            f"{'--sample ' if args.sample else ''}"
+                            f"--include '{DataMC}/{group}/{dataset}'"
+                        )
+                        print(f"      Executing command: {command}")
+                        result = subprocess.run(command, shell=True)
+                        if result.returncode != 0:
+                            print(f"Error submitting object-selection jobs for dataset: {dataset}")
+                            continue
+                        else:
+                            print(f"      Successfully submitted object-selection jobs for dataset: {dataset} with CRAB and saved logs to: {work_area}")
+
+    # Check CRAB job status for jobs submitted with --submitSelectionJobs
+    if args.checkCrabStatus:
+        print("\nChecking CRAB job status for object-selection jobs submitted with --submitSelectionJobs...")
+        check_crab_status_script = base_dir / 'scripts' / 'crab' / 'checkStatus.py'
+        if not check_crab_status_script.exists():
+            print(f"Error: {check_crab_status_script} not found!")
+            return 1
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nChecking CRAB status for era: {era}")
+            for DataMC in config['NgenandXsec'][era]:
+                print(f"  DataMC: {DataMC}")
+                for group in config['NgenandXsec'][era][DataMC]:
+                    print(f"    Group: {group}")
+                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                        print(f"      Dataset: {dataset}")
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        work_area = output_dir / era / DataMC / group / dataset / "crab_selection"
+                        command = f"python3 {check_crab_status_script} -d {work_area}"
+                        if args.resubmitFailedCrabJobs:
+                            command += " --resubmit"
+                        if args.removeSubmitFailedCrabJobs:
+                            command += " --removeSubmitFailed"
+                        print(f"      Executing command: {command}")
+                        result = subprocess.run(command, shell=True)
+                        if result.returncode != 0:
+                            print(f"Error checking CRAB status for dataset: {dataset}")
+                            continue
+                        else:
+                            print(f"      Successfully checked CRAB status for dataset: {dataset}. Check the output above for details.")
 
     if args.generateDatasetJSON:
         print("\nGenerating dataset JSON file using generateDatasetJSON.py...")

@@ -6,8 +6,12 @@ forward into 004A-Reconstruction (that reads `selectionII` directly).
 
 ## Inputs
 
-- Coffea filesets from 003-ObjectSelectionII's `--prepareFileset` step, copied in via
-  `--copyOutputsFromSelectionII --selectionIIHash <hash>`.
+- `{tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json` (coffea filesets from
+  003-ObjectSelectionII's `--prepareFileset` step) — the only thing this chapter actually
+  consumes from 003-ObjectSelectionII. Fetched into `inputs/` via
+  `--fetchFromPreviousChapter --previousHash <hash>`, one file per era/DataMC/group/dataset
+  (the filename already encodes all four, so they sit flat in `inputs/` like every other
+  chapter's fetched files — no per-dataset subdirectories needed).
 - `histDetails` / `weightList` / `plotSettings` in `config.yaml` define which variables to
   histogram, which weight branches to multiply together, and how MC groups are
   labelled/colored/stacked.
@@ -34,7 +38,7 @@ Per era: `plots/{era}/{histName}.{png,pdf,C}`, `plots/{era}/rootHists.root`,
 ## Running it
 
 ```
-run_all.py --copyOutputsFromSelectionII --selectionIIHash <hash>
+run_all.py --fetchFromPreviousChapter --previousHash <hash>
 run_all.py --buildSelectionHists
 run_all.py --aggregrateGroupHists
 run_all.py --makeplots

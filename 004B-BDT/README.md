@@ -7,7 +7,7 @@ computes the variable branches — it does not train a classifier.
 ## Inputs
 
 - `reconstruction_{tag}_{era}_datasets.json` from 004A-Reconstruction, fetched into
-  `inputs/` via `--fetchReconstructionJSON --reconstructionHash <hash>`.
+  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
 
 ## What it does
 
@@ -39,7 +39,7 @@ full-tree pass):
 ## Running it
 
 ```
-run_all.py --fetchReconstructionJSON --reconstructionHash <hash>
+run_all.py --fetchFromPreviousChapter --previousHash <hash>
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript
 scripts/run_all_{tag}.sh

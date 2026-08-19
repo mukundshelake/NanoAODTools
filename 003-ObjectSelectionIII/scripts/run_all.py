@@ -54,10 +54,13 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--copyOutputsFromSelectionII', action='store_true',
-                       help='Copy outputs from 003-ObjectSelectionII instead of running the processing steps')
-    parser.add_argument('--selectionIIHash', type=str, default=None,
-                       help='Hash of the 003-ObjectSelectionII run to copy outputs from (if --copyOutputsFromSelectionII is not used)')
+    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
+                       help='[0] Fetch {tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json for every era/DataMC/'
+                            'group/dataset from 003-ObjectSelectionII outputs into inputs/ (and this run\'s '
+                            'outputs/inputs/ snapshot). Requires --previousHash.')
+    parser.add_argument('--previousHash', type=str, default=None,
+                       help='[0] Config hash of the 003-ObjectSelectionII run to fetch from (its outputs/{tag}/{hash}/ '
+                            'directory). Required by --fetchFromPreviousChapter.')
     parser.add_argument('--buildSelectionHists', action='store_true',
                        help='Run buildSelectionHists.py to create histograms for selection optimization')
     parser.add_argument('--aggregrateGroupHists', action='store_true',
@@ -76,8 +79,8 @@ def main():
     print("Arguments:")
     print(f"  --tag: {args.tag}")
     print(f"  --sample: {args.sample}")
-    print(f"  --copyOutputsFromSelectionII: {args.copyOutputsFromSelectionII}")
-    print(f"  --selectionIIHash: {args.selectionIIHash}")
+    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
+    print(f"  --previousHash: {args.previousHash}")
     print(f"  --buildSelectionHists: {args.buildSelectionHists}")
     print(f"  --aggregrateGroupHists: {args.aggregrateGroupHists}")
     print(f"  --makeplots: {args.makeplots}")
@@ -121,18 +124,38 @@ def main():
     storageBase = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
-    # If  --copyOutputsFromSelectionII is set, copy outputs from 003-ObjectSelectionII. From 003-ObjectSelectionII's outputs/{tag}/{args.selectionIIHash}/*** to 003-ObjectSelectionIII's outputs/{[...]
-    if args.copyOutputsFromSelectionII:
-        if not args.selectionIIHash:
-            print("Error: --selectionIIHash must be provided when --copyOutputsFromSelectionII is set.")
+    # Fetch the per-dataset coffea fileset JSON (built by 003-ObjectSelectionII's
+    # --prepareFileset) into inputs/. This is the only thing this chapter actually
+    # consumes from 003-ObjectSelectionII -- its filename already encodes
+    # DataMC/group/dataset/era, so all fetched files live flat in inputs/, same as
+    # every other chapter's fetch step.
+    if args.fetchFromPreviousChapter:
+        if not args.previousHash:
+            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
             sys.exit(1)
-        source_dir = base_dir.parent / '003-ObjectSelectionII' / 'outputs' / args.tag / args.selectionIIHash
-        if not source_dir.exists():
-            print(f"Error: Source directory for copying does not exist: {source_dir}")
-            sys.exit(1)
-        print(f"Copying outputs from {source_dir} to {output_dir}...")
-        subprocess.run(['cp', '-r', str(source_dir) + '/.', str(output_dir)], check=True)
-        print("Copy completed.")
+        print(f"\nFetching inputs from 003-ObjectSelectionII (hash: {args.previousHash})...")
+        previous_chapter_outputs = base_dir.parent / '003-ObjectSelectionII' / 'outputs' / args.tag / args.previousHash
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"  Era: {era}")
+            for DataMC in config['NgenandXsec'][era]:
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                for group in config['NgenandXsec'][era][DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        filename = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json'
+                        source_path = previous_chapter_outputs / era / DataMC / group / dataset / filename
+                        if not source_path.exists():
+                            print(f"    Error: Source file not found: {source_path}. Skipping.")
+                            continue
+                        local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
+                        print(f"    Fetched {filename} -> {local_path} and {output_path}")
+        print("Finished fetching inputs from 003-ObjectSelectionII.")
     
     if args.buildSelectionHists:
         print("Building selection histograms...")
@@ -159,9 +182,10 @@ def main():
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
                         print(f"      Dataset: {dataset}")
-                        fileSetJSON = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json'
+                        fileSetJSON = output_dir / 'inputs' / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json'
                         if not fileSetJSON.exists():
-                            print(f"Error: FileSet JSON not found for {era}/{DataMC}/{group}/{dataset} at {fileSetJSON}")
+                            print(f"Error: FileSet JSON not found for {era}/{DataMC}/{group}/{dataset} at {fileSetJSON}. "
+                                  f"Run --fetchFromPreviousChapter --previousHash <hash> first.")
                             continue
                         outputDirectory = output_dir / era / DataMC / group / dataset
                         outputDirectory.mkdir(parents=True, exist_ok=True)

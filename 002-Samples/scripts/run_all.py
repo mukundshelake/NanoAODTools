@@ -56,10 +56,12 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
 
 def main():
     parser = argparse.ArgumentParser(description='Generate all outputs for 002-Samples')
-    parser.add_argument('-t', '--tag', type=str, required=True,
+    parser.add_argument('-t', '--tag', type=str, default='Dump',
                        help='Create named tag for this run (e.g., baseline, paper_v1)')
     parser.add_argument('--force', action='store_true',
                        help='Regenerate outputs even if output files already exist for this config hash')
+    parser.add_argument('--printHash', action='store_true',
+                       help='Print the config hash and exit (useful for debugging)')
 
     # --- lxplus: DAS querying / golden JSON / lumi info -----------------------------
     parser.add_argument('--getFileList', action='store_true',
@@ -132,6 +134,7 @@ def main():
     print(f"  --generatePreselectionDatasetJSON: {args.generatePreselectionDatasetJSON}")
     print(f"  --getStatus: {args.getStatus}")
     print(f"  --filter: {args.filter}")
+    print(f"  --printHash: {args.printHash}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -159,6 +162,10 @@ def main():
         latest_link.unlink()
     latest_link.symlink_to(output_dir.name)
     print(f"Updated symlink: {latest_link} -> {output_dir.name}")
+
+    if args.printHash:
+        print(f"Config hash: {config_hash}")
+        return 0
 
     # Run getFileList.py if requested
     if args.getFileList:
@@ -499,7 +506,7 @@ def main():
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         lfn_base = config['LFN_Base'].rstrip('/')
-                        lfn_path = f"{lfn_base}/{era}/{DataMC}/{group}/{dataset_name}"
+                        lfn_path = f"{lfn_base}/preselection/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset_name}"
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
                         command = f"python3 {submit_preselection_script} --submit --era {era} --das-json {dataset_json_path} --golden-json {golden_json_path} --output-lfn {lfn_path} --work-area {work_area} --include '{DataMC}/{group}/{dataset_name}'"
                         print(f"      Executing command: {command}")
@@ -560,7 +567,7 @@ def main():
             if output_json_path.exists() and not args.force:
                 print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
                 continue
-            base_directory = str(Path(storageBase) / "preselection" / args.tag / era)
+            base_directory = str(Path(storageBase) / "preselection" / args.tag / config_hash / era)
             cmd = [
                 'python', str(generateJSON_script),
                 '--outputDirectory', str(output_dir / era),
@@ -578,7 +585,7 @@ def main():
     # Overall status across DAS expectations / getFileInfo / dataset JSON / CRAB / EOS output
     if args.getStatus:
         print("\nGetting overall status of the preselection processing...")
-        eos_base = utils.eos_path_from_lfn_base(config['LFN_Base'])
+        eos_base = f"{utils.eos_path_from_lfn_base(config['LFN_Base'])}/preselection/{args.tag}/{config_hash}"
         for era in config['DASQueries']:
             if not matches_filter(args.filter, era):
                 continue

@@ -54,6 +54,13 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
+    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
+                       help='[0] Fetch selectionI_{tag}_{era}_datasets.json and {era}_goldenJSON.json from '
+                            '003-ObjectSelectionI outputs into inputs/ (and this run\'s outputs/inputs/ snapshot). '
+                            'Requires --previousHash.')
+    parser.add_argument('--previousHash', type=str, default=None,
+                       help='[0] Config hash of the 003-ObjectSelectionI run to fetch from (its outputs/{tag}/{hash}/ '
+                            'directory). Required by --fetchFromPreviousChapter.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
@@ -74,6 +81,8 @@ def main():
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
+    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
+    print(f"  --previousHash: {args.previousHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
@@ -118,6 +127,32 @@ def main():
     if args.printHash:
         print(f"Config hash: {config_hash}")
         return 0
+
+    # Fetch selection-I dataset JSON + golden JSON (pass-through) into inputs/
+    if args.fetchFromPreviousChapter:
+        if not args.previousHash:
+            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+            return 1
+        print(f"\nFetching inputs from 003-ObjectSelectionI (hash: {args.previousHash})...")
+        previous_chapter_outputs = base_dir.parent / '003-ObjectSelectionI' / 'outputs' / args.tag / args.previousHash
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"  Era: {era}")
+            dataset_filename = f'selectionI_{args.tag}_{era}_datasets.json'
+            golden_filename = f'{era}_goldenJSON.json'
+            sources = [
+                previous_chapter_outputs / era / dataset_filename,       # this chapter's own deliverable
+                previous_chapter_outputs / 'inputs' / golden_filename,   # pass-through from 002-Samples
+            ]
+            for source_path in sources:
+                filename = source_path.name
+                if not source_path.exists():
+                    print(f"    Error: Source file not found: {source_path}. Skipping.")
+                    continue
+                local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
+                print(f"    Fetched {filename} -> {local_path} and {output_path}")
+        print("Finished fetching inputs from 003-ObjectSelectionI.")
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:

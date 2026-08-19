@@ -13,7 +13,15 @@ This chapter takes the pre-selected NanoAOD ROOT files produced by the preselect
 | `preselection_{era}_datasets.json` | File-path lists for each era pointing to the preselection-stage ROOT files on disk. Organised as `{DataMC → group → dataset → {filepath: "Events"}}`. These are the direct inputs to the event loop. |
 | `{era}_goldenJSON.json` | CMS Golden JSON for that era, used by NanoAOD's `PostProcessor` to certify data runs. Not applied to MC. |
 
-Currently two eras have these files committed: **UL2016preVFP** and **UL2018**. The others (UL2016postVFP, UL2017) are expected at the same path when their runs are set up.
+Fetched from 002-Samples via:
+```
+run_all.py --fetchFromPreviousChapter --previousHash <002-Samples config hash>
+```
+This copies both files per era from `002-Samples/outputs/{tag}/{previousHash}/{era}/` into
+`inputs/` *and* into this run's own `outputs/{tag}/{hash}/inputs/` snapshot (so the
+snapshot stays complete even though it's normally taken once, at the start of the
+invocation, before the fetch runs). `PRESELECTION_HASH` below is exactly this
+`--previousHash` value, recorded for provenance.
 
 ### 2. `config.yaml`
 
@@ -31,7 +39,7 @@ The single source of truth for the entire chapter. Key sections:
 
 ### 3. Preselection ROOT files on disk
 
-Located under `{STORAGE}/preselection/{PRESELECTION_TAG}/{era}/...`. These are the NanoAOD-format ROOT files (tree name `Events`) produced by the previous chapter. Paths are listed explicitly in `inputs/preselection_{era}_datasets.json`.
+Located under `{STORAGE}/preselection/{PRESELECTION_TAG}/{PRESELECTION_HASH}/{era}/...`. These are the NanoAOD-format ROOT files (tree name `Events`) produced by the previous chapter (002-Samples), hash-versioned by that chapter's own config hash. Paths are listed explicitly in `inputs/preselection_{era}_datasets.json`.
 
 ---
 
@@ -113,6 +121,9 @@ After the skim files are written, `--generateDatasetJSON` scans the output stora
 ## Flow of the Chapter
 
 ```
+run_all.py --fetchFromPreviousChapter --previousHash <hash>  ← Step 0 (see "Expected Inputs" above)
+        │
+        ▼
 config.yaml
 inputs/preselection_{era}_datasets.json
 inputs/{era}_goldenJSON.json
@@ -182,6 +193,38 @@ inputs/{era}_goldenJSON.json
 |---|---|
 | `run_all_{tag}.sh` | Auto-generated bash script (written to `scripts/`) with explicit `runSelection.py` calls per group; executed in step 3 |
 | `notebooks/configBuilder.ipynb` | Interactive helper for building or inspecting `config.yaml` |
+
+### CRAB alternative to Step 2/3 (lxplus only)
+
+Steps 1 and 4 are unchanged. Instead of `--writeBashScript` + running the generated script
+locally, the same object selection can be submitted to CRAB — useful since `runSelection.py`
+is the slow, time-consuming step:
+
+```
+source scripts/crab/getcrabReady.sh          # cmsenv + CRAB env + voms-proxy-init
+run_all.py --submitSelectionJobs
+run_all.py --checkCrabStatus [--resubmitFailedCrabJobs] [--removeSubmitFailedCrabJobs]
+run_all.py --generateDatasetJSON             # same step 4, unchanged
+```
+
+Unlike 002-Samples' preselection CRAB job, the input here (preselection skims already on
+EOS) is not a DBS-registered dataset, so `scripts/crab/submit_selection_flexible.py` uses
+`Data.userInputFiles` — an LFN list built directly from `preselection_{era}_datasets.json`
+(the same file `--generateProcessListJSON` reads locally) via `utils.lfn_path_for_local_file()`.
+Since there's no DBS lumi mask in that mode, golden-JSON filtering is applied the same way
+the local path does it: `jsonInput=<shipped golden JSON file>`, passed directly to
+`PostProcessor` inside `scripts/crab/crab_script_selection.py` (which runs the same
+`SelectedObjectsProducer`, shipped as a CRAB input file since it isn't part of the
+installed NanoAODTools package).
+
+CRAB output is written to `{LFN_Base}/selectionI/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}`
+— deliberately the same layout as the local `{STORAGE}/selectionI/...` path (`LFN_Base` in
+`config.yaml` and `STORAGE.lxplus` point at the same physical EOS area). This means
+`--generateDatasetJSON` can scan CRAB's output in place on lxplus, no manual copy step
+needed, unlike the 002→003-I preselection handoff.
+
+This is purely additive: it doesn't change `runSelection.py`, the local Pool-based path, or
+anything else described above.
 
 ### Idempotency
 
