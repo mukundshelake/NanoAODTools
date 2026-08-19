@@ -195,7 +195,7 @@ def main():
                             print(f"Output file already exists for {era}/{DataMC}/{group}/{dataset} at {outputDirectory / outputFileName}. Skipping (use --force to overwrite).")
                             continue
                         command = [
-                            'python', str(build_selection_hists_script),
+                            sys.executable, str(build_selection_hists_script),
                             '--fileSet', str(fileSetJSON),
                             '--configFile', str(config_path),
                             '--outputDir', str(outputDirectory),
@@ -270,7 +270,7 @@ def main():
         plots_dir.mkdir(parents=True, exist_ok=True)
         
         command = [
-            'python', str(root_hists_script),
+            sys.executable, str(root_hists_script),
             '--tag', args.tag,
             '--hash', config_hash,
             '--outputDir', str(plots_dir),
@@ -292,7 +292,7 @@ def main():
         else:
             try:
                 command = [
-                    'python', str(create_pdf_script),
+                    sys.executable, str(create_pdf_script),
                     '--configFile', str(config_path),
                     '--hash', config_hash,
                     '--tag', args.tag,

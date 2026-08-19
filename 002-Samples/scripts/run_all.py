@@ -569,7 +569,7 @@ def main():
                 continue
             base_directory = str(Path(storageBase) / "preselection" / args.tag / config_hash / era)
             cmd = [
-                'python', str(generateJSON_script),
+                sys.executable, str(generateJSON_script),
                 '--outputDirectory', str(output_dir / era),
                 '--outputFileName', output_json_name,
                 '--baseDirectory', base_directory

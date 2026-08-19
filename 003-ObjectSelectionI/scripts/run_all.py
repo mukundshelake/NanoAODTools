@@ -293,7 +293,7 @@ def main():
                         log_dir.mkdir(parents=True, exist_ok=True)
                         f.write(f"mkdir -p {log_dir}\n")
                         cmd = (
-                            f"python {base_dir / 'scripts' / 'runSelection.py'} "
+                            f"python3 {base_dir / 'scripts' / 'runSelection.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
                             f"{'--force ' if args.force else ''}"
@@ -399,7 +399,7 @@ def main():
             outputFileName = f"selectionI_{args.tag}_{era}_datasets.json"
             baseDirectory = os.path.join(storageBase, "selectionI", args.tag, config_hash, era)
             cmd = [
-                'python', str(generate_dataset_json_script),
+                sys.executable, str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
                 '--outputFileName', outputFileName,
                 '--baseDirectory', baseDirectory

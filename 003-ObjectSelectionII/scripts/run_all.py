@@ -271,7 +271,7 @@ def main():
                         if not matches_filter(args.filter, era, DataMC, group):
                             continue
                         cmd = (
-                            f"python {base_dir / 'scripts' / 'runSelectionII.py'} "
+                            f"python3 {base_dir / 'scripts' / 'runSelectionII.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
                             f"{'--force ' if args.force else ''}"
@@ -298,7 +298,7 @@ def main():
             outputFileName = f"selectionII_{args.tag}_{era}_datasets.json"
             baseDirectory = os.path.join(storageBase, "selectionII", args.tag, config_hash, era)
             cmd = [
-                'python', str(generate_dataset_json_script),
+                sys.executable, str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
                 '--outputFileName', outputFileName,
                 '--baseDirectory', baseDirectory

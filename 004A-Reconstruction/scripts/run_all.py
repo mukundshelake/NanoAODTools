@@ -290,7 +290,7 @@ def main():
                         log_dir.mkdir(parents=True, exist_ok=True)
                         f.write(f"mkdir -p {log_dir}\n")
                         cmd = (
-                            f"python {base_dir / 'scripts' / 'runReco.py'} "
+                            f"python3 {base_dir / 'scripts' / 'runReco.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
                             f"{'--force ' if args.force else ''}"
@@ -314,13 +314,13 @@ def main():
                     delta_dir = era_output_dir / "plots" / "deltaMass"
                     f.write(f"mkdir -p {era_output_dir}\n")
                     f.write(
-                        f"python {base_dir / 'scripts' / 'generateDatasetJSON.py'} "
+                        f"python3 {base_dir / 'scripts' / 'generateDatasetJSON.py'} "
                         f"--outputDirectory {era_output_dir} "
                         f"--outputFileName {dataset_json.name} "
                         f"--baseDirectory {reconstruction_base}\n"
                     )
                     f.write(
-                        f"python {base_dir / 'scripts' / 'deltaMassPlots.py'} "
+                        f"python3 {base_dir / 'scripts' / 'deltaMassPlots.py'} "
                         f"--json {dataset_json} --outDir {delta_dir}\n"
                     )
         os.chmod(bash_script_path, 0o755)
@@ -341,7 +341,7 @@ def main():
             outputFileName  = f"reconstruction_{args.tag}_{era}_datasets.json"
             baseDirectory   = f'{storageBase}/reconstruction/{args.tag}/{config_hash}/{era}'
             cmd = [
-                'python', str(generate_dataset_json_script),
+                sys.executable, str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
                 '--outputFileName',  outputFileName,
                 '--baseDirectory',   baseDirectory,

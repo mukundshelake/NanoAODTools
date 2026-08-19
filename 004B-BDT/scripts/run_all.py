@@ -266,7 +266,7 @@ def main():
                         log_dir.mkdir(parents=True, exist_ok=True)
                         f.write(f"mkdir -p {log_dir}\n")
                         cmd = (
-                            f"python {base_dir / 'scripts' / 'runBDTVariables.py'} "
+                            f"python3 {base_dir / 'scripts' / 'runBDTVariables.py'} "
                             f"--processListJSON {process_list_json} "
                             f"--workers {args.workers} "
                             f"{'--force ' if args.force else ''}"
@@ -295,7 +295,7 @@ def main():
             outputFileName  = f"BDTVariables_{args.tag}_{era}_datasets.json"
             baseDirectory   = f'{storageBase}/BDTVariables/{args.tag}/{config_hash}/{era}'
             cmd = [
-                'python', str(generate_dataset_json_script),
+                sys.executable, str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
                 '--outputFileName',  outputFileName,
                 '--baseDirectory',   baseDirectory,
@@ -372,7 +372,7 @@ def main():
                         
                         # Run buildBDTVariableHists.py
                         command = [
-                            'python', str(build_bdt_hists_script),
+                            sys.executable, str(build_bdt_hists_script),
                             '--fileSet', str(fileset_json_path),
                             '--configFile', str(config_path),
                             '--outputDir', str(output_hists_dir),
@@ -473,7 +473,7 @@ def main():
         plots_dir.mkdir(parents=True, exist_ok=True)
 
         command = [
-            'python', str(bdt_plotter_script),
+            sys.executable, str(bdt_plotter_script),
             '--tag', args.tag,
             '--hash', config_hash,
             '--outputDir', str(plots_dir),
@@ -494,7 +494,7 @@ def main():
         else:
             try:
                 command = [
-                    'python', str(create_pdf_script),
+                    sys.executable, str(create_pdf_script),
                     '--configFile', str(config_path),
                     '--hash', config_hash,
                     '--tag', args.tag,
