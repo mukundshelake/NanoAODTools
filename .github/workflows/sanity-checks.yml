@@ -1,0 +1,42 @@
+name: Sanity Checks
+
+# Fast, dependency-light checks that run on GitHub's own hosted runners --
+# no CVMFS/CMSSW/ROOT/CRAB access needed, so nothing here touches lxplus or
+# EOS. These catch exactly the class of bugs that otherwise only show up
+# after pushing and pulling on lxplus: syntax errors, import-time errors in
+# utils.py/run_all.py, and argparse definition mistakes (duplicate/missing
+# flags). Anything that needs CVMFS/ROOT/CRAB is out of scope for this
+# workflow and needs a self-hosted runner on a persistent CERN host instead.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Byte-compile every Python file in the repo (syntax only, zero deps)
+        run: |
+          python3 -m py_compile $(find . -name "*.py" -not -path "*/__pycache__/*" -not -path "./build/*" -not -path "./.git/*")
+
+  run-all-help-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the lightweight deps run_all.py imports at module level
+        run: pip install pyyaml coffea
+      - name: run_all.py --help for every chapter (exercises imports + argparse, no STORAGE/CRAB touched)
+        run: |
+          set -e
+          for chapter in 002-Samples 003-ObjectSelectionI 003-ObjectSelectionII 003-ObjectSelectionIII 004A-Reconstruction 004B-BDT; do
+            echo "=== $chapter ==="
+            python3 "$chapter/scripts/run_all.py" --help
+          done

@@ -48,6 +48,26 @@ run_all.py --generateDatasetJSON
 
 `--filter`, `--force`, `--sample`, `--workers` work as in the other chapters.
 
+### CRAB alternative to Step 2/3 (lxplus only)
+
+Same pattern as 003-ObjectSelectionI/II and 004A-Reconstruction's CRAB support:
+
+```
+source scripts/crab/getcrabReady.sh
+run_all.py --submitBDTJobs [--sample]
+run_all.py --checkCrabStatus [--resubmitFailedCrabJobs] [--removeSubmitFailedCrabJobs]
+run_all.py --generateDatasetJSON
+```
+
+`scripts/crab/submit_bdt_flexible.py` builds `Data.userInputFiles` from
+`reconstruction_{tag}_{era}_datasets.json` the same way (reconstruction output isn't
+DBS-registered either), and `scripts/crab/crab_script_bdt.py` resolves each LFN to
+`root://eosuser.cern.ch/...` directly, bypassing `crabhelper.inputFiles()` for the same
+reason as 003-I. No golden JSON is shipped or needed here (neither a cut string nor
+golden-JSON filtering is re-applied), and unlike 004A-Reconstruction's worker script, no
+LCG `sys.path` fix is needed either -- `BDTvariableModule` only imports `numpy`, which is
+part of the stock CMSSW python environment.
+
 ## Storage
 
 `STORAGE` in `config.yaml` is a dict keyed by machine (matched as a substring of

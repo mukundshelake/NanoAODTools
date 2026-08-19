@@ -14,19 +14,48 @@ dataset (Data.userInputFiles was used, not Data.inputDataset), so CRAB has no
 lumi mask to give us: runsAndLumis() returns None here. Golden-JSON filtering
 is instead applied the same way the local Pool-based runSelection.py already
 does it -- jsonInput=<path to the shipped golden JSON file>, only for data.
+
+NOTE on input file resolution: we deliberately do NOT use
+PhysicsTools.NanoAODTools.postprocessing.framework.crabhelper.inputFiles().
+That helper resolves /store/... LFNs via the site-local config (which maps
+/store/... to /eos/cms/..., the official CMS T2_CH_CERN storage), falling
+back to the global AAA redirector (root://cms-xrd-global.cern.ch/, which only
+knows about DBS/Rucio-registered files) if the local open fails. Our
+preselection input files are private and live in CERNBox (/eos/user/...), a
+different physical EOS instance from /eos/cms -- neither of crabhelper's
+resolution paths can ever find them. So instead we translate the /store/...
+LFN CRAB assigns us directly to its CERNBox xrootd door (root://eosuser.cern.ch/),
+using this chapter's own LFN_Base (shipped via config.yaml) to know the mapping.
 """
 
 import os
 import sys
 import yaml
+import PSet
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
-from PhysicsTools.NanoAODTools.postprocessing.framework.crabhelper import inputFiles, runsAndLumis
 from SelectedObjects import SelectedObjectsProducer
 
 print("Running crab_script_selection.py")
 
-files = inputFiles()
-print("INPUT FILES:", files)
+with open("config.yaml") as _f:
+    _config = yaml.safe_load(_f)
+
+
+def lfn_to_eosuser_xrootd(lfn, lfn_base):
+    """Convert a /store/user/<username>/... LFN to root://eosuser.cern.ch/..."""
+    lfn_base = lfn_base.rstrip('/')
+    if not lfn.startswith(lfn_base):
+        raise ValueError(f"LFN '{lfn}' does not start with configured LFN_Base '{lfn_base}'")
+    parts = lfn_base.strip('/').split('/')  # ['store', 'user', '<username>', ...rest]
+    username = parts[2]
+    eos_base = '/'.join(['/eos/user', username[0], username] + parts[3:])
+    return f"root://eosuser.cern.ch/{eos_base}{lfn[len(lfn_base):]}"
+
+
+raw_lfns = list(PSet.process.source.fileNames)
+files = [lfn_to_eosuser_xrootd(lfn, _config["LFN_Base"]) for lfn in raw_lfns]
+print("INPUT FILES (raw LFNs):", raw_lfns)
+print("INPUT FILES (resolved):", files)
 
 # scriptArgs: era=VALUE, isData=True/False (passed by submit_selection_flexible.py)
 era = None
@@ -41,9 +70,6 @@ if era is None:
     raise RuntimeError("crab_script_selection.py requires scriptArgs era=<era>")
 
 print(f"era={era}, isData={is_data}")
-
-with open("config.yaml") as _f:
-    _config = yaml.safe_load(_f)
 
 # Build the same combined cut string run_all.py --generateProcessListJSON builds locally
 _era_cuts = _config["SelectionCuts"][era]

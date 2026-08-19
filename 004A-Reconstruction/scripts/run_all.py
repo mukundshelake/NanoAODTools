@@ -106,6 +106,21 @@ def main():
                             'selectionII dataset JSONs from the inputs folder')
     parser.add_argument('--writeBashScript', action='store_true',
                        help='[2] Write a bash script with all runReco.py commands instead of executing them directly')
+    parser.add_argument('--submitReconstructionJobs', action='store_true',
+                       help='[2alt][lxplus][CRAB] Submit reconstruction jobs to CRAB instead of running them '
+                            'locally -- an alternative to --writeBashScript + local execution. Processes the same '
+                            'selectionII skims (via Data.userInputFiles, since they are not DBS-registered) and '
+                            'writes output to the same {STORAGE}/reconstruction/{tag}/{hash}/... layout, so '
+                            'downstream steps work unchanged either way. This is the CPU-heavy stage (one SLSQP fit '
+                            'per permutation per event), the main motivation for CRAB support here. Uses '
+                            'scripts/crab/submit_reconstruction_flexible.py.')
+    parser.add_argument('--checkCrabStatus', action='store_true',
+                       help='[lxplus][CRAB] Check CRAB job status for jobs submitted with --submitReconstructionJobs. '
+                            'Uses scripts/crab/checkStatus.py.')
+    parser.add_argument('--resubmitFailedCrabJobs', action='store_true',
+                       help='[lxplus][CRAB] With --checkCrabStatus: resubmit failed CRAB jobs.')
+    parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
+                       help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON by scanning the reconstruction output directory')
     parser.add_argument('--makeDeltaPlots', action='store_true',
@@ -124,6 +139,10 @@ def main():
     print(f"  --previousHash: {args.previousHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
+    print(f"  --submitReconstructionJobs: {args.submitReconstructionJobs}")
+    print(f"  --checkCrabStatus: {args.checkCrabStatus}")
+    print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
+    print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
     print(f"  --makeDeltaPlots: {args.makeDeltaPlots}")
     print(f"  --sample: {args.sample}")
@@ -325,6 +344,84 @@ def main():
                     )
         os.chmod(bash_script_path, 0o755)
         print(f"\nBash script written to: {bash_script_path}")
+
+    # Submit reconstruction jobs to CRAB, as an alternative to --writeBashScript +
+    # local execution. lxplus only (needs STORAGE to resolve to the EOS mount of LFN_Base).
+    if args.submitReconstructionJobs:
+        print("\nSubmitting reconstruction jobs to CRAB...")
+        submit_reconstruction_script = base_dir / 'scripts' / 'crab' / 'submit_reconstruction_flexible.py'
+        if not submit_reconstruction_script.exists():
+            print(f"Error: {submit_reconstruction_script} not found!")
+            return 1
+        lfn_base = config.get('LFN_Base', '').rstrip('/')
+        if not lfn_base:
+            print("Error: LFN_Base not set in config.yaml; required for --submitReconstructionJobs.")
+            return 1
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nSubmitting reconstruction jobs for era: {era}")
+            dataset_json_path = output_dir / 'inputs' / f'selectionII_{args.tag}_{era}_datasets.json'
+            if not dataset_json_path.exists():
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                continue
+            for DataMC in config['NgenandXsec'][era]:
+                print(f"  DataMC: {DataMC}")
+                for group in config['NgenandXsec'][era][DataMC]:
+                    print(f"    Group: {group}")
+                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                        print(f"      Dataset: {dataset}")
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        lfn_output_path = f"{lfn_base}/reconstruction/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
+                        work_area = output_dir / era / DataMC / group / dataset / "crab_reconstruction"
+                        command = (
+                            f"python3 {submit_reconstruction_script} --submit --era {era} "
+                            f"--dataset-json {dataset_json_path} "
+                            f"--output-lfn {lfn_output_path} --work-area {work_area} "
+                            f"{'--sample ' if args.sample else ''}"
+                            f"--include '{DataMC}/{group}/{dataset}'"
+                        )
+                        print(f"      Executing command: {command}")
+                        result = subprocess.run(command, shell=True)
+                        if result.returncode != 0:
+                            print(f"Error submitting reconstruction jobs for dataset: {dataset}")
+                            continue
+                        else:
+                            print(f"      Successfully submitted reconstruction jobs for dataset: {dataset} with CRAB and saved logs to: {work_area}")
+
+    # Check CRAB job status for jobs submitted with --submitReconstructionJobs
+    if args.checkCrabStatus:
+        print("\nChecking CRAB job status for reconstruction jobs submitted with --submitReconstructionJobs...")
+        check_crab_status_script = base_dir / 'scripts' / 'crab' / 'checkStatus.py'
+        if not check_crab_status_script.exists():
+            print(f"Error: {check_crab_status_script} not found!")
+            return 1
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nChecking CRAB status for era: {era}")
+            for DataMC in config['NgenandXsec'][era]:
+                print(f"  DataMC: {DataMC}")
+                for group in config['NgenandXsec'][era][DataMC]:
+                    print(f"    Group: {group}")
+                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                        print(f"      Dataset: {dataset}")
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        work_area = output_dir / era / DataMC / group / dataset / "crab_reconstruction"
+                        command = f"python3 {check_crab_status_script} -d {work_area}"
+                        if args.resubmitFailedCrabJobs:
+                            command += " --resubmit"
+                        if args.removeSubmitFailedCrabJobs:
+                            command += " --removeSubmitFailed"
+                        print(f"      Executing command: {command}")
+                        result = subprocess.run(command, shell=True)
+                        if result.returncode != 0:
+                            print(f"Error checking CRAB status for dataset: {dataset}")
+                            continue
+                        else:
+                            print(f"      Successfully checked CRAB status for dataset: {dataset}. Check the output above for details.")
 
     # --generateDatasetJSON
     if args.generateDatasetJSON:

@@ -3,6 +3,10 @@ STORAGE:
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 
+# LFN base for CRAB Data.userInputFiles / output LFNs (lxplus only). Must match the
+# EOS mount STORAGE.lxplus points at above.
+LFN_Base : "/store/user/mshelake/DataFiles"
+
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
 # ---------------------------------------------------------------------------

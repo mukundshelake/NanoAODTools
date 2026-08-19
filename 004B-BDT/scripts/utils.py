@@ -257,6 +257,28 @@ def resolve_storage_path(config):
     )
 
 
+def lfn_path_for_local_file(local_path, storage_base, lfn_base):
+    """
+    Translate an absolute file path under storage_base (the resolved STORAGE
+    path for the current machine) into its /store/... LFN equivalent under
+    lfn_base, for CRAB's Data.userInputFiles.
+
+    Only meaningful when storage_base is itself an EOS mount of lfn_base, i.e.
+    when running on lxplus with STORAGE.lxplus pointing at the EOS mount of
+    LFN_Base -- CRAB submission only makes sense there anyway.
+    """
+    local_path = str(local_path)
+    storage_base = str(storage_base).rstrip('/')
+    lfn_base = str(lfn_base).rstrip('/')
+    if not local_path.startswith(storage_base + '/'):
+        raise ValueError(
+            f"File path '{local_path}' is not under STORAGE base '{storage_base}'; "
+            f"cannot derive its LFN. CRAB submission must run on lxplus, with "
+            f"STORAGE resolving to the EOS mount of LFN_Base."
+        )
+    return lfn_base + local_path[len(storage_base):]
+
+
 def validate_output_status(outputs_dir, current_config_hash):
     """
     Check which outputs exist and their status relative to current config.
