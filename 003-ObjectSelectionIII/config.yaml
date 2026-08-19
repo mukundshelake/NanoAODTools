@@ -1,0 +1,820 @@
+STORAGE:
+  cms2:      "/mnt/disk2/mukund/DataFiles"
+  localhost: "/nfs/disk3/mukund/DataFiles"
+  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+LFN_Base : "/store/user/mshelake/DataFiles"
+# ---------------------------------------------------------------------------
+
+DataLumiInfo:
+  UL2016preVFP:
+    Lumi:    19521.2
+    LumiUnc: 0.012
+  UL2016postVFP:
+    Lumi:    16812.1
+    LumiUnc: 0.012
+  UL2017:
+    Lumi:    41479.6
+    LumiUnc: 0.0082
+  UL2018:
+    Lumi:    59222.7416
+    LumiUnc: 0.0084
+
+NgenandXsec:
+  UL2016postVFP:
+    Data_mu:
+      SingleMuon:
+        Run2016F_mu:
+          Ngen: 8024195
+          Xsec: -1.0
+        Run2016G_mu:
+          Ngen: 149916849
+          Xsec: -1.0
+        Run2016H_mu:
+          Ngen: 149916849
+          Xsec: -1.0
+    MC_alt:
+      FullyLeptonic:
+        ttbar_FullyLeptonic_Gluonmove:
+          Ngen: 18015000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_QCDinspired:
+          Ngen: 18121000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPdown:
+          Ngen: 18066000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPup:
+          Ngen: 18066000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_erdON:
+          Ngen: 17506000
+          Xsec: 88.5
+      SemiLeptonic:
+        ttbar_SemiLeptonic_Gluonmove:
+          Ngen: 62693000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_QCDinspired:
+          Ngen: 61029000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5down:
+          Ngen: 57909000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5up:
+          Ngen: 57909000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_erdON:
+          Ngen: 54573000
+          Xsec: 366.3
+      Tbarchannel:
+        Tbarchannel_Gluonmove:
+          Ngen: 12213000
+          Xsec: 80.0
+        Tbarchannel_QCDinspired:
+          Ngen: 12557000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5down:
+          Ngen: 12042000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5up:
+          Ngen: 12591000
+          Xsec: 80.0
+        Tbarchannel_erdON:
+          Ngen: 12042000
+          Xsec: 80.0
+      Tchannel:
+        Tchannel_Gluonmove:
+          Ngen: 23728000
+          Xsec: 134.2
+        Tchannel_QCDinspired:
+          Ngen: 25457000
+          Xsec: 134.2
+        Tchannel_TuneCP5down:
+          Ngen: 23751000
+          Xsec: 134.2
+        Tchannel_TuneCP5up:
+          Ngen: 25025000
+          Xsec: 134.2
+        Tchannel_erdON:
+          Ngen: 23728000
+          Xsec: 134.2
+    MC_mu:
+      Diboson:
+        WWTo2L2Nu:
+          Ngen: 2900000
+          Xsec: 11.09
+        WWTolnulnu:
+          Ngen: 4932000
+          Xsec: 10.48
+        WZTo2Q2L:
+          Ngen: 13526954
+          Xsec: 6.565
+        ZZTo2L2Nu:
+          Ngen: 16826232
+          Xsec: 0.974
+        ZZTo2Q2L:
+          Ngen: 13740600
+          Xsec: 3.676
+      DrellYan:
+        DYJetsToLL:
+          Ngen: 82448544
+          Xsec: 6424.0
+      FullyLeptonic:
+        ttbar_FullyLeptonic:
+          Ngen: 43546000
+          Xsec: 88.5
+      QCD:
+        QCD_Pt-1000_MuEnriched:
+          Ngen: 13905446
+          Xsec: 1.34449145
+        QCD_Pt-120To170_MuEnriched:
+          Ngen: 19772747
+          Xsec: 21509.488
+        QCD_Pt-15To20_MuEnriched:
+          Ngen: 4529975
+          Xsec: 2881500
+        QCD_Pt-170To300_MuEnriched:
+          Ngen: 34183334
+          Xsec: 7224.3
+        QCD_Pt-20To30_MuEnriched:
+          Ngen: 30853571
+          Xsec: 3657550
+        QCD_Pt-300To470_MuEnriched:
+          Ngen: 29824712
+          Xsec: 617.1102
+        QCD_Pt-30To50_MuEnriched:
+          Ngen: 35474172
+          Xsec: 1154520
+        QCD_Pt-470To600_MuEnriched:
+          Ngen: 19771458
+          Xsec: 57.84961
+        QCD_Pt-50To80_MuEnriched:
+          Ngen: 21491325
+          Xsec: 347191
+        QCD_Pt-600To800_MuEnriched:
+          Ngen: 18165741
+          Xsec: 22.21919375
+        QCD_Pt-800To1000_MuEnriched:
+          Ngen: 38913226
+          Xsec: 3.86242284
+        QCD_Pt-80To120_MuEnriched:
+          Ngen: 22005632
+          Xsec: 90131
+      SemiLeptonic:
+        ttbar_SemiLeptonic:
+          Ngen: 144722000
+          Xsec: 366.3
+      SingleTop:
+        Schannel:
+          Ngen: 5471000
+          Xsec: 2.215836
+        Tbarchannel:
+          Ngen: 30609000
+          Xsec: 80.0
+        Tchannel:
+          Ngen: 63073000
+          Xsec: 134.2
+        tw_antitop:
+          Ngen: 3654510
+          Xsec: 39.65
+        tw_top:
+          Ngen: 3368375
+          Xsec: 39.65
+      WJets:
+        WJetsToLNu_0J:
+          Ngen: 159756701
+          Xsec: 52780.0
+        WJetsToLNu_1J:
+          Ngen: 167292982
+          Xsec: 8832.0
+        WJetsToLNu_2J:
+          Ngen: 26790000
+          Xsec: 3276.0
+  UL2016preVFP:
+    Data_mu:
+      SingleMuon:
+        Run2016B_ver1_mu:
+          Ngen: 2789243
+          Xsec: -1.0
+        Run2016B_ver2_mu:
+          Ngen: 158145722
+          Xsec: -1.0
+        Run2016C_mu:
+          Ngen: 67441308
+          Xsec: -1.0
+        Run2016D_mu:
+          Ngen: 98017996
+          Xsec: -1.0
+        Run2016E_mu:
+          Ngen: 90984718
+          Xsec: -1.0
+        Run2016F_mu:
+          Ngen: 90984718
+          Xsec: -1.0
+    MC_alt:
+      FullyLeptonic:
+        ttbar_FullyLeptonic_Gluonmove:
+          Ngen: 16776000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_QCDinspired:
+          Ngen: 15518000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPdown:
+          Ngen: 10381000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPup:
+          Ngen: 10381000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_erdON:
+          Ngen: 16229000
+          Xsec: 88.5
+      SemiLeptonic:
+        ttbar_SemiLeptonic_Gluonmove:
+          Ngen: 56324000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_QCDinspired:
+          Ngen: 56166000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5down:
+          Ngen: 46263000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5up:
+          Ngen: 46263000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_erdON:
+          Ngen: 55704000
+          Xsec: 366.3
+      Tbarchannel:
+        Tbarchannel_Gluonmove:
+          Ngen: 10942000
+          Xsec: 80.0
+        Tbarchannel_QCDinspired:
+          Ngen: 10346000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5down:
+          Ngen: 10854000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5up:
+          Ngen: 10715000
+          Xsec: 80.0
+        Tbarchannel_erdON:
+          Ngen: 10942000
+          Xsec: 80.0
+      Tchannel:
+        Tchannel_Gluonmove:
+          Ngen: 21590000
+          Xsec: 134.2
+        Tchannel_QCDinspired:
+          Ngen: 19928000
+          Xsec: 134.2
+        Tchannel_TuneCP5down:
+          Ngen: 22073000
+          Xsec: 134.2
+        Tchannel_TuneCP5up:
+          Ngen: 21927000
+          Xsec: 134.2
+        Tchannel_erdON:
+          Ngen: 21590000
+          Xsec: 134.2
+    MC_mu:
+      Diboson:
+        WWTo2L2Nu:
+          Ngen: 3006596
+          Xsec: 11.09
+        WWTolnulnu:
+          Ngen: 4932000
+          Xsec: 10.48
+        WZTo2Q2L:
+          Ngen: 9780392
+          Xsec: 6.565
+        ZZTo2L2Nu:
+          Ngen: 16826232
+          Xsec: 0.974
+        ZZTo2Q2L:
+          Ngen: 10406942
+          Xsec: 3.676
+      DrellYan:
+        DYJetsToLL:
+          Ngen: 95170552
+          Xsec: 6424.0
+      FullyLeptonic:
+        ttbar_FullyLeptonic:
+          Ngen: 37202073
+          Xsec: 88.5
+      QCD:
+        QCD_Pt-1000_MuEnriched:
+          Ngen: 13660999
+          Xsec: 1.34449145
+        QCD_Pt-120To170_MuEnriched:
+          Ngen: 19136907
+          Xsec: 21509.488
+        QCD_Pt-15To20_MuEnriched:
+          Ngen: 4749558
+          Xsec: 2881500
+        QCD_Pt-170To300_MuEnriched:
+          Ngen: 37080544
+          Xsec: 7224.3
+        QCD_Pt-20To30_MuEnriched:
+          Ngen: 31926643
+          Xsec: 3657550
+        QCD_Pt-300To470_MuEnriched:
+          Ngen: 28465385
+          Xsec: 617.1102
+        QCD_Pt-30To50_MuEnriched:
+          Ngen: 28664840
+          Xsec: 1154520
+        QCD_Pt-470To600_MuEnriched:
+          Ngen: 19695298
+          Xsec: 57.84961
+        QCD_Pt-50To80_MuEnriched:
+          Ngen: 19724658
+          Xsec: 347191
+        QCD_Pt-600To800_MuEnriched:
+          Ngen: 19598815
+          Xsec: 22.21919375
+        QCD_Pt-800To1000_MuEnriched:
+          Ngen: 38933940
+          Xsec: 3.86242284
+        QCD_Pt-80To120_MuEnriched:
+          Ngen: 21978558
+          Xsec: 90131
+      SemiLeptonic:
+        ttbar_SemiLeptonic:
+          Ngen: 131106831
+          Xsec: 366.3
+      SingleTop:
+        Schannel:
+          Ngen: 3592772
+          Xsec: 2.215836
+        Tbarchannel:
+          Ngen: 29205915
+          Xsec: 80.0
+        Tchannel:
+          Ngen: 52437432
+          Xsec: 134.2
+        tw_antitop:
+          Ngen: 3176335
+          Xsec: 39.65
+        tw_top:
+          Ngen: 3294485
+          Xsec: 39.65
+      WJets:
+        WJetsToLNu_0J:
+          Ngen: 121208493
+          Xsec: 52780.0
+        WJetsToLNu_1J:
+          Ngen: 84198168
+          Xsec: 8832.0
+        WJetsToLNu_2J:
+          Ngen: 27463756
+          Xsec: 3276.0
+  UL2017:
+    Data_mu:
+      SingleMuon:
+        Run2017B_mu:
+          Ngen: 136300266
+          Xsec: -1.0
+        Run2017C_mu:
+          Ngen: 165652756
+          Xsec: -1.0
+        Run2017D_mu:
+          Ngen: 70361660
+          Xsec: -1.0
+        Run2017E_mu:
+          Ngen: 154618774
+          Xsec: -1.0
+        Run2017F_mu:
+          Ngen: 242140980
+          Xsec: -1.0
+    MC_alt:
+      FullyLeptonic:
+        ttbar_FullyLeptonic_Gluonmove:
+          Ngen: 42603000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_QCDinspired:
+          Ngen: 42817000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPdown:
+          Ngen: 39285000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCPup:
+          Ngen: 42388000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_erdON:
+          Ngen: 42432000
+          Xsec: 88.5
+      SemiLeptonic:
+        ttbar_SemiLeptonic_Gluonmove:
+          Ngen: 141920000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_QCDinspired:
+          Ngen: 136012000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5down:
+          Ngen: 134394000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5up:
+          Ngen: 137062000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_erdON:
+          Ngen: 124882000
+          Xsec: 366.3
+      Tbarchannel:
+        Tbarchannel_Gluonmove:
+          Ngen: 27522000
+          Xsec: 80.0
+        Tbarchannel_QCDinspired:
+          Ngen: 27649000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5down:
+          Ngen: 27196000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5up:
+          Ngen: 26488000
+          Xsec: 80.0
+        Tbarchannel_erdON:
+          Ngen: 26979000
+          Xsec: 80.0
+      Tchannel:
+        Tchannel_Gluonmove:
+          Ngen: 53390000
+          Xsec: 134.2
+        Tchannel_QCDinspired:
+          Ngen: 53950000
+          Xsec: 134.2
+        Tchannel_TuneCP5down:
+          Ngen: 53646000
+          Xsec: 134.2
+        Tchannel_TuneCP5up:
+          Ngen: 52891000
+          Xsec: 134.2
+        Tchannel_erdON:
+          Ngen: 55383000
+          Xsec: 134.2
+    MC_mu:
+      Diboson:
+        WWTo2L2Nu:
+          Ngen: 7071358
+          Xsec: 11.09
+        WWTolnulnu:
+          Ngen: 2000000
+          Xsec: 10.79
+        WZTo2Q2L:
+          Ngen: 18136497
+          Xsec: 5.595
+        ZZTo2L2Nu:
+          Ngen: 16826232
+          Xsec: 0.974
+        ZZTo2Q2L:
+          Ngen: 19134840
+          Xsec: 3.676
+      DrellYan:
+        DYJetsToLL:
+          Ngen: 131552392
+          Xsec: 6424.0
+      FullyLeptonic:
+        ttbar_FullyLeptonic:
+          Ngen: 105860011
+          Xsec: 88.5
+      QCD:
+        QCD_Pt-1000_MuEnriched:
+          Ngen: 27478273
+          Xsec: 1.34449145
+        QCD_Pt-120To170_MuEnriched:
+          Ngen: 39394151
+          Xsec: 21509.488
+        QCD_Pt-15To20_MuEnriched:
+          Ngen: 9019841
+          Xsec: 2881500
+        QCD_Pt-170To300_MuEnriched:
+          Ngen: 73071987
+          Xsec: 7224.3
+        QCD_Pt-20To30_MuEnriched:
+          Ngen: 64623134
+          Xsec: 3657550
+        QCD_Pt-300To470_MuEnriched:
+          Ngen: 58692910
+          Xsec: 617.1102
+        QCD_Pt-30To50_MuEnriched:
+          Ngen: 58639613
+          Xsec: 1154520
+        QCD_Pt-470To600_MuEnriched:
+          Ngen: 39491752
+          Xsec: 57.84961
+        QCD_Pt-50To80_MuEnriched:
+          Ngen: 40322726
+          Xsec: 347191
+        QCD_Pt-600To800_MuEnriched:
+          Ngen: 39321940
+          Xsec: 22.21919375
+        QCD_Pt-800To1000_MuEnriched:
+          Ngen: 78215559
+          Xsec: 3.86242284
+        QCD_Pt-80To120_MuEnriched:
+          Ngen: 45981017
+          Xsec: 90131
+      SemiLeptonic:
+        ttbar_SemiLeptonic:
+          Ngen: 343257745
+          Xsec: 366.3
+      SingleTop:
+        Schannel:
+          Ngen: 8866570
+          Xsec: 2.215836
+        Tbarchannel:
+          Ngen: 65701149
+          Xsec: 80.0
+        Tchannel:
+          Ngen: 121728258
+          Xsec: 134.2
+        tw_antitop:
+          Ngen: 8433562
+          Xsec: 39.65
+        tw_top:
+          Ngen: 8506765
+          Xsec: 39.65
+      WJets:
+        WJetsToLNu_0J:
+          Ngen: 135263983
+          Xsec: 52780.0
+        WJetsToLNu_1J:
+          Ngen: 85950236
+          Xsec: 8832.0
+        WJetsToLNu_2J:
+          Ngen: 29987306
+          Xsec: 3276.0
+  UL2018:
+    Data_mu:
+      SingleMuon:
+        Run2018A_mu:
+          Ngen: 241608232
+          Xsec: -1.0
+        Run2018B_mu:
+          Ngen: 119918017
+          Xsec: -1.0
+        Run2018C_mu:
+          Ngen: 109986009
+          Xsec: -1.0
+        Run2018D_mu:
+          Ngen: 109986009
+          Xsec: -1.0
+    MC_alt:
+      FullyLeptonic:
+        ttbar_FullyLeptonic_Gluonmove:
+          Ngen: 57189000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_QCDinspired:
+          Ngen: 59620000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCP5down:
+          Ngen: 57064000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_TuneCP5up:
+          Ngen: 57064000
+          Xsec: 88.5
+        ttbar_FullyLeptonic_erdON:
+          Ngen: 59973000
+          Xsec: 88.5
+      SemiLeptonic:
+        ttbar_SemiLeptonic_Gluonmove:
+          Ngen: 195101000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_QCDinspired:
+          Ngen: 199323000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5down:
+          Ngen: 199394000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_TuneCP5up:
+          Ngen: 199394000
+          Xsec: 366.3
+        ttbar_SemiLeptonic_erdON:
+          Ngen: 198188000
+          Xsec: 366.3
+      Tbarchannel:
+        Tbarchannel_Gluonmove:
+          Ngen: 36558000
+          Xsec: 80.0
+        Tbarchannel_QCDinspired:
+          Ngen: 37106000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5down:
+          Ngen: 36144000
+          Xsec: 80.0
+        Tbarchannel_TuneCP5up:
+          Ngen: 36424000
+          Xsec: 80.0
+        Tbarchannel_erdON:
+          Ngen: 36144000
+          Xsec: 80.0
+      Tchannel:
+        Tchannel_Gluonmove:
+          Ngen: 69631000
+          Xsec: 134.2
+        Tchannel_QCDinspired:
+          Ngen: 74568000
+          Xsec: 134.2
+        Tchannel_TuneCP5down:
+          Ngen: 74992000
+          Xsec: 134.2
+        Tchannel_TuneCP5up:
+          Ngen: 75582000
+          Xsec: 134.2
+        Tchannel_erdON:
+          Ngen: 74992000
+          Xsec: 134.2
+        Tchannel_hdampup:
+          Ngen: 59030000
+          Xsec: 134.2
+    MC_mu:
+      Diboson:
+        WWTo2L2Nu:
+          Ngen: 9962019
+          Xsec: 11.09
+        WWTolnulnu:
+          Ngen: 4946000
+          Xsec: 2.206
+        WZTo2Q2L:
+          Ngen: 17952068
+          Xsec: 6.565
+        ZZTo2L2Nu:
+          Ngen: 16826232
+          Xsec: 0.974
+        ZZTo2Q2L:
+          Ngen: 19082659
+          Xsec: 3.676
+      DrellYan:
+        DYJetsToLL:
+          Ngen: 129037134
+          Xsec: 6424.0
+      FullyLeptonic:
+        ttbar_FullyLeptonic:
+          Ngen: 143830836
+          Xsec: 88.5
+      QCD:
+        QCD_Pt-1000_MuEnriched:
+          Ngen: 27427130
+          Xsec: 1.34449145
+        QCD_Pt-120To170_MuEnriched:
+          Ngen: 38022194
+          Xsec: 21509.488
+        QCD_Pt-15To20_MuEnriched:
+          Ngen: 9325758
+          Xsec: 2881500
+        QCD_Pt-170To300_MuEnriched:
+          Ngen: 71870974
+          Xsec: 7224.3
+        QCD_Pt-20To30_MuEnriched:
+          Ngen: 60640516
+          Xsec: 3657550
+        QCD_Pt-300To470_MuEnriched:
+          Ngen: 58949756
+          Xsec: 617.1102
+        QCD_Pt-30To50_MuEnriched:
+          Ngen: 58737695
+          Xsec: 1154520
+        QCD_Pt-470To600_MuEnriched:
+          Ngen: 38453296
+          Xsec: 57.84961
+        QCD_Pt-50To80_MuEnriched:
+          Ngen: 40022458
+          Xsec: 347191
+        QCD_Pt-600To800_MuEnriched:
+          Ngen: 37197942
+          Xsec: 22.21919375
+        QCD_Pt-800To1000_MuEnriched:
+          Ngen: 78942993
+          Xsec: 3.86242284
+        QCD_Pt-80To120_MuEnriched:
+          Ngen: 45494357
+          Xsec: 90131
+      SemiLeptonic:
+        ttbar_SemiLeptonic:
+          Ngen: 472977862
+          Xsec: 366.3
+      SingleTop:
+        Schannel:
+          Ngen: 12444591
+          Xsec: 2.215836
+        Tbarchannel:
+          Ngen: 89985007
+          Xsec: 80.0
+        Tchannel:
+          Ngen: 166637158
+          Xsec: 134.2
+        tw_antitop:
+          Ngen: 10949620
+          Xsec: 39.65
+        tw_top:
+          Ngen: 11270430
+          Xsec: 39.65
+      WJets:
+        WJetsToLNu_0J:
+          Ngen: 137259710
+          Xsec: 52780.0
+        WJetsToLNu_1J:
+          Ngen: 87594835
+          Xsec: 8832.0
+        WJetsToLNu_2J:
+          Ngen: 29028341
+          Xsec: 3276.0
+
+histDetails:
+  lepPt:
+    bins: 50
+    range: [0, 200]
+    name: "pt"
+    label: "Leading Muon p_{T} [GeV]"
+    variable: "SelMuon_pt"
+    ylimits: [0.5, 100000000]  # min, max (null = auto)
+  lepEta:
+    bins: 50
+    range: [-2.5, 2.5]
+    name: "eta"
+    label: "Leading Muon #eta"
+    variable: "SelMuon_eta"
+    ylimits: [0.5, 100000000]
+  lepPhi:
+    bins: 50
+    range: [-3.14, 3.14]
+    name: "phi"
+    label: "Leading Muon #phi"
+    variable: "SelMuon_phi"
+    ylimits: [0.5, 100000000]
+  leadingJetPt:
+    bins: 50
+    range: [0, 500]
+    name: "leadingJetPt"
+    label: "Leading Jet p_{T} [GeV]"
+    variable: "leadingJet_pt"
+    ylimits: [0.5, 100000000]
+  leadingJetEta:
+    bins: 50
+    range: [-2.5, 2.5]
+    name: "leadingJetEta"
+    label: "Leading Jet #eta"
+    variable: "leadingJet_eta"
+    ylimits: [0.5, 100000000]
+  leadingJetPhi:
+    bins: 50
+    range: [-3.14, 3.14]
+    name: "leadingJetPhi"
+    label: "Leading Jet #phi"
+    variable: "leadingJet_phi"
+    ylimits: [0.5, 100000000]
+  nJets:
+    bins: 8
+    range: [0, 8]
+    name: "nJets"
+    label: "Number of Jets"
+    variable: "sel_nJet"
+    ylimits: [0.5, 100000000]
+  nbJets:
+    bins: 6
+    range: [0, 6]
+    name: "nbJets"
+    label: "Number of b-jets"
+    variable: "sel_nbjet"
+    ylimits: [0.5, 100000000]
+  
+weightList:
+  MC: ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
+  Data: ["L1PreFiringWeight_Nom"]
+
+# ---------------------------------------------------------------------------
+# Plot settings for rootHists.py Data/MC comparison plots.
+# MC groups are drawn as a filled stack; order: 1 = bottom, N = top.
+# color: ROOT color integer (see https://root.cern/doc/master/classTColor.html).
+# ---------------------------------------------------------------------------
+plotSettings:
+  MC_mu:
+    QCD:
+      label: "QCD"
+      color: 921      # kGray+1
+      order: 1
+    DrellYan:
+      label: "DrellYan"
+      color: 3        # kGreen
+      order: 2
+    WJets:
+      label: "WJets"
+      color: 5        # kYellow
+      order: 3
+    SingleTop:
+      label: "SingleTop"
+      color: 800      # kOrange
+      order: 4
+    Diboson:
+      label: "Diboson"
+      color: 2        # kRed
+      order: 5
+    FullyLeptonic:
+      label: "t#bar{t} FullyLeptonic"
+      color: 6        # kMagenta
+      order: 6
+    SemiLeptonic:
+      label: "t#bar{t} SemiLeptonic"
+      color: 7        # kCyan
+      order: 7
+  Data_mu:
+    SingleMuon:
+      label: "Data"

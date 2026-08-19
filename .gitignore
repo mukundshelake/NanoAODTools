@@ -45,12 +45,13 @@ python/
 Datasets/*
 *.ipynb
 SEGFAULT_FIX_GUIDE.md
-*.json
-*.yaml
 *.coffea
-*.md
 006-Results/Datacards/*
 **/outputs/*
 *.log
-**/*.sh
+**/run_all_*.sh
 **/*.parquet
+**/inputs/*
+**/Inputs/*
+**/SFs/*
+**/Outputs/*
