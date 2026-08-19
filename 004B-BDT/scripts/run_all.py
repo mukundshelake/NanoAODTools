@@ -109,7 +109,7 @@ def main():
     config_path   = base_dir / 'config.yaml'
     outputs_base  = base_dir / 'outputs' / f'{args.tag}'
     inputs_folder = base_dir / 'inputs'
-    reconstruction_outputs_folder = '/home/mukund/Projects/PhysicsTools/NanoAODTools/004A-Reconstruction/outputs'
+    reconstruction_outputs_folder = base_dir.parent / '004A-Reconstruction' / 'outputs'
 
     print(f"Using config: {config_path}")
 
