@@ -89,6 +89,10 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, go
     cfg.Data.outLFNDirBase      = output_lfn
     cfg.section_("Site")
     cfg.Site.storageSite = "T3_CH_CERNBOX"
+    # Required for Data.userInputFiles: unlike a DBS-registered inputDataset, CRAB has
+    # no location info for private files, so it refuses to submit without an explicit
+    # whitelist. The preselection input files live on the same SE as our own output.
+    cfg.Site.whitelist = ["T3_CH_CERNBOX"]
 
     return cfg
 
