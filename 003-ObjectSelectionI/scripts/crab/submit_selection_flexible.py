@@ -91,8 +91,12 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, go
     cfg.Site.storageSite = "T3_CH_CERNBOX"
     # Required for Data.userInputFiles: unlike a DBS-registered inputDataset, CRAB has
     # no location info for private files, so it refuses to submit without an explicit
-    # whitelist. The preselection input files live on the same SE as our own output.
-    cfg.Site.whitelist = ["T3_CH_CERNBOX"]
+    # whitelist. NOTE: Site.whitelist takes CMS *Processing Site* names (a different
+    # registry from storage element names like T3_CH_CERNBOX above -- using the SE name
+    # here gets a SUBMITREFUSED with "not in the list of known CMS Processing Site Names").
+    # T2_CH_CERN is the processing site with access to CERN EOS (where our /store/user/...
+    # input files physically live).
+    cfg.Site.whitelist = ["T2_CH_CERN"]
 
     return cfg
 
