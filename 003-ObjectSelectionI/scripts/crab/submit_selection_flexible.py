@@ -175,6 +175,18 @@ def main():
                 except ValueError as e:
                     print(f"  [SKIP] {label}: {e}")
                     continue
+
+                # CRABServer hard-rejects (400 Bad Request) any Data.userInputFiles entry
+                # over 255 chars. Filter those out here with a clear message instead of
+                # letting the whole submission fail on an opaque server-side error.
+                too_long = [lf for lf in lfn_files if len(lf) > 255]
+                if too_long:
+                    for lf in too_long:
+                        print(f"  [SKIP FILE] {label}: LFN is {len(lf)} chars (>255 CRAB limit): {lf}")
+                    lfn_files = [lf for lf in lfn_files if len(lf) <= 255]
+                if not lfn_files:
+                    print(f"  [SKIP] {label} (no files left under the 255-char LFN limit)")
+                    continue
                 job_params.append((DataMC, group, key, lfn_files, is_data))
                 tag = "[Data]" if is_data else "[MC  ]"
                 sample_tag = " [SAMPLE]" if args.sample else ""

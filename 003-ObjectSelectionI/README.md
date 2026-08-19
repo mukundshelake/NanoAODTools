@@ -39,7 +39,13 @@ The single source of truth for the entire chapter. Key sections:
 
 ### 3. Preselection ROOT files on disk
 
-Located under `{STORAGE}/preselection/{PRESELECTION_TAG}/{PRESELECTION_HASH}/{era}/...`. These are the NanoAOD-format ROOT files (tree name `Events`) produced by the previous chapter (002-Samples), hash-versioned by that chapter's own config hash. Paths are listed explicitly in `inputs/preselection_{era}_datasets.json`.
+Located under `{STORAGE}/{PRESELECTION_HASH}/{era}/...` (no `preselection/{tag}/` prefix,
+unlike other chapters' output paths -- see 002-Samples' README for why: these files are
+consumed via CRAB's `Data.userInputFiles`, which CRABServer hard-caps at 255 chars per
+entry, and every extra prefix character comes out of that budget). These are the
+NanoAOD-format ROOT files (tree name `Events`) produced by the previous chapter
+(002-Samples), hash-versioned by that chapter's own config hash. Paths are listed
+explicitly in `inputs/preselection_{era}_datasets.json`.
 
 ---
 

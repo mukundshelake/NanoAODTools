@@ -506,7 +506,14 @@ def main():
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         lfn_base = config['LFN_Base'].rstrip('/')
-                        lfn_path = f"{lfn_base}/preselection/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset_name}"
+                        # NOTE: kept deliberately short (just the hash, no "preselection/{tag}/"
+                        # prefix) -- CRABServer enforces a hard 255-char limit on each
+                        # Data.userInputFiles entry (see 003-ObjectSelectionI's submit_selection_flexible.py),
+                        # and CRAB's own nested output naming (dataset name/request name/timestamp/
+                        # counter/filename) already eats most of that budget for MC datasets with
+                        # long official CMS dataset names. Every extra prefix character here comes
+                        # straight out of that budget downstream.
+                        lfn_path = f"{lfn_base}/{config_hash}/{era}/{DataMC}/{group}/{dataset_name}"
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
                         command = f"python3 {submit_preselection_script} --submit --era {era} --das-json {dataset_json_path} --golden-json {golden_json_path} --output-lfn {lfn_path} --work-area {work_area} --include '{DataMC}/{group}/{dataset_name}'"
                         print(f"      Executing command: {command}")
@@ -567,7 +574,7 @@ def main():
             if output_json_path.exists() and not args.force:
                 print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
                 continue
-            base_directory = str(Path(storageBase) / "preselection" / args.tag / config_hash / era)
+            base_directory = str(Path(storageBase) / config_hash / era)
             cmd = [
                 sys.executable, str(generateJSON_script),
                 '--outputDirectory', str(output_dir / era),
@@ -585,7 +592,7 @@ def main():
     # Overall status across DAS expectations / getFileInfo / dataset JSON / CRAB / EOS output
     if args.getStatus:
         print("\nGetting overall status of the preselection processing...")
-        eos_base = f"{utils.eos_path_from_lfn_base(config['LFN_Base'])}/preselection/{args.tag}/{config_hash}"
+        eos_base = f"{utils.eos_path_from_lfn_base(config['LFN_Base'])}/{config_hash}"
         for era in config['DASQueries']:
             if not matches_filter(args.filter, era):
                 continue
