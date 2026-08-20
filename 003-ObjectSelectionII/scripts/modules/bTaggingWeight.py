@@ -103,8 +103,10 @@ class bTaggingWeightProducer(Module):
                     SF = self.bTageval['deepJet_mujets'].evaluate('central', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFUp = self.bTageval['deepJet_mujets'].evaluate('up', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFDown = self.bTageval['deepJet_mujets'].evaluate('down', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
-                    effPass = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_BM'](abs(jet.eta), jet.pt)
-                    effTotal = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_No'](abs(jet.eta), jet.pt)
+                    # ROOT TH2s are filled with pT on the x-axis and |eta| on the
+                    # y-axis; the coffea evaluator takes (x, y) = (pt, eta).
+                    effPass = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_BM'](jet.pt, abs(jet.eta))
+                    effTotal = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)
@@ -116,8 +118,8 @@ class bTaggingWeightProducer(Module):
                     SF = self.bTageval['deepJet_mujets'].evaluate('central', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFUp = self.bTageval['deepJet_mujets'].evaluate('up', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFDown = self.bTageval['deepJet_mujets'].evaluate('down', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
-                    effPass = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_BM'](abs(jet.eta), jet.pt)
-                    effTotal = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_No'](abs(jet.eta), jet.pt)
+                    effPass = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_BM'](jet.pt, abs(jet.eta))
+                    effTotal = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)
@@ -129,8 +131,8 @@ class bTaggingWeightProducer(Module):
                     SF = self.bTageval['deepJet_incl'].evaluate('central', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFUp = self.bTageval['deepJet_incl'].evaluate('up', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
                     SFDown = self.bTageval['deepJet_incl'].evaluate('down', 'M', jet.hadronFlavour, abs(jet.eta), jet.pt)
-                    effPass = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_BM'](abs(jet.eta), jet.pt)
-                    effTotal = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_No'](abs(jet.eta), jet.pt)
+                    effPass = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_BM'](jet.pt, abs(jet.eta))
+                    effTotal = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)

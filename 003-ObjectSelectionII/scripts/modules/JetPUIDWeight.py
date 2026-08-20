@@ -68,9 +68,17 @@ class jetPUIdWeightProducer(Module):
             SF_up   = self.jetPUeval['PUJetID_eff'].evaluate(jet.eta, jet.pt, 'up',   'L')
             SF_down = self.jetPUeval['PUJetID_eff'].evaluate(jet.eta, jet.pt, 'down', 'L')
 
-            # Per-(|eta|, pT) efficiency from ROOT file
-            effPass  = self.pu_eff_evaluator['Efficiency/JetPUId_pass_Loose'](abs(jet.eta), jet.pt)
-            effTotal = self.pu_eff_evaluator['Efficiency/JetPUId_pass_No'](abs(jet.eta), jet.pt)
+            # Per-(pT, |eta|) efficiency from ROOT file.
+            # The TH2s are filled with pT on the x-axis and |eta| on the
+            # y-axis (see computeJetPUIDEfficiency.py), and coffea's
+            # extractor evaluator takes arguments in that same (x, y)
+            # order -- i.e. (pt, eta), NOT (eta, pt). Calling it as
+            # (eta, pt) silently reads the wrong, clipped bin (pt values
+            # up to 50 overflow the 0-5 "eta axis", while eta values
+            # underflow the 12.5-50 "pt axis"), which was the source of
+            # the huge/negative event weights.
+            effPass  = self.pu_eff_evaluator['Efficiency/JetPUId_pass_Loose'](jet.pt, abs(jet.eta))
+            effTotal = self.pu_eff_evaluator['Efficiency/JetPUId_pass_No'](jet.pt, abs(jet.eta))
             eff = (effPass / effTotal) if effTotal > 0 else 0.9
 
             if jet.puId > 0:

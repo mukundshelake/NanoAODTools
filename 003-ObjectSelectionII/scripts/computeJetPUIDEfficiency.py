@@ -100,13 +100,13 @@ class JetPUIDEfficiencyProcessor(processor.ProcessorABC):
         jet_mask = (
             (events.Jet.pt > 12.5) &
             (events.Jet.pt <= 50.0) &
-            (ak.abs(events.Jet.eta) < 5.0)
+            (abs(events.Jet.eta) < 5.0)
         )
         jets = events.Jet[jet_mask]
 
         # Materialise the dask arrays (called once per chunk)
         pt_all   = ak.to_numpy(ak.flatten(jets.pt).compute())
-        eta_all  = ak.to_numpy(ak.flatten(ak.abs(jets.eta)).compute())
+        eta_all  = ak.to_numpy(ak.flatten(abs(jets.eta)).compute())
         pass_L   = ak.to_numpy(ak.flatten(jets.puId > 0).compute())
 
         # Fill histograms

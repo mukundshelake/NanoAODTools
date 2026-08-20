@@ -306,28 +306,28 @@ DASQueries:
 
 
 Pre-SelectionCuts:
-  "UL2016preVFP": 
+  "UL2016preVFP":
         muonCut: "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) >= 1"
-        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 1"
-        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
         HLTCut: "(HLT_IsoMu24 || HLT_IsoTkMu24)"
         METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
-  "UL2016postVFP": 
+  "UL2016postVFP":
         muonCut: "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) >= 1"
-        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 1"
-        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
         HLTCut: "(HLT_IsoMu24 || HLT_IsoTkMu24)"
         METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   "UL2017":
         muonCut: "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <=  0.2) >= 1"
-        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.3040 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 1"
-        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.3040 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
         HLTCut: "HLT_IsoMu27"
         METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   "UL2018":
         muonCut: "Sum$(Muon_pt > 27 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) >= 1"
-        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2783 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 1"
-        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        bjetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2783 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
+        jetCut: "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
         HLTCut: "HLT_IsoMu24"
         METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
 

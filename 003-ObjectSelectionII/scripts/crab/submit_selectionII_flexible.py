@@ -92,7 +92,10 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn,
         mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
         for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
             if file_key in mod_cfg:
-                input_files.append(str(REPO_ROOT / mod_cfg[file_key]))
+                # These are chapter-relative ("inputs/SFs/...", fetched by run_all.py
+                # --fetchSFFiles), unlike efficiencyFolder below which stays repo-root
+                # relative ("SFs/Efficiency", a shared, self-computed artifact).
+                input_files.append(str(CHAPTER_DIR / mod_cfg[file_key]))
         if mod_name == "bTagging":
             eff_file = REPO_ROOT / mod_cfg["efficiencyFolder"] / era / f"{key}.root"
             if not eff_file.is_file():

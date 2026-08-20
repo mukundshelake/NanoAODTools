@@ -13,10 +13,26 @@ import os
 def getLumiInformation(normtag, unit, json_file, output_file):
     # brilcalc is a shell alias wrapping singularity; use the real command directly
     # so subprocess doesn't need a shell and alias expansion is not required.
+    #
+    # This singularity image has no default binds for /eos or /cvmfs (both come
+    # back "No such file or directory" without an explicit -B), and even with
+    # /eos bound, EOS access still fails with PermissionError unless the host's
+    # kerberos ticket cache is both bound in and pointed at via KRB5CCNAME --
+    # the container starts with no ticket of its own. Confirmed by reproducing
+    # each failure individually against a real EOS-hosted golden JSON.
     singularity_image = '/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-cloud/brilws-docker:latest'
+    krb5ccname = os.environ.get('KRB5CCNAME')
+    run_dir = f'/run/user/{os.getuid()}'
     command = [
         'singularity', '-s', 'exec',
+        '-B', '/eos:/eos',
+        '-B', '/cvmfs:/cvmfs',
+        '-B', f'{run_dir}:{run_dir}',
         '--env', 'PYTHONPATH=/home/bril/.local/lib/python3.10/site-packages',
+    ]
+    if krb5ccname:
+        command += ['--env', f'KRB5CCNAME={krb5ccname}']
+    command += [
         singularity_image,
         'brilcalc',
         'lumi',
@@ -32,7 +48,7 @@ def getLumiInformation(normtag, unit, json_file, output_file):
         print(result.stdout)
     except subprocess.CalledProcessError as e:
         print(f"Error running brilcalc: {e.stderr}")
-        return
+        raise
 
     print(f"Luminosity information saved to {output_file}")
 

@@ -11,7 +11,9 @@ Options:
 """
 
 import argparse
+import gzip
 import os
+import shutil
 import sys
 from pathlib import Path
 import subprocess
@@ -61,11 +63,36 @@ def main():
     parser.add_argument('--previousHash', type=str, default=None,
                        help='[0] Config hash of the 003-ObjectSelectionI run to fetch from (its outputs/{tag}/{hash}/ '
                             'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--fetchSFFiles', action='store_true',
+                       help='[0a] Fetch correctionlib SF files (muon ID/HLT, jet PU ID, b-tagging) from '
+                            "SFSource (hostname-resolved, e.g. lxplus's CVMFS jsonpog-integration mount) into "
+                            'inputs/SFs/. Idempotent: a file already present in inputs/ is left alone and not '
+                            're-fetched -- pass --force to refetch everything regardless.')
+    parser.add_argument('--prepareEfficiencyFileset', action='store_true',
+                       help='[0b] Build a per-era, MC-only coffea fileset JSON from the selectionI dataset JSON '
+                            '(fetched via --fetchFromPreviousChapter) for --computeJetPUIDEfficiency / '
+                            '--computeBTaggingEfficiency. Uses selectionI (pre-weight) skims, not this '
+                            "chapter's own output, since the efficiency maps are needed by the weight "
+                            'modules themselves.')
+    parser.add_argument('--computeJetPUIDEfficiency', action='store_true',
+                       help='[0c] Compute Jet PU ID efficiency maps (scripts/computeJetPUIDEfficiency.py) from '
+                            'the fileset(s) built by --prepareEfficiencyFileset, writing ROOT files into '
+                            "<repo-root>/SFs/JetPUID/Efficiency/<era>/<sample>.root (config.yaml's "
+                            "jetPUID.efficiencyFolder).")
+    parser.add_argument('--computeBTaggingEfficiency', action='store_true',
+                       help='[0d] Compute per-flavor b-tagging efficiency maps (scripts/computeBTaggingEfficiency.py) '
+                            'from the fileset(s) built by --prepareEfficiencyFileset, writing ROOT files into '
+                            "<repo-root>/SFs/Efficiency/<era>/<sample>.root (config.yaml's "
+                            "bTagging.efficiencyFolder).")
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
     parser.add_argument('--writeBashScript', action='store_true',
                        help='[2] Write a bash script with all runSelection.py commands instead of executing them directly')
+    parser.add_argument('--runBashScript', action='store_true',
+                       help='[2b] Execute the run_all_<tag>.sh script written by --writeBashScript, streaming '
+                            'its output live. Can be combined with --writeBashScript in the same invocation '
+                            '(write then run), or run alone against a script written by an earlier invocation.')
     parser.add_argument('--submitSelectionJobs', action='store_true',
                        help='[2alt][lxplus][CRAB] Submit scale-factor-weight jobs to CRAB instead of running them '
                             'locally -- an alternative to --writeBashScript + local execution. Processes the same '
@@ -96,8 +123,13 @@ def main():
     print(f"  --tag: {args.tag}")
     print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
     print(f"  --previousHash: {args.previousHash}")
+    print(f"  --fetchSFFiles: {args.fetchSFFiles}")
+    print(f"  --prepareEfficiencyFileset: {args.prepareEfficiencyFileset}")
+    print(f"  --computeJetPUIDEfficiency: {args.computeJetPUIDEfficiency}")
+    print(f"  --computeBTaggingEfficiency: {args.computeBTaggingEfficiency}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
+    print(f"  --runBashScript: {args.runBashScript}")
     print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
     print(f"  --checkCrabStatus: {args.checkCrabStatus}")
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
@@ -170,6 +202,165 @@ def main():
                 local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
                 print(f"    Fetched {filename} -> {local_path} and {output_path}")
         print("Finished fetching inputs from 003-ObjectSelectionI.")
+
+    # Fetch correctionlib SF files from CVMFS (or wherever SFSource resolves to on this
+    # machine) into inputs/SFs/. Treated as an input like the selectionI dataset JSON
+    # above: idempotent (skip a file already present locally, unless --force), and
+    # dual-written into both the persistent inputs_folder and this run's own
+    # output_dir/inputs snapshot for the same reason fetch_and_snapshot() does -- the
+    # snapshot copy at the top of this script only reflects inputs_folder as it was
+    # before this invocation's own fetch runs.
+    if args.fetchSFFiles:
+        print("\nFetching correctionlib SF files...")
+        sf_source_base, ssh_relay_host = utils.resolve_sf_source(config)
+        sf_source_base = Path(sf_source_base)
+        if ssh_relay_host:
+            print(f"Using SF source base: {sf_source_base} (relayed over SSH via {ssh_relay_host})")
+            print(f"  This machine has no direct SFSource entry -- may prompt for your "
+                  f"password/2FA on first connection to {ssh_relay_host}; respond in this terminal.")
+        else:
+            print(f"Using SF source base: {sf_source_base}")
+        any_fetched = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            era_dir = utils.cvmfs_era_dir(era)
+            for spec in utils.SF_FETCH_SPECS:
+                source_path = sf_source_base / spec['pog'] / era_dir / spec['source_filename']
+                for out_suffix in spec['outputs']:
+                    rel_path = Path('SFs') / f"{era}_{out_suffix}"
+                    local_path = inputs_folder / rel_path
+                    snapshot_path = output_dir / 'inputs' / rel_path
+                    if local_path.exists() and not args.force:
+                        print(f"  [skip, already fetched] {rel_path}")
+                        continue
+                    if ssh_relay_host:
+                        try:
+                            raw = utils.ssh_read_file(ssh_relay_host, source_path)
+                        except FileNotFoundError as e:
+                            print(f"  Error: {e}. Skipping {rel_path}.")
+                            continue
+                    else:
+                        if not source_path.exists():
+                            print(f"  Error: source not found: {source_path}. Skipping {rel_path}.")
+                            continue
+                        raw = source_path.read_bytes()
+                    content = gzip.decompress(raw) if spec['gunzip'] else raw
+                    local_path.parent.mkdir(parents=True, exist_ok=True)
+                    local_path.write_bytes(content)
+                    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(local_path, snapshot_path)
+                    any_fetched = True
+                    src_desc = f"{ssh_relay_host}:{source_path}" if ssh_relay_host else str(source_path)
+                    print(f"  Fetched {src_desc} -> {local_path}")
+        if not any_fetched:
+            print("  All SF files already present in inputs/SFs/ (use --force to refetch).")
+
+    # Build a per-era, MC-only coffea fileset from the selectionI (pre-weight) skims,
+    # for the two efficiency-map computers below. Deliberately sourced from selectionI's
+    # dataset JSON, not this chapter's own (selectionII) output: the efficiency maps are
+    # an input the weight modules need, so they can't depend on this chapter having
+    # already run with those weights applied.
+    if args.prepareEfficiencyFileset:
+        print("\nPreparing MC-only efficiency fileset(s) from selectionI inputs...")
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            selectionI_dataset_json = output_dir / 'inputs' / f'selectionI_{args.tag}_{era}_datasets.json'
+            if not selectionI_dataset_json.exists():
+                print(f"  Warning: Dataset JSON not found for era {era}: {selectionI_dataset_json}. "
+                      f"Run --fetchFromPreviousChapter first. Skipping.")
+                continue
+            with open(selectionI_dataset_json) as f:
+                datasetJSON = json.load(f)
+
+            fileset = {}
+            for DataMC in datasetJSON:
+                if DataMC.lower().startswith("data"):
+                    continue  # efficiency maps are an MC-truth quantity (hadronFlavour, genuine PU-ID pass)
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                for group in datasetJSON[DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    for dataset in datasetJSON[DataMC][group]:
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        datasetName = f'{era}_{DataMC}_{group}_{dataset}'
+                        fileset[datasetName] = {
+                            "files": datasetJSON[DataMC][group][dataset],
+                            "metadata": {"isData": False, "era": era, "sample": dataset},
+                        }
+
+            fileset_output_path = output_dir / era / f"{args.tag}_{era}_efficiencyFileset.json"
+            fileset_output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(fileset_output_path, 'w') as f:
+                json.dump(fileset, f, indent=2)
+            print(f"  Era {era}: {len(fileset)} MC dataset(s) -> {fileset_output_path}")
+
+    # Compute Jet PU ID efficiency maps into the shared, repo-root SFs/ folder.
+    if args.computeJetPUIDEfficiency:
+        print("\nComputing Jet PU ID efficiency maps...")
+        compute_script = base_dir / 'scripts' / 'computeJetPUIDEfficiency.py'
+        jetpuid_outdir = sfs_folder / 'JetPUID' / 'Efficiency'
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            fileset_path = output_dir / era / f"{args.tag}_{era}_efficiencyFileset.json"
+            if not fileset_path.exists():
+                print(f"  Warning: Efficiency fileset not found for era {era}: {fileset_path}. "
+                      f"Run --prepareEfficiencyFileset first. Skipping.")
+                continue
+            cmd = [
+                sys.executable, str(compute_script),
+                '--fileList', str(fileset_path),
+                '--outputDir', str(jetpuid_outdir),
+                '--workers', str(args.workers),
+            ]
+            if args.sample:
+                cmd.append('--sample')
+            print(f"  Era {era}: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"Error computing Jet PU ID efficiency for era {era}")
+                return 1
+        print(f"Jet PU ID efficiency maps written under: {jetpuid_outdir}")
+
+    # Compute per-flavor b-tagging efficiency maps into the shared, repo-root SFs/ folder.
+    if args.computeBTaggingEfficiency:
+        print("\nComputing b-tagging efficiency maps...")
+        compute_script = base_dir / 'scripts' / 'computeBTaggingEfficiency.py'
+        btag_outdir = sfs_folder / 'Efficiency'
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            fileset_path = output_dir / era / f"{args.tag}_{era}_efficiencyFileset.json"
+            if not fileset_path.exists():
+                print(f"  Warning: Efficiency fileset not found for era {era}: {fileset_path}. "
+                      f"Run --prepareEfficiencyFileset first. Skipping.")
+                continue
+            # bTagSFFile in config.yaml is relative to output_dir (e.g. "inputs/SFs/..."),
+            # same as it resolves for the module itself once runSelectionII.py chdirs there.
+            bTagSFFile = output_dir / config['Modules']['bTagging'][era]['bTagSFFile']
+            if not bTagSFFile.exists():
+                print(f"  Warning: bTagSFFile not found for era {era}: {bTagSFFile}. "
+                      f"Run --fetchSFFiles first. Skipping.")
+                continue
+            cmd = [
+                sys.executable, str(compute_script),
+                '--fileList', str(fileset_path),
+                '--outputDir', str(btag_outdir),
+                '--bTagSFFile', str(bTagSFFile),
+                '--workers', str(args.workers),
+            ]
+            if args.sample:
+                cmd.append('--sample')
+            print(f"  Era {era}: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"Error computing b-tagging efficiency for era {era}")
+                return 1
+        print(f"b-tagging efficiency maps written under: {btag_outdir}")
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
@@ -299,6 +490,21 @@ def main():
                         f.write(cmd + "\n")
         os.chmod(bash_script_path, 0o755)
         print(f"\nBash script with runSelectionII.py commands written to: {bash_script_path}")
+
+    # Execute the bash script written by --writeBashScript (this invocation's, or an
+    # earlier one's -- the path is deterministic from --tag alone). Streamed live, not
+    # captured, since this is the long-running processing step.
+    if args.runBashScript:
+        bash_script_path = base_dir / 'scripts' / f"run_all_{args.tag}.sh"
+        if not bash_script_path.exists():
+            print(f"Error: Bash script not found: {bash_script_path}. Run with --writeBashScript first.")
+            return 1
+        print(f"\nExecuting bash script: {bash_script_path}")
+        result = subprocess.run(["bash", str(bash_script_path)])
+        if result.returncode != 0:
+            print(f"Error: {bash_script_path} exited with code {result.returncode}")
+            return 1
+        print(f"Finished executing: {bash_script_path}")
 
     # Submit scale-factor-weight jobs to CRAB, as an alternative to --writeBashScript +
     # local execution. lxplus only (needs STORAGE to resolve to the EOS mount of LFN_Base).

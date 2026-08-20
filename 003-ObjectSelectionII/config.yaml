@@ -4,6 +4,16 @@ STORAGE:
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 LFN_Base : "/store/user/mshelake/DataFiles"
 # ---------------------------------------------------------------------------
+# Where to fetch correctionlib SF files from (run_all.py --fetchSFFiles), keyed
+# the same way as STORAGE -- a substring of socket.gethostname(). Only lxplus is
+# confirmed to have this CVMFS mount; add other machines here once verified.
+SFSource:
+  lxplus: "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG"
+# Fallback for any machine not listed in SFSource above (no local CVMFS mount): relay
+# the fetch through this host over SSH instead (reusing SFSource.lxplus's path as it
+# exists there). Runs interactively -- expect a password/2FA prompt on first use.
+SFSourceSSHRelay: "lxplus.cern.ch"
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
@@ -42,7 +52,7 @@ Modules:
   # Evaluated on the leading muon passing kinematic cuts.
   muonID:
     UL2016preVFP:
-      IDSFFile: "SFs/UL2016preVFP_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2016preVFP_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -52,7 +62,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2016postVFP:
-      IDSFFile: "SFs/UL2016postVFP_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2016postVFP_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -62,7 +72,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2017:
-      IDSFFile: "SFs/UL2017_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2017_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -72,7 +82,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2018:
-      IDSFFile: "SFs/UL2018_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2018_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -87,7 +97,7 @@ Modules:
   # Evaluated on the leading muon passing kinematic cuts.
   muonHLT:
     UL2016preVFP:
-      HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2016preVFP_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -96,7 +106,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2016postVFP:
-      HLTSFFile: "SFs/UL2016postVFP_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2016postVFP_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -105,7 +115,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2017:
-      HLTSFFile: "SFs/UL2017_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2017_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu27_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -114,7 +124,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2018:
-      HLTSFFile: "SFs/UL2018_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2018_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -131,28 +141,28 @@ Modules:
   jetPUID:
     UL2016preVFP:
       efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2016preVFP_jet_jmar.json.gz"
+      jetPUIdFile:    "inputs/SFs/UL2016preVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2016postVFP:
       efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2016postVFP_jet_jmar.json.gz"
+      jetPUIdFile:    "inputs/SFs/UL2016postVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2017:
       efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2017_jet_jmar.json.gz"
+      jetPUIdFile:    "inputs/SFs/UL2017_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2018:
       efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2018_jet_jmar.json.gz"
+      jetPUIdFile:    "inputs/SFs/UL2018_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
@@ -165,7 +175,7 @@ Modules:
   bTagging:
     UL2016preVFP:
       era:             "UL2016preVFP"
-      bTagSFFile:      "SFs/UL2016preVFP_jet_Btagging.json"
+      bTagSFFile:      "inputs/SFs/UL2016preVFP_jet_Btagging.json"
       efficiencyFolder: "SFs/Efficiency"
       bTagThreshold:   0.2598
       branchNames:
@@ -174,7 +184,7 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2016postVFP:
       era:             "UL2016postVFP"
-      bTagSFFile:      "SFs/UL2016postVFP_jet_Btagging.json"
+      bTagSFFile:      "inputs/SFs/UL2016postVFP_jet_Btagging.json"
       efficiencyFolder: "SFs/Efficiency"
       bTagThreshold:   0.2489
       branchNames:
@@ -183,7 +193,7 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2017:
       era:             "UL2017"
-      bTagSFFile:      "SFs/UL2017_jet_Btagging.json"
+      bTagSFFile:      "inputs/SFs/UL2017_jet_Btagging.json"
       efficiencyFolder: "SFs/Efficiency"
       bTagThreshold:   0.3040
       branchNames:
@@ -192,7 +202,7 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2018:
       era:             "UL2018"
-      bTagSFFile:      "SFs/UL2018_jet_Btagging.json"
+      bTagSFFile:      "inputs/SFs/UL2018_jet_Btagging.json"
       efficiencyFolder: "SFs/Efficiency"
       bTagThreshold:   0.2783
       branchNames:

@@ -19,12 +19,14 @@ chapter's own LFN_Base, bypassing crabhelper.inputFiles() (which assumes
 /store/... resolves to /eos/cms/..., not CERNBox).
 
 NOTE on SF file layout: correctionlib file paths in config.yaml
-(Modules.muonID.IDSFFile etc.) are relative, e.g. "SFs/UL2018_mu_ID.json" --
-the shared module code (same files the local Pool-based path uses,
-unmodified) expects that literal relative layout. CRAB flattens all
-JobType.inputFiles into the sandbox root, so this script recreates the
-expected SFs/ (and SFs/Efficiency/<era>/) layout by moving the flat-shipped
-files into place before instantiating any module.
+(Modules.muonID.IDSFFile etc.) are relative, e.g. "inputs/SFs/UL2018_mu_ID.json"
+(fetched by run_all.py --fetchSFFiles) -- the shared module code (same files
+the local Pool-based path uses, unmodified) expects that literal relative
+layout. CRAB flattens all JobType.inputFiles into the sandbox root, so this
+script recreates the expected inputs/SFs/ and SFs/Efficiency/<era>/ layouts
+(the latter still repo-root relative -- a shared, self-computed artifact, not
+a fetched input) by moving the flat-shipped files into place before
+instantiating any module.
 
 NOTE on correctionlib/coffea/awkward: these are NOT part of the stock CMSSW
 release's python environment -- on lxplus they only import because the user
@@ -112,9 +114,10 @@ os.makedirs(f"SFs/Efficiency/{era}", exist_ok=True)
 for mod_name, mod_cfg in module_configs:
     for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
         if file_key in mod_cfg:
-            expected_path = mod_cfg[file_key]  # e.g. "SFs/UL2018_mu_ID.json"
+            expected_path = mod_cfg[file_key]  # e.g. "inputs/SFs/UL2018_mu_ID.json"
             flat_name = os.path.basename(expected_path)
             if os.path.isfile(flat_name) and not os.path.isfile(expected_path):
+                os.makedirs(os.path.dirname(expected_path), exist_ok=True)
                 shutil.move(flat_name, expected_path)
     if mod_name == "bTagging":
         eff_flat = f"{dataset_key}.root"
