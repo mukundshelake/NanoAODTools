@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, str(Path(__file__).parent))
 import utils
@@ -357,24 +358,34 @@ def main():
         if not lfn_base:
             print("Error: LFN_Base not set in config.yaml; required for --submitReconstructionJobs.")
             return 1
+        # Phase 1: build the flat task list (one CRAB submission per dataset),
+        # enumerating from the actual fetched selectionII dataset JSON, not
+        # config['NgenandXsec'] -- a hand-maintained table that can drift from
+        # what selectionII actually produced, silently dropping coverage here
+        # with no warning.
+        tasks = []  # (label, command, work_area)
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            print(f"\nSubmitting reconstruction jobs for era: {era}")
             dataset_json_path = output_dir / 'inputs' / f'selectionII_{args.tag}_{era}_datasets.json'
             if not dataset_json_path.exists():
                 print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
                 continue
-            for DataMC in config['NgenandXsec'][era]:
-                print(f"  DataMC: {DataMC}")
-                for group in config['NgenandXsec'][era][DataMC]:
-                    print(f"    Group: {group}")
-                    for dataset in config['NgenandXsec'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset}")
+            with open(dataset_json_path) as jf:
+                era_dataset_json = json.load(jf)
+            for DataMC in era_dataset_json:
+                for group in era_dataset_json[DataMC]:
+                    for dataset in era_dataset_json[DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
-                        lfn_output_path = f"{lfn_base}/reconstruction/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
                         work_area = output_dir / era / DataMC / group / dataset / "crab_reconstruction"
+                        # Idempotency: CRAB refuses to submit into an existing requestName
+                        # directory ("Working area already exists"). Skip datasets already
+                        # submitted unless --force.
+                        if work_area.exists() and any(work_area.glob('crab_reco_*')) and not args.force:
+                            print(f"  Already submitted (work area exists), skipping: {work_area}")
+                            continue
+                        lfn_output_path = f"{lfn_base}/reconstruction/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
                         command = (
                             f"python3 {submit_reconstruction_script} --submit --era {era} "
                             f"--dataset-json {dataset_json_path} "
@@ -382,13 +393,39 @@ def main():
                             f"{'--sample ' if args.sample else ''}"
                             f"--include '{DataMC}/{group}/{dataset}'"
                         )
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error submitting reconstruction jobs for dataset: {dataset}")
-                            continue
-                        else:
-                            print(f"      Successfully submitted reconstruction jobs for dataset: {dataset} with CRAB and saved logs to: {work_area}")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset}", command, work_area))
+
+        print(f"\n{len(tasks)} datasets to submit. Submitting with {args.workers} parallel workers...")
+
+        # Phase 2: submit in parallel -- CRAB submission is dominated by network
+        # round-trip time to cmsweb.cern.ch, same reasoning as 002-Samples'
+        # --submitPreSelectionJobs parallelization. Each task is a separate OS
+        # process, so there's no concern about the CRAB client's thread-safety.
+        submitted, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command, work_area)
+                    for label, command, work_area in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command, work_area = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    if ok:
+                        submitted += 1
+                        print(f"  [{i}/{len(tasks)}] Submitted: {label} (logs: {work_area})")
+                    else:
+                        failed += 1
+                        print(f"  [{i}/{len(tasks)}] FAILED: {label}\n{output}")
+
+        print(f"\nsubmitReconstructionJobs: {submitted} submitted, {failed} failed out of {len(tasks)} total.")
 
     # Check CRAB job status for jobs submitted with --submitReconstructionJobs
     if args.checkCrabStatus:
@@ -397,16 +434,21 @@ def main():
         if not check_crab_status_script.exists():
             print(f"Error: {check_crab_status_script} not found!")
             return 1
+
+        # Phase 1: build the flat task list (one `crab status` check per dataset).
+        tasks = []  # (label, command)
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            print(f"\nChecking CRAB status for era: {era}")
-            for DataMC in config['NgenandXsec'][era]:
-                print(f"  DataMC: {DataMC}")
-                for group in config['NgenandXsec'][era][DataMC]:
-                    print(f"    Group: {group}")
-                    for dataset in config['NgenandXsec'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset}")
+            dataset_json_path = output_dir / 'inputs' / f'selectionII_{args.tag}_{era}_datasets.json'
+            if not dataset_json_path.exists():
+                print(f"  Warning: selectionII dataset JSON not found for era {era}: {dataset_json_path}. Skipping.")
+                continue
+            with open(dataset_json_path) as jf:
+                era_dataset_json = json.load(jf)
+            for DataMC in era_dataset_json:
+                for group in era_dataset_json[DataMC]:
+                    for dataset in era_dataset_json[DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
                         work_area = output_dir / era / DataMC / group / dataset / "crab_reconstruction"
@@ -415,13 +457,40 @@ def main():
                             command += " --resubmit"
                         if args.removeSubmitFailedCrabJobs:
                             command += " --removeSubmitFailed"
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error checking CRAB status for dataset: {dataset}")
-                            continue
-                        else:
-                            print(f"      Successfully checked CRAB status for dataset: {dataset}. Check the output above for details.")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset}", command))
+
+        print(f"\n{len(tasks)} datasets to check. Checking with {args.workers} parallel workers...")
+
+        # Phase 2: check in parallel -- stdout/stderr are captured (not
+        # inherited) so concurrent checks never interleave their output; each
+        # dataset's full captured output is printed as one block from this
+        # single main-thread loop only after its subprocess finishes.
+        succeeded, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command)
+                    for label, command in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    header = f"[{i}/{len(tasks)}] {label}"
+                    print(f"\n{'=' * len(header)}\n{header}\n{'=' * len(header)}\n{output}")
+                    if ok:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        print(f"Error checking CRAB status for dataset: {label}")
+
+        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
 
     # --generateDatasetJSON
     if args.generateDatasetJSON:

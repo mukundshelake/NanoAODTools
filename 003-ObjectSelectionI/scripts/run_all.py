@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -88,6 +89,13 @@ def main():
                             'For --submitSelectionJobs, only submits the first file of each dataset via CRAB.')
     parser.add_argument('--workers', type=int, default=15,
                        help='Number of parallel workers passed to runSelection.py (default: 15)')
+    parser.add_argument('--verifyOutput', action='store_true',
+                       help='[4] Run scripts/verifyOutput.py on selectionI_{tag}_{era}_datasets.json (from '
+                            '--generateDatasetJSON): checks each skim opens cleanly, has an Events tree, and '
+                            'has every branch SelectedObjectsProducer is supposed to write, plus per-dataset '
+                            'min/max/mean/stddev and cross-branch invariant checks scoped to those branches '
+                            '(not the pass-through NanoAOD branches -- see the script for why). '
+                            'Writes a JSON report per era.')
     args = parser.parse_args()
 
     # parsing arguments
@@ -107,6 +115,7 @@ def main():
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
+    print(f"  --verifyOutput: {args.verifyOutput}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -190,6 +199,11 @@ def main():
 
             # Build combined cut string for this era
             era_cuts = config['SelectionCuts'][era]
+            try:
+                utils.validate_selection_cuts_consistency(config, era)
+            except ValueError as e:
+                print(f"Error: {e}")
+                return 1
             cut_string = " && ".join(v for v in era_cuts.values() if v and v.strip())
 
             era_process_list = []
@@ -282,10 +296,20 @@ def main():
                 if not process_list_json.exists():
                     print(f"  Warning: Process list JSON not found for era {era}: {process_list_json}. Skipping runSelection command for this era.")
                     continue
-                for DataMC in config['NgenandXsec'][era]:
+                # Enumerate DataMC/group from the actual fetched preselection dataset JSON
+                # (same source --generateProcessListJSON reads), not config['NgenandXsec'] --
+                # NgenandXsec is a hand-maintained table that can drift from what preselection
+                # actually produced, silently dropping coverage here with no warning.
+                dataset_json_path = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+                if not dataset_json_path.exists():
+                    print(f"  Warning: preselection dataset JSON not found for era {era}: {dataset_json_path}. Skipping runSelection command for this era.")
+                    continue
+                with open(dataset_json_path) as jf:
+                    era_dataset_json = json.load(jf)
+                for DataMC in era_dataset_json:
                     if not matches_filter(args.filter, era, DataMC):
                         continue
-                    for group in config['NgenandXsec'][era][DataMC]:
+                    for group in era_dataset_json[DataMC]:
                         if not matches_filter(args.filter, era, DataMC, group):
                             continue
                         # create directories for logs
@@ -317,6 +341,7 @@ def main():
         if not lfn_base:
             print("Error: LFN_Base not set in config.yaml; required for --submitSelectionJobs.")
             return 1
+        submitted, failed, pre_skipped = 0, 0, 0
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
@@ -326,16 +351,28 @@ def main():
                 print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
                 continue
             golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
-            for DataMC in config['NgenandXsec'][era]:
+            # Enumerate DataMC/group/dataset from the actual fetched preselection dataset
+            # JSON, not config['NgenandXsec'] -- see the matching comment in --writeBashScript.
+            with open(dataset_json_path) as jf:
+                era_dataset_json = json.load(jf)
+            for DataMC in era_dataset_json:
                 print(f"  DataMC: {DataMC}")
-                for group in config['NgenandXsec'][era][DataMC]:
+                for group in era_dataset_json[DataMC]:
                     print(f"    Group: {group}")
-                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                    for dataset in era_dataset_json[DataMC][group]:
                         print(f"      Dataset: {dataset}")
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
-                        lfn_output_path = f"{lfn_base}/selectionI/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
                         work_area = output_dir / era / DataMC / group / dataset / "crab_selection"
+                        # Idempotency: CRAB refuses to submit into an existing requestName
+                        # directory ("Working area already exists"). Skip datasets that were
+                        # already submitted unless --force -- mirrors the fix made for
+                        # 002-Samples' --submitPreSelectionJobs after hitting this for real.
+                        if work_area.exists() and any(work_area.glob('crab_sel_*')) and not args.force:
+                            print(f"      Already submitted (work area exists), skipping: {work_area}")
+                            pre_skipped += 1
+                            continue
+                        lfn_output_path = f"{lfn_base}/selectionI/{args.tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}"
                         command = (
                             f"python3 {submit_selection_script} --submit --era {era} "
                             f"--dataset-json {dataset_json_path} --golden-json {golden_json_path} "
@@ -347,9 +384,13 @@ def main():
                         result = subprocess.run(command, shell=True)
                         if result.returncode != 0:
                             print(f"Error submitting object-selection jobs for dataset: {dataset}")
+                            failed += 1
                             continue
                         else:
                             print(f"      Successfully submitted object-selection jobs for dataset: {dataset} with CRAB and saved logs to: {work_area}")
+                            submitted += 1
+        print(f"\nsubmitSelectionJobs: {submitted} submitted, {failed} failed, {pre_skipped} pre-skipped "
+              f"out of {submitted + failed + pre_skipped} total.")
 
     # Check CRAB job status for jobs submitted with --submitSelectionJobs
     if args.checkCrabStatus:
@@ -358,16 +399,22 @@ def main():
         if not check_crab_status_script.exists():
             print(f"Error: {check_crab_status_script} not found!")
             return 1
+        # Phase 1: build the flat task list (one `crab status` check per dataset),
+        # enumerating from the actual fetched preselection dataset JSON, not
+        # config['NgenandXsec'] -- see the matching comment in --writeBashScript.
+        tasks = []  # (label, command)
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            print(f"\nChecking CRAB status for era: {era}")
-            for DataMC in config['NgenandXsec'][era]:
-                print(f"  DataMC: {DataMC}")
-                for group in config['NgenandXsec'][era][DataMC]:
-                    print(f"    Group: {group}")
-                    for dataset in config['NgenandXsec'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset}")
+            dataset_json_path = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+            if not dataset_json_path.exists():
+                print(f"  Warning: preselection dataset JSON not found for era {era}: {dataset_json_path}. Skipping.")
+                continue
+            with open(dataset_json_path) as jf:
+                era_dataset_json = json.load(jf)
+            for DataMC in era_dataset_json:
+                for group in era_dataset_json[DataMC]:
+                    for dataset in era_dataset_json[DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
                         work_area = output_dir / era / DataMC / group / dataset / "crab_selection"
@@ -376,13 +423,43 @@ def main():
                             command += " --resubmit"
                         if args.removeSubmitFailedCrabJobs:
                             command += " --removeSubmitFailed"
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error checking CRAB status for dataset: {dataset}")
-                            continue
-                        else:
-                            print(f"      Successfully checked CRAB status for dataset: {dataset}. Check the output above for details.")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset}", command))
+
+        print(f"\n{len(tasks)} datasets to check. Checking with {args.workers} parallel workers...")
+
+        # Phase 2: check in parallel -- each `crab status` call is dominated by
+        # network round-trip time to cmsweb.cern.ch, same reasoning as
+        # --submitSelectionJobs's parallelization potential. stdout/stderr are
+        # captured (not inherited) so concurrent checks never interleave their
+        # output; each dataset's full captured output is printed as one block
+        # from this single main-thread loop only after its subprocess finishes,
+        # keeping the terminal readable no matter how many run at once.
+        succeeded, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command)
+                    for label, command in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    header = f"[{i}/{len(tasks)}] {label}"
+                    print(f"\n{'=' * len(header)}\n{header}\n{'=' * len(header)}\n{output}")
+                    if ok:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        print(f"Error checking CRAB status for dataset: {label}")
+
+        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
 
     if args.generateDatasetJSON:
         print("\nGenerating dataset JSON file using generateDatasetJSON.py...")
@@ -411,7 +488,41 @@ def main():
                 return 1
             else:
                 print(f"Successfully generated dataset JSON for era {era}: {outputDirectory / outputFileName}")
-            
+
+    if args.verifyOutput:
+        print("\nVerifying object-selection skim output ROOT files (scripts/verifyOutput.py)...")
+        verify_script = base_dir / 'scripts' / 'verifyOutput.py'
+        if not verify_script.exists():
+            print(f"Error: {verify_script} not found!")
+            return 1
+        verify_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                verify_failed = True
+                continue
+            report_path = output_dir / era / f"verifyOutput_{era}_report.json"
+            cmd = [
+                sys.executable, str(verify_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--era', era,
+                '--outputReport', str(report_path),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"verifyOutput.py reported problems for era {era} (see {report_path}).")
+                verify_failed = True
+            else:
+                print(f"verifyOutput.py: all files OK for era {era}. Report: {report_path}")
+        if verify_failed:
+            return 1
+
     # exit(0)
 
 

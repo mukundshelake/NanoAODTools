@@ -68,9 +68,12 @@ if __name__ == "__main__":
                 if args.resubmit:
                     if "failed" in jobs_status.lower():
                         print(f"Resubmitting failed jobs for {full_path}...")
-                        resubmit_result = subprocess.run(['crab', 'resubmit', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        # NOTE: `crab resubmit <path>` (bare positional arg) fails; the
+                        # CRAB client here only accepts the directory via -d. Confirmed
+                        # directly: -d works, bare positional does not.
+                        resubmit_result = subprocess.run(['crab', 'resubmit', '-d', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                         if resubmit_result.returncode != 0:
-                            print(f"Error resubmitting jobs for {full_path}: {resubmit_result.stderr}")
+                            print(f"Error resubmitting jobs for {full_path}:\nstdout: {resubmit_result.stdout}\nstderr: {resubmit_result.stderr}")
                         else:
                             print(f"Successfully resubmitted jobs for {full_path}")
                 if args.removeCompleted:
@@ -86,7 +89,9 @@ if __name__ == "__main__":
                 if args.killRunning:
                     if "running" in jobs_status.lower():
                         print(f"Killing running jobs for {full_path}...")
-                        kill_result = subprocess.run(['crab', 'kill', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        # Bare positional arg fails the same way `crab resubmit <path>` does
+                        # (confirmed above); use -d here too.
+                        kill_result = subprocess.run(['crab', 'kill', '-d', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                         if kill_result.returncode != 0:
                             print(f"Error killing running jobs for {full_path}: {kill_result.stderr}")
                         else:

@@ -88,8 +88,10 @@ class SelectedObjectsProducer(Module):
 
     def analyze(self, event):
         self._fill_muon(event)
-        self._fill_jets(event)
-        self._fill_jet_counts(event)
+        jets = Collection(event, "Jet")
+        sel_jets = [j for j in jets if self._passes_jet_cuts(j)]
+        self._fill_jets(sel_jets)
+        self._fill_jet_counts(sel_jets)
         return True
 
     # ------------------------------------------------------------------
@@ -124,10 +126,7 @@ class SelectedObjectsProducer(Module):
             self.out.fillBranch(f"{prefix}_charge",         0)
             self.out.fillBranch(f"{prefix}_tightId",        False)
 
-    def _fill_jets(self, event):
-        jets     = Collection(event, "Jet")
-        sel_jets = [j for j in jets if self._passes_jet_cuts(j)]
-
+    def _fill_jets(self, sel_jets):
         # Sort all selected jets by pT descending, then greedily pick the first
         # two b-tagged jets as leading/subleading b-jets.  Strip those out and
         # take the next two highest-pT jets as the light-jet pair.  This avoids
@@ -198,16 +197,11 @@ class SelectedObjectsProducer(Module):
             and (jet.pt > 50 or jet.puId > 0)
         )
 
-    def _fill_jet_counts(self, event):
-        """Count all selected jets and b-tagged jets."""
-        jets = Collection(event, "Jet")
-        
-        # Count all jets passing selection
-        sel_nJet = sum(1 for j in jets if self._passes_jet_cuts(j))
-        
-        # Count all jets passing both selection and b-tag criteria
-        sel_nbjet = sum(1 for j in jets if self._passes_jet_cuts(j) and j.btagDeepFlavB > self.bTagThreshold)
-        
+    def _fill_jet_counts(self, sel_jets):
+        """Count selected jets and b-tagged jets (sel_jets already passed _passes_jet_cuts)."""
+        sel_nJet = len(sel_jets)
+        sel_nbjet = sum(1 for j in sel_jets if j.btagDeepFlavB > self.bTagThreshold)
+
         self.out.fillBranch("sel_nJet", sel_nJet)
         self.out.fillBranch("sel_nbjet", sel_nbjet)
 

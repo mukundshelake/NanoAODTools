@@ -89,7 +89,9 @@ if __name__ == "__main__":
                 if args.killRunning:
                     if "running" in jobs_status.lower():
                         print(f"Killing running jobs for {full_path}...")
-                        kill_result = subprocess.run(['crab', 'kill', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        # Bare positional arg fails the same way `crab resubmit <path>` does
+                        # (confirmed above); use -d here too.
+                        kill_result = subprocess.run(['crab', 'kill', '-d', full_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                         if kill_result.returncode != 0:
                             print(f"Error killing running jobs for {full_path}: {kill_result.stderr}")
                         else:

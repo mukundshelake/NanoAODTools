@@ -20,8 +20,9 @@ run_all.py --fetchFromPreviousChapter --previousHash <002-Samples config hash>
 This copies both files per era from `002-Samples/outputs/{tag}/{previousHash}/{era}/` into
 `inputs/` *and* into this run's own `outputs/{tag}/{hash}/inputs/` snapshot (so the
 snapshot stays complete even though it's normally taken once, at the start of the
-invocation, before the fetch runs). `PRESELECTION_HASH` below is exactly this
-`--previousHash` value, recorded for provenance.
+invocation, before the fetch runs). The `--tag`/`--previousHash` values used aren't
+recorded anywhere in `config.yaml` itself -- track which 002-Samples run an inputs/
+snapshot came from via the run's own `outputs/{tag}/{hash}/inputs/` provenance copy.
 
 ### 2. `config.yaml`
 
@@ -121,6 +122,10 @@ outputs/{tag}/
 ### Post-run dataset JSON (optional)
 
 After the skim files are written, `--generateDatasetJSON` scans the output storage directory and produces `selectionI_{tag}_{era}_datasets.json` listing all healthy skim ROOT files. This is the input format expected by the next chapter.
+
+### Output verification (optional)
+
+`--verifyOutput` runs `scripts/verifyOutput.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`). Unlike 002-Samples' `verifyOutput.py`, which checks every branch against a curated `branch_selection.keep` allowlist, this stage's skims keep *all* original NanoAOD branches untouched -- there's no drop list to check against. Instead this script is scoped to exactly the branches `SelectedObjectsProducer` creates: it confirms every expected `SelMuon_*`/`leading[b]Jet_*`/`subleading[b]Jet_*`/`sel_nJet`/`sel_nbjet` branch is present (era- and Data/MC-aware, via `config.yaml`'s `Modules.selectedObjects.branchNames`), computes min/max/mean/stddev for those branches only, and checks cross-branch invariants that must always hold given the module's deterministic jet-assignment algorithm (e.g. `sel_nbjet <= sel_nJet`, and each `leading/subleading` slot is filled if and only if the object count says it should be) -- any violation there is a real bug, not noise. It also reports each object's sentinel (`*_pt == -1`) rate as a warning-level diagnostic, since `SelectionCuts` already guarantees enough muons/jets/b-jets before this module runs, so a healthy skim should show ~0%. Writes a JSON report per era.
 
 ---
 

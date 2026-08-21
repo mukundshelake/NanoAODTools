@@ -5,8 +5,6 @@ STORAGE:
 # /store/... LFN base for CRAB (lxplus only). Must point at the same physical
 # files as STORAGE.lxplus (its EOS mount) -- see utils.lfn_path_for_local_file().
 LFN_Base: "/store/user/mshelake/DataFiles"
-PRESELECTION_TAG: "earlyApril"
-PRESELECTION_HASH: "7c0a36bed459"
 # ---------------------------------------------------------------------------
 # Event-level selection cuts passed directly to PostProcessor (cut= argument).
 # All cuts are joined with &&. The list-generation script combines these.

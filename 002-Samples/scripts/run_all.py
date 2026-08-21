@@ -640,14 +640,13 @@ def main():
         if not check_crab_status_script.exists():
             print(f"Error: {check_crab_status_script} not found!")
             return 1
+
+        # Phase 1: build the flat task list (one `crab status` check per dataset).
+        tasks = []  # (label, command)
         for era in config['DASQueries']:
-            print(f"\nChecking CRAB status for era: {era}")
             for DataMC in config['DASQueries'][era]:
-                print(f"  DataMC: {DataMC}")
                 for group in config['DASQueries'][era][DataMC]:
-                    print(f"    Group: {group}")
                     for dataset_name in config['DASQueries'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset_name}")
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
@@ -656,13 +655,43 @@ def main():
                             command += " --resubmit"
                         if args.removeSubmitFailedCrabJobs:
                             command += " --removeSubmitFailed"
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error checking CRAB status for dataset: {dataset_name}")
-                            continue
-                        else:
-                            print(f"      Successfully checked CRAB status for dataset: {dataset_name}. Check the output above for details.")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset_name}", command))
+
+        print(f"\n{len(tasks)} datasets to check. Checking with {args.workers} parallel workers...")
+
+        # Phase 2: check in parallel -- each `crab status` call is dominated by
+        # network round-trip time to cmsweb.cern.ch, same reasoning as
+        # --submitPreSelectionJobs's parallelization. stdout/stderr are
+        # captured (not inherited) so concurrent checks never interleave their
+        # output; each dataset's full captured output is printed as one block
+        # from this single main-thread loop only after its subprocess finishes,
+        # keeping the terminal readable no matter how many run at once.
+        succeeded, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command)
+                    for label, command in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    header = f"[{i}/{len(tasks)}] {label}"
+                    print(f"\n{'=' * len(header)}\n{header}\n{'=' * len(header)}\n{output}")
+                    if ok:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        print(f"Error checking CRAB status for dataset: {label}")
+
+        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
 
     # Scan local disk for CRAB output ROOT files (once copied down from EOS) and
     # build preselection_{era}_datasets.json, the input 003-ObjectSelectionI expects.
