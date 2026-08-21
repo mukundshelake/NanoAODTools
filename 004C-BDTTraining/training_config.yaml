@@ -1,0 +1,122 @@
+# Configuration for the BDT training step of 004C-BDTTraining: trains an
+# XGBoost classifier per era to distinguish qqbar-initiated (y==1) from
+# gg-initiated (y==2) ttbar_SemiLeptonic production.
+#
+# Hashed independently of config.yaml (see utils.compute_config_hash) so that
+# tuning the grid search or feature-selection settings never forces parquet
+# re-extraction. The resulting training_hash versions
+# outputs/{tag}/{parquetHash}/{era}/bdt/{training_hash}/.
+
+# Which extraction-side dataset to train on. Must match a
+# DataMC/group/dataset key present in Parquet_{tag}_{era}_datasets.json.
+# Nominal ttbar_SemiLeptonic only -- deliberately excludes the MC_alt
+# generator-tune systematic variants (ttbar_SemiLeptonic_Gluonmove,
+# _QCDinspired, _TuneCP5up/down, _erdON).
+TrainingSample:
+  DataMC:  MC_mu
+  group:   SemiLeptonic
+  dataset: ttbar_SemiLeptonic
+
+# Feature columns used for training -- a subset of config.yaml's
+# BDTVariables + AdditionalFeatures, decoupled here so future runs can try
+# feature subsets without touching (and re-hashing) the extraction config.
+Features:
+  - JetHT
+  - pTSum
+  - FW1
+  - FW2
+  - FW3
+  - AL
+  - Sxx
+  - Syy
+  - Sxy
+  - Sxz
+  - Syz
+  - Szz
+  - S
+  - P
+  - A
+  - p2in
+  - p2out
+  - sel_nJet
+  - sel_nbjet
+
+# Listed explicitly so trainBDT.py doesn't have to infer dtype from the
+# parquet schema, and so these get median (not mean) imputation.
+IntegerFeatures:
+  - sel_nJet
+  - sel_nbjet
+
+# Training-label source branch.
+TargetBranch: y
+
+# Keep only events with y in these keys, then map to the given binary class.
+# 1 (qqbar) -> 0, 2 (gg) -> 1: preserves y's own ordering as the 0/1
+# ordering. Everything else (y in {0, 3, 4, 5}: undefined/data, qg, qq'
+# different flavour, qq same flavour) is dropped before any balancing --
+# this is a deliberate correction of the old (deleted) BDT.py script, which
+# incorrectly trained qqbar (y==1) vs NOT-qqbar (y!=1), lumping qg/qq'/qq
+# into the "background" class alongside gg.
+Labels:
+  1: 0
+  2: 1
+
+# "downsample": randomly subsample the majority class to the minority class
+# size (matches the old script's behaviour).
+# "scale_pos_weight": keep all rows, weight the loss instead (XGBoost-native).
+# Computed from the TRAIN split only, after train_test_split, to avoid
+# leaking test-set class balance into a training-time hyperparameter.
+ClassBalancing:
+  method: downsample
+  random_state: 42
+
+Split:
+  test_size: 0.3
+  random_state: 42
+  stratify: true
+
+# XGBClassifier constructor args applied at every grid point.
+FixedParams:
+  objective: binary:logistic
+  eval_metric: auc
+  random_state: 42
+  n_jobs: -1
+  tree_method: hist
+
+# GridSearchCV parameter grid. Kept modest deliberately: 3x3x3x2x2 = 108
+# grid points * cv=3 = 324 fits/era. XGBoost's hist tree method makes this
+# comparable in wall-clock cost to the old script's 27-point grid over the
+# markedly slower sklearn GradientBoostingClassifier.
+ParamGrid:
+  n_estimators:     [100, 300, 500]
+  max_depth:        [3, 4, 5]
+  learning_rate:    [0.01, 0.05, 0.1]
+  subsample:        [0.8, 1.0]
+  colsample_bytree: [0.8, 1.0]
+
+# Fixed rather than grid-searched, to keep combinatorics tractable -- the
+# old script never tuned regularization either, and 19 features on a
+# few-hundred-thousand-event balanced sample is a low overfitting-risk
+# regime. Still hand-tunable here without touching code.
+RegularizationParams:
+  reg_lambda: 1.0
+  min_child_weight: 1
+  gamma: 0.0
+
+GridSearch:
+  cv: 3
+  scoring: roc_auc
+  n_jobs: -1
+  verbose: 2
+
+# Importance-based feature slimming: rank by built-in (gain) importance and
+# permutation importance on held-out test data, then retrain on the top-N
+# features and compare AUC before/after. Set select_features to null (or
+# remove the key) to skip this step entirely.
+FeatureSelection:
+  select_features: 10
+  permutation_importance:
+    n_repeats: 10
+    random_state: 42
+    scoring: roc_auc
+  performance_drop_threshold: 0.01

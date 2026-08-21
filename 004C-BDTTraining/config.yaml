@@ -1,0 +1,58 @@
+# Configuration for 004C-BDTTraining: BDT training-input extraction.
+#
+# This stage reads the BDTVariables ROOT files produced by 004B-BDT and
+# extracts the BDT feature branches plus the `y` training target into
+# parquet files, one per dataset (split into numbered parts if a dataset
+# would otherwise produce an overlarge file).
+#
+# This stage is pure-python (uproot/awkward/pyarrow) -- it does not run the
+# NanoAODTools PostProcessor and needs no CMSSW environment, so unlike
+# 002/003-I/003-II/004A/004B there is no CRAB submission path here.
+
+STORAGE:
+  cms2:      "/mnt/disk2/mukund/DataFiles"
+  localhost: "/nfs/disk3/mukund/DataFiles"
+  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+
+# Eras to iterate over. Matches the BDTVariables_{tag}_{era}_datasets.json
+# filenames fetched from 004B-BDT.
+Eras:
+  - UL2016preVFP
+  - UL2016postVFP
+  - UL2017
+  - UL2018
+
+# Branches computed by BDTvariableModule (004B-BDT scripts/modules/BDTvariableModule.py)
+# that make up the BDT feature set, in the order they should appear as parquet columns.
+BDTVariables:
+  - JetHT
+  - pTSum
+  - FW1
+  - FW2
+  - FW3
+  - AL
+  - Sxx
+  - Syy
+  - Sxy
+  - Sxz
+  - Syz
+  - Szz
+  - S
+  - P
+  - A
+  - p2in
+  - p2out
+
+# Additional per-event branches (not produced by BDTvariableModule, but
+# already present upstream from 003-ObjectSelectionI/scripts/modules/SelectedObjects.py
+# and carried through untouched since every stage runs with branchsel=None).
+AdditionalFeatures:
+  - sel_nJet
+  - sel_nbjet
+
+# Training-label branch, also filled by BDTvariableModule.
+TargetBranch: y
+
+# Split a dataset's output into multiple `_part{N}.parquet` files once a
+# chunk read from the source ROOT files would exceed this many rows.
+MaxEventsPerParquet: 2000000

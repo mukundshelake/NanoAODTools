@@ -358,6 +358,7 @@ dependencies:
       - mplhep==0.4.1
       - mplhep-data==0.0.5
       - multidict==6.7.0
+      - nvidia-nccl-cu12==2.31.2
       - paginate==0.5.7
       - pandas==2.3.3
       - partd==1.4.2
@@ -382,5 +383,6 @@ dependencies:
       - vector==1.7.0
       - watchdog==6.0.0
       - widgetsnbextension==4.0.15
+      - xgboost==3.2.0
       - xxhash==3.6.0
       - yarl==1.22.0
