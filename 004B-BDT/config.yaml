@@ -214,9 +214,6 @@ NgenandXsec:
   UL2016preVFP:
     Data_mu:
       SingleMuon:
-        Run2016B_ver1_mu:
-          Ngen: 2789243
-          Xsec: -1.0
         Run2016B_ver2_mu:
           Ngen: 158145722
           Xsec: -1.0

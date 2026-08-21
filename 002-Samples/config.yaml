@@ -31,7 +31,6 @@ DASQueries:
   "UL2016preVFP":
     "Data_mu":
       "SingleMuon":
-        "Run2016B_ver1_mu": "/SingleMuon/Run2016B-ver1_HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD"
         "Run2016B_ver2_mu": "/SingleMuon/Run2016B-ver2_HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD"
         "Run2016C_mu": "/SingleMuon/Run2016C-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD"
         "Run2016D_mu": "/SingleMuon/Run2016D-HIPM_UL2016_MiniAODv2_NanoAODv9-v2/NANOAOD"

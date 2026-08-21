@@ -66,7 +66,8 @@ def main():
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--workers', type=int, default=15,
-                       help='Number of parallel DAS queries for --getFileInfo (default: 15)')
+                       help='Number of parallel operations for --getFileInfo (DAS queries) and '
+                            '--submitPreSelectionJobs (CRAB submissions). Default: 15.')
 
     # --- lxplus: DAS querying / golden JSON / lumi info -----------------------------
     parser.add_argument('--getFileList', action='store_true',
@@ -113,6 +114,12 @@ def main():
                             'files from DAS with the number of files obtained from getFileInfo.py, the number of '
                             'files for which dataset JSON file is generated, the number of CRAB jobs submitted for '
                             'pre-selection, and the number of pre-selection output root files found on EOS.')
+    parser.add_argument('--verifyOutput', action='store_true',
+                       help='[7] Run scripts/verifyOutput.py on preselection_{era}_datasets.json (from '
+                            '--generatePreselectionDatasetJSON): checks each output ROOT file opens cleanly, has '
+                            'an Events tree, and its branch list matches config.yaml branch_selection (missing '
+                            'expected / unexpected extra branches), plus per-dataset min/max/mean/stddev for '
+                            'numeric branches. Writes a JSON report per era.')
 
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
@@ -142,6 +149,7 @@ def main():
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generatePreselectionDatasetJSON: {args.generatePreselectionDatasetJSON}")
     print(f"  --getStatus: {args.getStatus}")
+    print(f"  --verifyOutput: {args.verifyOutput}")
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
     print(f"  --workers: {args.workers}")
@@ -539,8 +547,13 @@ def main():
         if not submit_preselection_script.exists():
             print(f"Error: {submit_preselection_script} not found!")
             return 1
+
+        # Phase 1: build the flat task list (one CRAB submission per dataset),
+        # honoring the same filter/skip logic as before.
+        tasks = []  # (label, command, work_area)
+        pre_skipped = 0
         for era in config['DASQueries']:
-            print(f"\nSubmitting pre-selection jobs for era: {era}")
+            print(f"\nPreparing pre-selection submissions for era: {era}")
             dataset_json_path = output_dir / era / f"DAS_{era}_dataset.json"
             if not dataset_json_path.exists():
                 print(f"Error: DAS dataset JSON file not found for era {era} at expected location: {dataset_json_path}. Please ensure --generateDASDatasetJSON has been run before submitting pre-selection jobs.")
@@ -550,11 +563,8 @@ def main():
                 print(f"Error: Golden JSON file not found for era {era} at expected location: {golden_json_path}. Please ensure the golden JSON is downloaded before submitting pre-selection jobs.")
                 continue
             for DataMC in config['DASQueries'][era]:
-                print(f"  DataMC: {DataMC}")
                 for group in config['DASQueries'][era][DataMC]:
-                    print(f"    Group: {group}")
                     for dataset_name in config['DASQueries'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset_name}")
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         lfn_base = config['LFN_Base'].rstrip('/')
@@ -567,6 +577,13 @@ def main():
                         # straight out of that budget downstream.
                         lfn_path = f"{lfn_base}/{config_hash}/{era}/{DataMC}/{group}/{dataset_name}"
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
+                        # Skip datasets already submitted (a crab_presel_* project dir already
+                        # exists under work_area). Without this, re-running after an interrupted
+                        # submission pass -- or just re-running --submitPreSelectionJobs at all --
+                        # would resubmit every dataset again with a fresh CRAB task each time.
+                        if work_area.exists() and any(work_area.glob('crab_presel_*')) and not args.force:
+                            pre_skipped += 1
+                            continue
                         command = (
                             f"python3 {submit_preselection_script} --submit --era {era} "
                             f"--das-json {dataset_json_path} --golden-json {golden_json_path} "
@@ -574,13 +591,47 @@ def main():
                             f"{'--sample ' if args.sample else ''}"
                             f"--include '{DataMC}/{group}/{dataset_name}'"
                         )
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error submitting pre-selection jobs for dataset: {dataset_name}")
-                            continue
-                        else:
-                            print(f"      Successfully submitted pre-selection jobs for dataset: {dataset_name} with CRAB and saved logs to: {work_area}")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset_name}", command, work_area))
+
+        print(f"\n{len(tasks)} datasets to submit, {pre_skipped} already submitted / filtered out. "
+              f"Submitting with {args.workers} parallel workers...")
+
+        # Phase 2: submit in parallel. Each task is a separate `python3
+        # submit_preselection_flexible.py` OS process (as before, just no
+        # longer run one-at-a-time) -- CRAB submission is dominated by network
+        # round-trip time to cmsweb.cern.ch, so running several concurrently
+        # cuts wall-clock time roughly by the worker count without any
+        # concern about the CRAB client's thread-safety (there isn't any
+        # shared state to worry about -- each submission is its own process).
+        submitted, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command, work_area)
+                    for label, command, work_area in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command, work_area = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    if ok:
+                        submitted += 1
+                        print(f"  [{i}/{len(tasks)}] Submitted: {label} (logs: {work_area})")
+                    else:
+                        failed += 1
+                        print(f"  [{i}/{len(tasks)}] FAILED: {label}\n{output}")
+
+        print(f"\nsubmitPreSelectionJobs: {submitted} submitted, {failed} failed, {pre_skipped} pre-skipped "
+              f"out of {len(tasks) + pre_skipped} total.")
+        if tasks and submitted == 0:
+            print("Error: all pre-selection submissions failed.")
+            return 1
 
     # Check CRAB job status
     if args.checkCrabStatus:
@@ -745,6 +796,41 @@ def main():
                         crab_job_expected_output_dir = f"{eos_base}/{era}/{DataMC}/{group}/{dataset_name}/"
                         num_preselection_output_files = len(list(Path(crab_job_expected_output_dir).glob(f"**/*.root")))
                         print(f"                    Number of pre-selection output root files found at expected location {crab_job_expected_output_dir}: {num_preselection_output_files}")
+
+    # Verify preselection output ROOT files (branch completeness, per-dataset stats)
+    if args.verifyOutput:
+        print("\nVerifying preselection output ROOT files (scripts/verifyOutput.py)...")
+        verify_script = base_dir / 'scripts' / 'verifyOutput.py'
+        if not verify_script.exists():
+            print(f"Error: {verify_script} not found!")
+            return 1
+        verify_failed = False
+        for era in config['DASQueries']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"preselection_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: preselection dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generatePreselectionDatasetJSON first.")
+                verify_failed = True
+                continue
+            report_path = output_dir / era / f"verifyOutput_{era}_report.json"
+            cmd = [
+                sys.executable, str(verify_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--outputReport', str(report_path),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"verifyOutput.py reported problems for era {era} (see {report_path}).")
+                verify_failed = True
+            else:
+                print(f"verifyOutput.py: all files OK for era {era}. Report: {report_path}")
+        if verify_failed:
+            return 1
+
     exit(0)
 
 
