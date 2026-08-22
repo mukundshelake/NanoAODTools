@@ -25,6 +25,17 @@ print("Running crab_script_preselection.py")
 
 files = inputFiles()
 print("INPUT FILES:", files)
+# NOTE: inputFiles() mutates PSet.process.source.fileNames in place (it
+# resolves each LFN to a local PFN via edmFileUtil, or -- if that fails --
+# prefixes it with the AAA global redirector as a fallback). Calling it a
+# second time here used to re-run that same logic on the ALREADY-resolved
+# list: for files that got the AAA fallback on the first call, the second
+# call sees an already-prefixed root://cms-xrd-global.cern.ch/... string,
+# fails to resolve *that* locally too, and prefixes it again, producing a
+# doubly-prefixed URL that can never open. Confirmed via a real failed job's
+# log during the UL2016preVFP campaign submission (OSError: Failed to open
+# file root://cms-xrd-global.cern.ch/root://cms-xrd-global.cern.ch//store/...).
+# Reuse the already-resolved `files` from the call above instead.
 
 # Select cuts based on era (passed as 'era=VALUE' argument from crab_preselection.sh)
 era = "UL2016preVFP"
@@ -60,7 +71,7 @@ print("Generated keep_and_drop.txt from config.yaml")
 
 p = PostProcessor(
     ".",
-    inputFiles(),
+    files,
     cut=" && ".join(cuts),
     # outputfile="tree.root",
     branchsel="keep_and_drop.txt",

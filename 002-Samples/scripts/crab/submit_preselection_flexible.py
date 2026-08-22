@@ -72,7 +72,7 @@ def safe_name(s: str) -> str:
     """Replace non-alphanumeric characters with underscores."""
     return re.sub(r"[^A-Za-z0-9_]", "_", s)
 
-def make_crab_config(group, key, das_dataset, is_data, output_lfn, golden_json, era, work_area=None):
+def make_crab_config(group, key, das_dataset, is_data, output_lfn, golden_json, era, work_area=None, sample=False):
     from WMCore.Configuration import Configuration  # noqa: PLC0415
     cfg = Configuration()
     request_name = f"presel_{safe_name(era)}_{safe_name(group)}_{safe_name(key)}"[:100]
@@ -90,7 +90,10 @@ def make_crab_config(group, key, das_dataset, is_data, output_lfn, golden_json, 
     cfg.Data.inputDataset     = das_dataset
     cfg.Data.inputDBS         = "global"
     cfg.Data.publication      = False
-    cfg.Data.outputDatasetTag = f"presel_{safe_name(era)}_{safe_name(group)}_{safe_name(key)}"
+    # era/group/key are already encoded in outLFNDirBase's directory nesting, so
+    # repeating them here just eats into CRAB's 255-char LFN limit -- it pushed
+    # some UL2016preVFP dataset paths over the limit and got them skipped by 003.
+    cfg.Data.outputDatasetTag = "presel"
     cfg.Data.outLFNDirBase    = output_lfn
     if is_data:
         cfg.Data.splitting   = "FileBased"
@@ -99,6 +102,14 @@ def make_crab_config(group, key, das_dataset, is_data, output_lfn, golden_json, 
     else:
         cfg.Data.splitting   = "FileBased"
         cfg.Data.unitsPerJob = 1
+    if sample:
+        # Unlike 003-I/II's Data.userInputFiles submissions (where --sample trims
+        # the file list before submitting), this stage submits the whole
+        # DBS-registered dataset via Data.inputDataset -- CRAB's own splitting
+        # engine handles file enumeration, so there's no file list to trim here.
+        # Data.totalUnits is CRAB's own knob for this: with FileBased splitting,
+        # it caps how many files (units) get processed, same testing purpose.
+        cfg.Data.totalUnits = 1
     cfg.section_("Site")
     cfg.Site.storageSite = "T3_CH_CERNBOX"
 
@@ -145,6 +156,11 @@ def main():
     parser.add_argument(
         "--work-area",
         help="Directory where CRAB project folders are created (default: current directory).",
+    )
+    parser.add_argument(
+        "--sample", action="store_true",
+        help="Restrict each submitted dataset to 1 file via Data.totalUnits (for testing purposes), "
+             "same convention as --sample elsewhere in this chapter.",
     )
     args = parser.parse_args()
 
@@ -196,7 +212,8 @@ def main():
                 is_data     = "Data" in group
                 job_params.append((group, subgroup, key, das_dataset, is_data))
                 tag = "[Data]" if is_data else "[MC  ]"
-                print(f"  {'[SUBMIT]' if args.submit else '[DRY-RUN]'} {tag} {label}")
+                sample_tag = " [SAMPLE]" if args.sample else ""
+                print(f"  {'[SUBMIT]' if args.submit else '[DRY-RUN]'} {tag}{sample_tag} {label}")
                 print(f"           DAS: {das_dataset}")
 
     print(f"\nTotal jobs: {len(job_params)}")
@@ -220,7 +237,7 @@ def main():
     for group, subgroup, key, das_dataset, is_data in job_params:
         label = f"{group}/{subgroup}/{key}"
         try:
-            cfg = make_crab_config(f"{group}_{subgroup}", key, das_dataset, is_data, output_lfn, golden_json, args.era, args.work_area)
+            cfg = make_crab_config(f"{group}_{subgroup}", key, das_dataset, is_data, output_lfn, golden_json, args.era, args.work_area, args.sample)
             crabCommand("submit", config=cfg)
             print(f"  Submitted: {label}")
             submitted += 1
@@ -229,6 +246,10 @@ def main():
             failed += 1
 
     print(f"\nDone: {submitted} submitted, {failed} failed.")
+    if failed:
+        # Non-zero exit so callers (run_all.py's subprocess.run check) don't report
+        # "Successfully submitted" when some/all submissions actually failed.
+        sys.exit(1)
 
 if __name__ == "__main__":
     print("Running submit_preselection_flexible.py")

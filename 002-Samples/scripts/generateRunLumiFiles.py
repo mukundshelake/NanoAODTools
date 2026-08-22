@@ -7,12 +7,18 @@ Usage: python3 generateRunLumiFiles.py -i <input_json_file> -outDir <output_dire
 import argparse
 import json
 import os
+import sys
 
 
 def generate_run_lumi_files(input_json_file, output_file_path):
-    # Read the input JSON file
-    with open(input_json_file, 'r') as f:
-        data = json.load(f)
+    """Returns True on success, False on any failure (bad/missing input JSON)."""
+    try:
+        with open(input_json_file, 'r') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error reading {input_json_file}: {e}")
+        return False
+
     runLumi_info = {}
     for entry in data:
         lumi = entry["lumi"][0]["lumi_section_num"]
@@ -27,6 +33,7 @@ def generate_run_lumi_files(input_json_file, output_file_path):
         json.dump(runLumi_info, f, indent=4)
 
     print(f"Run-lumi information saved to {output_file_path}")
+    return True
 
 
 if __name__ == "__main__":
@@ -39,4 +46,5 @@ if __name__ == "__main__":
 
     output_file_path = os.path.join(args.outDir, args.output)
 
-    generate_run_lumi_files(args.input, output_file_path)
+    ok = generate_run_lumi_files(args.input, output_file_path)
+    sys.exit(0 if ok else 1)

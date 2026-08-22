@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
 """
-003-ObjectSelectionI/scripts/crab/submit_selection_flexible.py
-================================================================
-Generate and (optionally) submit CRAB jobs for the object-selection stage,
-processing the preselection-stage skims that already live on EOS.
+003-ObjectSelectionII/scripts/crab/submit_selectionII_flexible.py
+====================================================================
+Generate and (optionally) submit CRAB jobs for the scale-factor weight
+stage, processing the selectionI skims that already live on EOS (produced
+either locally or via 003-ObjectSelectionI's own CRAB support).
 
-Unlike 002-Samples' preselection CRAB job, the input here is not a
-DBS-registered dataset (preselection output was published with
-publication=False), so this uses Data.userInputFiles -- a plain LFN list --
-instead of Data.inputDataset. The LFN list is built by translating the local
-(EOS-mounted, on lxplus) file paths already present in
-preselection_{era}_datasets.json into their /store/... equivalents.
+Same Data.userInputFiles approach as 003-ObjectSelectionI's
+submit_selection_flexible.py, for the same reason: selectionI output is not
+DBS-registered. See that script's docstring for the full rationale.
 
 Usage
 -----
     # Dry run — print what would be submitted, no actual submission
-    python3 submit_selection_flexible.py --era UL2018 \\
-        --dataset-json inputs/preselection_UL2018_datasets.json \\
-        --output-lfn /store/user/mshelake/DataFiles/selectionI/earlyApril/<hash>/UL2018 \\
-        --work-area /tmp/crab_selection_UL2018
+    python3 submit_selectionII_flexible.py --era UL2018 \\
+        --dataset-json inputs/selectionI_earlyApril_UL2018_datasets.json \\
+        --golden-json inputs/UL2018_goldenJSON.json \\
+        --output-lfn /store/user/mshelake/DataFiles/selectionII/earlyApril/<hash>/UL2018 \\
+        --work-area /tmp/crab_selectionII_UL2018
 
-    # Submit only one dataset
-    python3 submit_selection_flexible.py --submit --era UL2018 --include 'Data_mu/SingleMuon/Run2018A_mu' ...
+    # Submit only one dataset, one file each (testing)
+    python3 submit_selectionII_flexible.py --submit --sample --era UL2018 \\
+        --include 'MC_mu/SingleTop/Tchannel' ...
 
 Options
 -------
     --submit         Actually submit to CRAB (default: dry run).
+    --sample         Only submit the first file of each matching dataset.
     --include        Regex matched against "DataMC/group/dataset"; only matching triples are processed.
     --exclude        Regex matched against "DataMC/group/dataset"; matching triples are skipped.
     --era            Data-taking era (e.g., UL2016preVFP, UL2017, UL2018). Required.
-    --dataset-json   Path to preselection_{era}_datasets.json (from inputs/). Required.
+    --dataset-json   Path to selectionI_{tag}_{era}_datasets.json (from inputs/). Required.
     --golden-json    Path to the era's golden JSON (shipped to Data jobs only). Required if any Data job matches.
     --output-lfn     Base LFN for CRAB output on T3_CH_CERNBOX. Required.
     --work-area      Directory where CRAB project folders are created.
-    --sample         Only submit the first file of each matching dataset (for testing).
 """
 
 import argparse
@@ -46,12 +46,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 import utils
 
-REPO_ROOT   = SCRIPT_DIR.parent.parent.parent  # crab/ -> scripts/ -> 003-ObjectSelectionI/ -> repo root
-CONFIG_YAML = SCRIPT_DIR.parent.parent / "config.yaml"  # 003-ObjectSelectionI/config.yaml
+CHAPTER_DIR = SCRIPT_DIR.parent.parent           # 003-ObjectSelectionII/
+REPO_ROOT   = CHAPTER_DIR.parent                 # repo root
+CONFIG_YAML = CHAPTER_DIR / "config.yaml"
 PSET        = SCRIPT_DIR / "PSet.py"
-SCRIPT_SH   = SCRIPT_DIR / "crab_selection.sh"
-SCRIPT_PY   = SCRIPT_DIR / "crab_script_selection.py"
-MODULE_PY   = SCRIPT_DIR.parent / "modules" / "SelectedObjects.py"
+SCRIPT_SH   = SCRIPT_DIR / "crab_selectionII.sh"
+SCRIPT_PY   = SCRIPT_DIR / "crab_script_selectionII.py"
+MODULES_DIR = CHAPTER_DIR / "scripts" / "modules"
+MODULE_FILES = {
+    "lheWeightSign": MODULES_DIR / "LHEWeightSign.py",
+    "muonID":        MODULES_DIR / "MuonIDWeight.py",
+    "muonHLT":       MODULES_DIR / "MuonHLTWeight.py",
+    "bTagging":      MODULES_DIR / "bTaggingWeight.py",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,10 +69,11 @@ def safe_name(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", s)
 
 
-def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, golden_json, work_area=None):
+def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn,
+                      golden_json, config, work_area=None):
     from WMCore.Configuration import Configuration  # noqa: PLC0415
     cfg = Configuration()
-    request_name = f"sel_{safe_name(era)}_{safe_name(group)}_{safe_name(key)}"[:100]
+    request_name = f"selII_{safe_name(era)}_{safe_name(group)}_{safe_name(key)}"[:100]
     cfg.section_("General")
     cfg.General.requestName  = request_name
     cfg.General.transferLogs = True
@@ -75,27 +83,41 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, go
     cfg.JobType.pluginName = "Analysis"
     cfg.JobType.psetName   = str(PSET)
     cfg.JobType.scriptExe  = str(SCRIPT_SH)
-    input_files = [str(SCRIPT_PY), str(MODULE_PY), str(CONFIG_YAML)]
+
+    input_files = [str(SCRIPT_PY), str(CONFIG_YAML)]
+    module_names = [] if is_data else config["ModuleList"]["MC"]
+    for mod_name in module_names:
+        input_files.append(str(MODULE_FILES[mod_name]))
+        mod_cfg_raw = config["Modules"].get(mod_name, {})
+        mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
+        for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
+            if file_key in mod_cfg:
+                input_files.append(str(REPO_ROOT / mod_cfg[file_key]))
+        if mod_name == "bTagging":
+            eff_file = REPO_ROOT / mod_cfg["efficiencyFolder"] / era / f"{key}.root"
+            if not eff_file.is_file():
+                raise FileNotFoundError(f"b-tagging efficiency file not found: {eff_file}")
+            input_files.append(str(eff_file))
     if is_data:
         input_files.append(str(golden_json))
-    cfg.JobType.inputFiles  = input_files
-    cfg.JobType.scriptArgs  = [f"era={era}", f"isData={is_data}"]
+    cfg.JobType.inputFiles = input_files
+
+    script_args = [f"era={era}", f"isData={is_data}"]
+    if not is_data:
+        script_args.append(f"dataset={key}")
+    cfg.JobType.scriptArgs = script_args
+
     cfg.section_("Data")
-    cfg.Data.userInputFiles     = lfn_files
+    cfg.Data.userInputFiles       = lfn_files
     cfg.Data.outputPrimaryDataset = safe_name(f"{group}_{key}")[:100]
-    cfg.Data.splitting          = "FileBased"
-    cfg.Data.unitsPerJob        = 1
-    cfg.Data.publication        = False
-    cfg.Data.outLFNDirBase      = output_lfn
+    cfg.Data.splitting            = "FileBased"
+    cfg.Data.unitsPerJob          = 1
+    cfg.Data.publication          = False
+    cfg.Data.outLFNDirBase        = output_lfn
     cfg.section_("Site")
     cfg.Site.storageSite = "T3_CH_CERNBOX"
-    # Required for Data.userInputFiles: unlike a DBS-registered inputDataset, CRAB has
-    # no location info for private files, so it refuses to submit without an explicit
-    # whitelist. NOTE: Site.whitelist takes CMS *Processing Site* names (a different
-    # registry from storage element names like T3_CH_CERNBOX above -- using the SE name
-    # here gets a SUBMITREFUSED with "not in the list of known CMS Processing Site Names").
-    # T2_CH_CERN is the processing site with access to CERN EOS (where our /store/user/...
-    # input files physically live).
+    # See 003-ObjectSelectionI's submit_selection_flexible.py for why this is
+    # needed and why it must be a processing site name, not a storage element.
     cfg.Site.whitelist = ["T2_CH_CERN"]
 
     return cfg
@@ -106,26 +128,25 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, go
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate/submit CRAB object-selection jobs for a user-specified era."
+        description="Generate/submit CRAB scale-factor-weight jobs for a user-specified era."
     )
     parser.add_argument("--submit", action="store_true",
                         help="Actually submit to CRAB (default: dry run).")
+    parser.add_argument("--sample", action="store_true",
+                        help="Only submit the first file of each matching dataset (for testing).")
     parser.add_argument("--include", help='Regex applied to "DataMC/group/key"; only matching triples are processed.')
     parser.add_argument("--exclude", help='Regex applied to "DataMC/group/key"; matching triples are skipped.')
     parser.add_argument("--era", required=True,
                         help="Data-taking era (e.g., UL2016preVFP, UL2017, UL2018). Required.")
     parser.add_argument("--dataset-json", required=True,
-                        help="Path to preselection_{era}_datasets.json listing the local/EOS-mounted "
-                             "preselection skim file paths.")
+                        help="Path to selectionI_{tag}_{era}_datasets.json listing the local/EOS-mounted "
+                             "selectionI skim file paths.")
     parser.add_argument("--golden-json", default=None,
                         help="Path to the era's golden JSON. Required if any matching job is Data.")
     parser.add_argument("--output-lfn", required=True,
                         help="Base LFN for CRAB output on T3_CH_CERNBOX.")
     parser.add_argument("--work-area",
                         help="Directory where CRAB project folders are created (default: current directory).")
-    parser.add_argument("--sample", action="store_true",
-                        help="Only submit the first file of each matching dataset (for testing purposes), "
-                             "same convention as --sample elsewhere in this chapter.")
     args = parser.parse_args()
 
     output_lfn = args.output_lfn.rstrip("/")
@@ -141,13 +162,12 @@ def main():
     exclude_pat = re.compile(args.exclude) if args.exclude else None
 
     for path, label in [
-        (SCRIPT_SH,    "crab_selection.sh"),
-        (SCRIPT_PY,    "crab_script_selection.py"),
-        (MODULE_PY,    "SelectedObjects.py"),
-        (PSET,         "PSet.py"),
-        (CONFIG_YAML,  "config.yaml"),
+        (SCRIPT_SH,   "crab_selectionII.sh"),
+        (SCRIPT_PY,   "crab_script_selectionII.py"),
+        (PSET,        "PSet.py"),
+        (CONFIG_YAML, "config.yaml"),
         (args.dataset_json, "dataset JSON"),
-    ]:
+    ] + [(p, f"module: {name}") for name, p in MODULE_FILES.items()]:
         if not Path(path).is_file():
             print(f"ERROR: required file not found: {path}  ({label})", file=sys.stderr)
             sys.exit(1)
@@ -180,9 +200,6 @@ def main():
                     print(f"  [SKIP] {label}: {e}")
                     continue
 
-                # CRABServer hard-rejects (400 Bad Request) any Data.userInputFiles entry
-                # over 255 chars. Filter those out here with a clear message instead of
-                # letting the whole submission fail on an opaque server-side error.
                 too_long = [lf for lf in lfn_files if len(lf) > 255]
                 if too_long:
                     for lf in too_long:
@@ -191,6 +208,7 @@ def main():
                 if not lfn_files:
                     print(f"  [SKIP] {label} (no files left under the 255-char LFN limit)")
                     continue
+
                 job_params.append((DataMC, group, key, lfn_files, is_data))
                 tag = "[Data]" if is_data else "[MC  ]"
                 sample_tag = " [SAMPLE]" if args.sample else ""
@@ -225,7 +243,7 @@ def main():
         label = f"{DataMC}/{group}/{key}"
         try:
             cfg = make_crab_config(args.era, DataMC, group, key, lfn_files, is_data,
-                                    output_lfn, args.golden_json, args.work_area)
+                                    output_lfn, args.golden_json, config, args.work_area)
             crabCommand("submit", config=cfg)
             print(f"  Submitted: {label}")
             submitted += 1
@@ -240,6 +258,6 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    print("Running submit_selection_flexible.py")
+    print("Running submit_selectionII_flexible.py")
     main()
-    print("Finished submit_selection_flexible.py")
+    print("Finished submit_selectionII_flexible.py")

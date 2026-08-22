@@ -7,24 +7,42 @@ Usage: python3 getFileInfo.py -q "lumi file=/store/data/Run2016E/SingleMuon/NANO
 import argparse
 import subprocess
 import os
+import sys
+import threading
+
+# run_all.py's --getFileInfo calls get_file_info() from multiple threads at
+# once (ThreadPoolExecutor). Each thread's own print() calls are individually
+# atomic, but a multi-line message built from several print() calls can still
+# interleave with another thread's -- this lock keeps each message's lines
+# together in the shared log.
+_print_lock = threading.Lock()
 
 
 def get_file_info(das_query, output_file):
-    """Get file run-lumi info from DAS query and save to json file."""
+    """Get file run-lumi info from DAS query and save to json file.
+
+    Returns True on success, False if dasgoclient failed (caller decides how
+    to handle/report -- this used to swallow failures by returning None in
+    both cases, which let callers report success even when nothing was
+    written).
+    """
     cmd = f"dasgoclient -query='{das_query}' -json"
-    print(f"Executing command: {cmd}")
+    with _print_lock:
+        print(f"Executing command: {cmd}")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     # Make sure the command executed successfully
     if result.returncode != 0:
-        print("Error running dasgoclient:")
-        print(f"Command output: \n{result.stdout}")
-        print(f"Command error (if any): \n{result.stderr}")  
-        return
+        with _print_lock:
+            print("Error running dasgoclient:")
+            print(f"Command output: \n{result.stdout}")
+            print(f"Command error (if any): \n{result.stderr}")
+        return False
     # make sure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w") as f:
         f.write(result.stdout)
+    return True
 
 
 if __name__ == "__main__":
@@ -39,4 +57,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     output_file_path = os.path.join(args.output_directory, args.output_filename)
-    get_file_info(args.das_query, output_file_path)
+    ok = get_file_info(args.das_query, output_file_path)
+    sys.exit(0 if ok else 1)

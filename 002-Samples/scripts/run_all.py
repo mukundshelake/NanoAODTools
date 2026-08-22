@@ -25,10 +25,13 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 import utils
+import getFileInfo
+import generateRunLumiFiles
 
 
 def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
@@ -62,6 +65,9 @@ def main():
                        help='Regenerate outputs even if output files already exist for this config hash')
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
+    parser.add_argument('--workers', type=int, default=15,
+                       help='Number of parallel operations for --getFileInfo (DAS queries) and '
+                            '--submitPreSelectionJobs (CRAB submissions). Default: 15.')
 
     # --- lxplus: DAS querying / golden JSON / lumi info -----------------------------
     parser.add_argument('--getFileList', action='store_true',
@@ -108,10 +114,20 @@ def main():
                             'files from DAS with the number of files obtained from getFileInfo.py, the number of '
                             'files for which dataset JSON file is generated, the number of CRAB jobs submitted for '
                             'pre-selection, and the number of pre-selection output root files found on EOS.')
+    parser.add_argument('--verifyOutput', action='store_true',
+                       help='[7] Run scripts/verifyOutput.py on preselection_{era}_datasets.json (from '
+                            '--generatePreselectionDatasetJSON): checks each output ROOT file opens cleanly, has '
+                            'an Events tree, and its branch list matches config.yaml branch_selection (missing '
+                            'expected / unexpected extra branches), plus per-dataset min/max/mean/stddev for '
+                            'numeric branches. Writes a JSON report per era.')
 
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
+    parser.add_argument('--sample', action='store_true',
+                       help='For --submitPreSelectionJobs: restrict each submitted dataset to 1 file '
+                            '(via Data.totalUnits) for testing purposes, same convention as --sample '
+                            'elsewhere in this chapter.')
 
     args = parser.parse_args()
 
@@ -133,8 +149,11 @@ def main():
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generatePreselectionDatasetJSON: {args.generatePreselectionDatasetJSON}")
     print(f"  --getStatus: {args.getStatus}")
+    print(f"  --verifyOutput: {args.verifyOutput}")
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
+    print(f"  --workers: {args.workers}")
+    print(f"  --sample: {args.sample}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -358,10 +377,12 @@ def main():
     # Get file run-lumi information from DAS if requested
     if args.getFileInfo:
         print("\nRunning getFileInfo.py to fetch file run-lumi information from DAS...")
-        get_file_info_script = base_dir / 'scripts' / 'getFileInfo.py'
-        if not get_file_info_script.exists():
-            print(f"Error: {get_file_info_script} not found!")
-            return 1
+
+        # Phase 1: build the flat task list (one dasgoclient query per file),
+        # honoring --force/existing-file skip logic, same as every Pool-based
+        # worker script elsewhere in this pipeline.
+        tasks = []
+        pre_skipped = 0
         for era in config['DASQueries']:
             print(f"\nFetching file run-lumi information for era: {era}")
             for DataMC in config['DASQueries'][era]:
@@ -386,25 +407,61 @@ def main():
                             output_directory.mkdir(parents=True, exist_ok=True)
                             output_file_path = output_directory / output_filename
                             if output_file_path.exists() and not args.force:
-                                print(f"      Run-lumi information for file {file_name} already exists at: {output_file_path} and --force not specified. Skipping run-lumi information retrieval for this file.")
+                                pre_skipped += 1
                                 continue
-                            query = f"lumi file={file_name}"
-                            cmd = f"python3 {get_file_info_script} -q \"{query}\" -o {output_filename} -outDir {output_directory}"
-                            print(f"      Executing command: {cmd}")
-                            result = subprocess.run(cmd, shell=True)
-                            if result.returncode != 0:
-                                print(f"Error fetching run-lumi information for file: {file_name}")
-                                continue
-                            else:
-                                print(f"      Successfully fetched run-lumi information for file: {file_name} and saved to: {output_directory / output_filename}")
+                            tasks.append((file_name, str(output_directory / output_filename)))
+
+        print(f"\n{len(tasks)} files to query, {pre_skipped} already done / filtered out. "
+              f"Running with {args.workers} parallel workers...")
+
+        # Phase 2: run the DAS queries in parallel. dasgoclient calls are I/O-bound
+        # (waiting on the network), so a thread pool is enough -- no need for
+        # separate processes. Calling getFileInfo.get_file_info() directly here
+        # (instead of spawning `python3 getFileInfo.py` per file, as before) also
+        # drops ~13000 redundant Python-interpreter-startup subprocess launches.
+        succeeded, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(getFileInfo.get_file_info, f"lumi file={file_name}", out_path): (file_name, out_path)
+                    for file_name, out_path in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    file_name, out_path = futures[future]
+                    try:
+                        ok = future.result()
+                    except Exception as e:
+                        print(f"      [{i}/{len(tasks)}] Exception fetching run-lumi information for {file_name}: {e}")
+                        ok = False
+                    if ok:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        print(f"      [{i}/{len(tasks)}] FAILED: {file_name}")
+                    if i % 200 == 0 or i == len(tasks):
+                        print(f"      Progress: {i}/{len(tasks)} ({succeeded} succeeded, {failed} failed)")
+
+        print(f"\ngetFileInfo: {succeeded} succeeded, {failed} failed, {pre_skipped} pre-skipped "
+              f"out of {len(tasks) + pre_skipped} total.")
+        if tasks and succeeded == 0:
+            # Every single query failed -- almost certainly something systemic
+            # (expired proxy, DAS outage), not per-file flakiness. Don't let
+            # the run silently look like it did something.
+            print("Error: all getFileInfo queries failed.")
+            return 1
 
     # Generate brilcalc friendly run-lumi JSON files for each data file if requested
     if args.generateRunLumiFiles:
         print("\nRunning generateRunLumiFiles.py to generate brilcalc friendly run-lumi JSON files from the output of getFileInfo.py...")
-        generate_run_lumi_files_script = base_dir / 'scripts' / 'generateRunLumiFiles.py'
-        if not generate_run_lumi_files_script.exists():
-            print(f"Error: {generate_run_lumi_files_script} not found!")
-            return 1
+        # NOTE: this loop used to have a bug where the per-file existence-check/
+        # generation logic sat outside the `for file in fileList:` loop (wrong
+        # indentation), so only the *last* file of each dataset was ever
+        # processed. Fixed here -- also switched from spawning a `python3
+        # generateRunLumiFiles.py` subprocess per file (this is a pure local
+        # JSON transform, no network call, so the interpreter-startup overhead
+        # for ~13k files was pure waste) to calling generate_run_lumi_files()
+        # directly in-process.
+        succeeded, failed, pre_skipped = 0, 0, 0
         for era in config['DASQueries']:
             print(f"\nGenerating run-lumi JSON files for era: {era}")
             for DataMC in config['DASQueries'][era]:
@@ -424,23 +481,26 @@ def main():
                         for file in fileList:
                             file_id = file["file"][0]["file_id"]
                             file_info_json = output_dir / era / DataMC / group / dataset_name / f"file_{file_id}" / f"{era}_{DataMC}_{group}_{dataset_name}_file{file_id}_run_lumi_info.json"
-                        if not file_info_json.exists():
-                            print(f"Error: File run-lumi information JSON not found for file ID {file_id} at expected location: {file_info_json}. Please ensure the file run-lumi information is fetched before generating run-lumi JSON files for this file.")
-                            continue
-                        output_directory = output_dir / era / DataMC / group / dataset_name / f"file_{file_id}"
-                        output_filename = f"{era}_{DataMC}_{group}_{dataset_name}_file{file_id}_run_lumi.json"
-                        output_file_path = output_directory / output_filename
-                        if output_file_path.exists() and not args.force:
-                            print(f"      Run-lumi JSON file for file ID {file_id} already exists at: {output_file_path} and --force not specified. Skipping generation of run-lumi JSON file for this file.")
-                            continue
-                        cmd = f"python3 {generate_run_lumi_files_script} -i {file_info_json} -o {output_filename} --outDir {output_directory}"
-                        print(f"      Executing command: {cmd}")
-                        result = subprocess.run(cmd, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error generating run-lumi JSON file for file ID: {file_id}")
-                            continue
-                        else:
-                            print(f"      Successfully generated run-lumi JSON file for file ID: {file_id} and saved to: {output_directory / output_filename}")
+                            if not file_info_json.exists():
+                                print(f"Error: File run-lumi information JSON not found for file ID {file_id} at expected location: {file_info_json}. Please ensure the file run-lumi information is fetched before generating run-lumi JSON files for this file.")
+                                failed += 1
+                                continue
+                            output_directory = output_dir / era / DataMC / group / dataset_name / f"file_{file_id}"
+                            output_filename = f"{era}_{DataMC}_{group}_{dataset_name}_file{file_id}_run_lumi.json"
+                            output_file_path = output_directory / output_filename
+                            if output_file_path.exists() and not args.force:
+                                pre_skipped += 1
+                                continue
+                            if generateRunLumiFiles.generate_run_lumi_files(str(file_info_json), str(output_file_path)):
+                                succeeded += 1
+                            else:
+                                print(f"Error generating run-lumi JSON file for file ID: {file_id}")
+                                failed += 1
+
+        print(f"\ngenerateRunLumiFiles: {succeeded} succeeded, {failed} failed, {pre_skipped} pre-skipped.")
+        if failed and succeeded == 0:
+            print("Error: all generateRunLumiFiles conversions failed.")
+            return 1
 
     # Build DAS_{era}_dataset.json (remote LFN dataset map, feeds CRAB submission)
     if args.generateDASDatasetJSON:
@@ -487,8 +547,13 @@ def main():
         if not submit_preselection_script.exists():
             print(f"Error: {submit_preselection_script} not found!")
             return 1
+
+        # Phase 1: build the flat task list (one CRAB submission per dataset),
+        # honoring the same filter/skip logic as before.
+        tasks = []  # (label, command, work_area)
+        pre_skipped = 0
         for era in config['DASQueries']:
-            print(f"\nSubmitting pre-selection jobs for era: {era}")
+            print(f"\nPreparing pre-selection submissions for era: {era}")
             dataset_json_path = output_dir / era / f"DAS_{era}_dataset.json"
             if not dataset_json_path.exists():
                 print(f"Error: DAS dataset JSON file not found for era {era} at expected location: {dataset_json_path}. Please ensure --generateDASDatasetJSON has been run before submitting pre-selection jobs.")
@@ -498,11 +563,8 @@ def main():
                 print(f"Error: Golden JSON file not found for era {era} at expected location: {golden_json_path}. Please ensure the golden JSON is downloaded before submitting pre-selection jobs.")
                 continue
             for DataMC in config['DASQueries'][era]:
-                print(f"  DataMC: {DataMC}")
                 for group in config['DASQueries'][era][DataMC]:
-                    print(f"    Group: {group}")
                     for dataset_name in config['DASQueries'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset_name}")
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         lfn_base = config['LFN_Base'].rstrip('/')
@@ -515,14 +577,61 @@ def main():
                         # straight out of that budget downstream.
                         lfn_path = f"{lfn_base}/{config_hash}/{era}/{DataMC}/{group}/{dataset_name}"
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
-                        command = f"python3 {submit_preselection_script} --submit --era {era} --das-json {dataset_json_path} --golden-json {golden_json_path} --output-lfn {lfn_path} --work-area {work_area} --include '{DataMC}/{group}/{dataset_name}'"
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error submitting pre-selection jobs for dataset: {dataset_name}")
+                        # Skip datasets already submitted (a crab_presel_* project dir already
+                        # exists under work_area). Without this, re-running after an interrupted
+                        # submission pass -- or just re-running --submitPreSelectionJobs at all --
+                        # would resubmit every dataset again with a fresh CRAB task each time.
+                        if work_area.exists() and any(work_area.glob('crab_presel_*')) and not args.force:
+                            pre_skipped += 1
                             continue
-                        else:
-                            print(f"      Successfully submitted pre-selection jobs for dataset: {dataset_name} with CRAB and saved logs to: {work_area}")
+                        command = (
+                            f"python3 {submit_preselection_script} --submit --era {era} "
+                            f"--das-json {dataset_json_path} --golden-json {golden_json_path} "
+                            f"--output-lfn {lfn_path} --work-area {work_area} "
+                            f"{'--sample ' if args.sample else ''}"
+                            f"--include '{DataMC}/{group}/{dataset_name}'"
+                        )
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset_name}", command, work_area))
+
+        print(f"\n{len(tasks)} datasets to submit, {pre_skipped} already submitted / filtered out. "
+              f"Submitting with {args.workers} parallel workers...")
+
+        # Phase 2: submit in parallel. Each task is a separate `python3
+        # submit_preselection_flexible.py` OS process (as before, just no
+        # longer run one-at-a-time) -- CRAB submission is dominated by network
+        # round-trip time to cmsweb.cern.ch, so running several concurrently
+        # cuts wall-clock time roughly by the worker count without any
+        # concern about the CRAB client's thread-safety (there isn't any
+        # shared state to worry about -- each submission is its own process).
+        submitted, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command, work_area)
+                    for label, command, work_area in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command, work_area = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    if ok:
+                        submitted += 1
+                        print(f"  [{i}/{len(tasks)}] Submitted: {label} (logs: {work_area})")
+                    else:
+                        failed += 1
+                        print(f"  [{i}/{len(tasks)}] FAILED: {label}\n{output}")
+
+        print(f"\nsubmitPreSelectionJobs: {submitted} submitted, {failed} failed, {pre_skipped} pre-skipped "
+              f"out of {len(tasks) + pre_skipped} total.")
+        if tasks and submitted == 0:
+            print("Error: all pre-selection submissions failed.")
+            return 1
 
     # Check CRAB job status
     if args.checkCrabStatus:
@@ -531,14 +640,13 @@ def main():
         if not check_crab_status_script.exists():
             print(f"Error: {check_crab_status_script} not found!")
             return 1
+
+        # Phase 1: build the flat task list (one `crab status` check per dataset).
+        tasks = []  # (label, command)
         for era in config['DASQueries']:
-            print(f"\nChecking CRAB status for era: {era}")
             for DataMC in config['DASQueries'][era]:
-                print(f"  DataMC: {DataMC}")
                 for group in config['DASQueries'][era][DataMC]:
-                    print(f"    Group: {group}")
                     for dataset_name in config['DASQueries'][era][DataMC][group]:
-                        print(f"      Dataset: {dataset_name}")
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
@@ -547,13 +655,43 @@ def main():
                             command += " --resubmit"
                         if args.removeSubmitFailedCrabJobs:
                             command += " --removeSubmitFailed"
-                        print(f"      Executing command: {command}")
-                        result = subprocess.run(command, shell=True)
-                        if result.returncode != 0:
-                            print(f"Error checking CRAB status for dataset: {dataset_name}")
-                            continue
-                        else:
-                            print(f"      Successfully checked CRAB status for dataset: {dataset_name}. Check the output above for details.")
+                        tasks.append((f"{era}/{DataMC}/{group}/{dataset_name}", command))
+
+        print(f"\n{len(tasks)} datasets to check. Checking with {args.workers} parallel workers...")
+
+        # Phase 2: check in parallel -- each `crab status` call is dominated by
+        # network round-trip time to cmsweb.cern.ch, same reasoning as
+        # --submitPreSelectionJobs's parallelization. stdout/stderr are
+        # captured (not inherited) so concurrent checks never interleave their
+        # output; each dataset's full captured output is printed as one block
+        # from this single main-thread loop only after its subprocess finishes,
+        # keeping the terminal readable no matter how many run at once.
+        succeeded, failed = 0, 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {
+                    pool.submit(subprocess.run, command, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True): (label, command)
+                    for label, command in tasks
+                }
+                for i, future in enumerate(as_completed(futures), start=1):
+                    label, command = futures[future]
+                    try:
+                        result = future.result()
+                        ok = (result.returncode == 0)
+                        output = result.stdout
+                    except Exception as e:
+                        ok = False
+                        output = str(e)
+                    header = f"[{i}/{len(tasks)}] {label}"
+                    print(f"\n{'=' * len(header)}\n{header}\n{'=' * len(header)}\n{output}")
+                    if ok:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        print(f"Error checking CRAB status for dataset: {label}")
+
+        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
 
     # Scan local disk for CRAB output ROOT files (once copied down from EOS) and
     # build preselection_{era}_datasets.json, the input 003-ObjectSelectionI expects.
@@ -687,6 +825,41 @@ def main():
                         crab_job_expected_output_dir = f"{eos_base}/{era}/{DataMC}/{group}/{dataset_name}/"
                         num_preselection_output_files = len(list(Path(crab_job_expected_output_dir).glob(f"**/*.root")))
                         print(f"                    Number of pre-selection output root files found at expected location {crab_job_expected_output_dir}: {num_preselection_output_files}")
+
+    # Verify preselection output ROOT files (branch completeness, per-dataset stats)
+    if args.verifyOutput:
+        print("\nVerifying preselection output ROOT files (scripts/verifyOutput.py)...")
+        verify_script = base_dir / 'scripts' / 'verifyOutput.py'
+        if not verify_script.exists():
+            print(f"Error: {verify_script} not found!")
+            return 1
+        verify_failed = False
+        for era in config['DASQueries']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"preselection_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: preselection dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generatePreselectionDatasetJSON first.")
+                verify_failed = True
+                continue
+            report_path = output_dir / era / f"verifyOutput_{era}_report.json"
+            cmd = [
+                sys.executable, str(verify_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--outputReport', str(report_path),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"verifyOutput.py reported problems for era {era} (see {report_path}).")
+                verify_failed = True
+            else:
+                print(f"verifyOutput.py: all files OK for era {era}. Report: {report_path}")
+        if verify_failed:
+            return 1
+
     exit(0)
 
 
