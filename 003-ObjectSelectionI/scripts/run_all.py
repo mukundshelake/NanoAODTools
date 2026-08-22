@@ -81,6 +81,13 @@ def main():
                        help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
+    parser.add_argument('--verifyOutput', action='store_true',
+                       help='[4] Run scripts/verifyOutput.py on selectionI_{tag}_{era}_datasets.json (from '
+                            '--generateDatasetJSON): checks each skim ROOT file opens cleanly, has an Events '
+                            'tree, and its branch list matches the expected set (everything inherited from '
+                            '002-Samples branch_selection.keep, plus the SelMuon_*/leading(b)Jet_*/sel_nJet/'
+                            'sel_nbjet branches this chapter\'s own selectedObjects module writes). Writes a '
+                            'JSON report per era.')
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
@@ -102,6 +109,7 @@ def main():
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
+    print(f"  --verifyOutput: {args.verifyOutput}")
     print(f"  --sample: {args.sample}")
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
@@ -411,7 +419,47 @@ def main():
                 return 1
             else:
                 print(f"Successfully generated dataset JSON for era {era}: {outputDirectory / outputFileName}")
-            
+
+    # Verify object-selection skim output ROOT files (branch completeness only)
+    if args.verifyOutput:
+        print("\nVerifying object-selection output ROOT files (scripts/verifyOutput.py)...")
+        verify_script = base_dir / 'scripts' / 'verifyOutput.py'
+        if not verify_script.exists():
+            print(f"Error: {verify_script} not found!")
+            return 1
+        previous_config_path = base_dir.parent / '002-Samples' / 'config.yaml'
+        if not previous_config_path.exists():
+            print(f"Error: 002-Samples config not found at {previous_config_path}; required for --verifyOutput.")
+            return 1
+        verify_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                verify_failed = True
+                continue
+            report_path = output_dir / era / f"verifyOutput_{era}_report.json"
+            cmd = [
+                sys.executable, str(verify_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--previousConfig', str(previous_config_path),
+                '--era', era,
+                '--outputReport', str(report_path),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"verifyOutput.py reported problems for era {era} (see {report_path}).")
+                verify_failed = True
+            else:
+                print(f"verifyOutput.py: all files OK for era {era}. Report: {report_path}")
+        if verify_failed:
+            return 1
+
     # exit(0)
 
 

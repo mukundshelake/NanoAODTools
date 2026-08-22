@@ -4,7 +4,54 @@ import logging
 import os
 import json
 import argparse
+import re
+import socket
 import ROOT
+
+# CRAB output timestamp directories look like YYMMDD_HHMMSS (e.g. 260820_225039).
+TIMESTAMP_DIR_RE = re.compile(r'^\d{6}_\d{6}$')
+
+def is_lxplus_host() -> bool:
+    """Match the substring convention used by utils.resolve_storage_path()."""
+    return 'lxplus' in socket.gethostname()
+
+def superseded_timestamp_dirs(datasetDir: str) -> set:
+    """
+    On lxplus, a dataset's CRAB output directory can contain multiple sibling
+    <timestamp> directories under the same publish-tag folder when a dataset
+    was submitted more than once -- e.g. a leftover --sample test run (a
+    lone tree_1.root), or a resubmission of failed jobs that was done as a
+    brand-new CRAB task instead of an in-place retry, leaving the old wave's
+    files behind alongside the new, complete one.
+
+    Only the most recent submission per publish-tag folder should be trusted;
+    older waves are superseded and would otherwise be double-counted since
+    they physically sit under the same datasetDir. This has no effect on
+    machines with no such CRAB-style timestamp directories (e.g. local
+    processing outside lxplus), since nothing will match TIMESTAMP_DIR_RE.
+
+    Returns the set of superseded timestamp directory paths to exclude.
+    """
+    groups = {}  # parent_dir -> [timestamp dirnames]
+    for dirpath, dirnames, _ in os.walk(datasetDir):
+        for d in dirnames:
+            if TIMESTAMP_DIR_RE.match(d):
+                groups.setdefault(dirpath, []).append(d)
+
+    superseded = set()
+    for parent, ts_list in groups.items():
+        if len(ts_list) <= 1:
+            continue
+        latest = max(ts_list)  # YYMMDD_HHMMSS sorts chronologically as a string
+        for ts in ts_list:
+            if ts != latest:
+                superseded_dir = os.path.join(parent, ts)
+                superseded.add(superseded_dir)
+                logging.info(
+                    f"Superseded CRAB submission wave, excluding: {superseded_dir} "
+                    f"(kept latest: {os.path.join(parent, latest)})"
+                )
+    return superseded
 
 def is_root_file_healthy(filepath: str) -> bool:
     """Check if a ROOT file is healthy using PyROOT, with logging info."""
@@ -81,7 +128,12 @@ def generate_dataset_json(base_dir, output_dir, output_name):
                 # loop over all root files in datasetDir and it's subdirectories
                 totalDatasetFiles = 0
                 rejected_totalDatasetFiles = 0
-                for dirpath, _, filenames in os.walk(datasetDir):
+                exclude_dirs = superseded_timestamp_dirs(datasetDir) if is_lxplus_host() else set()
+                for dirpath, dirnames, filenames in os.walk(datasetDir):
+                    dirnames[:] = [
+                        d for d in dirnames
+                        if os.path.join(dirpath, d) not in exclude_dirs
+                    ]
                     for file in filenames:
                         if file.endswith('.root'):
                             filePath = os.path.join(dirpath, file)
