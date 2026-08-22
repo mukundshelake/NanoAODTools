@@ -118,8 +118,7 @@ def main():
                        help='[7] Run scripts/verifyOutput.py on preselection_{era}_datasets.json (from '
                             '--generatePreselectionDatasetJSON): checks each output ROOT file opens cleanly, has '
                             'an Events tree, and its branch list matches config.yaml branch_selection (missing '
-                            'expected / unexpected extra branches), plus per-dataset min/max/mean/stddev for '
-                            'numeric branches. Writes a JSON report per era.')
+                            'expected / unexpected extra branches). Writes a JSON report per era.')
 
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
@@ -826,7 +825,7 @@ def main():
                         num_preselection_output_files = len(list(Path(crab_job_expected_output_dir).glob(f"**/*.root")))
                         print(f"                    Number of pre-selection output root files found at expected location {crab_job_expected_output_dir}: {num_preselection_output_files}")
 
-    # Verify preselection output ROOT files (branch completeness, per-dataset stats)
+    # Verify preselection output ROOT files (branch completeness only)
     if args.verifyOutput:
         print("\nVerifying preselection output ROOT files (scripts/verifyOutput.py)...")
         verify_script = base_dir / 'scripts' / 'verifyOutput.py'

@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 """
 Verify preselection output ROOT files: checks each file opens cleanly and has
-the "Events" tree, cross-checks the tree's actual branch list against
+the "Events" tree, and cross-checks the tree's actual branch list against
 config.yaml's branch_selection (catching both missing-expected and
 unexpected-extra branches -- the latter usually means keep_and_drop.txt
-wasn't applied correctly on the CRAB worker), and computes per-dataset
-min/max/mean/stddev for numeric branches (chaining all of a dataset's files
-together, so stats are computed over the real event population rather than
-per file).
+wasn't applied correctly on the CRAB worker).
 
 Input is a preselection_{era}_datasets.json (from --generatePreselectionDatasetJSON),
 keyed {DataMC: {group: {dataset: {filepath: "Events"}}}}.
 
 Usage:
     python3 verifyOutput.py --datasetJSON <preselection_{era}_datasets.json> \\
-        --config <config.yaml> --outputReport <report.json> [--filter ...] \\
-        [--maxEntriesForStats 500000]
+        --config <config.yaml> --outputReport <report.json> [--filter ...]
 """
 
 import argparse
@@ -42,9 +38,6 @@ MC_ONLY_EXACT = {
     "LHEWeight_originalXWGTUP", "PSWeight", "LHEScaleWeight", "LHEPdfWeight",
 }
 MC_ONLY_PREFIXES = ("GenPart", "puWeight")
-
-# Leaf type names that don't make sense to summarize as min/max/mean/stddev.
-_NON_NUMERIC_TYPES = {"Char_t", "UChar_t"}
 
 
 def expand_keep_list(keep_list):
@@ -120,72 +113,6 @@ def check_file_structure(filepath, exact, prefixes, is_data):
     return (len(info["errors"]) == 0), info
 
 
-def _base_type(root_type_name):
-    """Strip ROOT::VecOps::RVec<...> wrapping off a jagged-branch column type."""
-    if root_type_name.startswith("ROOT::VecOps::RVec<") and root_type_name.endswith(">"):
-        return root_type_name[len("ROOT::VecOps::RVec<"):-1]
-    return root_type_name
-
-
-def compute_dataset_stats(filepaths, max_entries_for_stats):
-    """Chain all of a dataset's files and compute per-branch min/max/mean/stddev.
-
-    Uses RDataFrame's lazy Min/Max/Mean/StdDev actions rather than
-    TTree::Draw + GetV1(): the latter's result buffer needs SetEstimate()
-    sized correctly for every branch's max array multiplicity, and getting
-    that wrong for even one branch (e.g. a GenPart-heavy event) causes a
-    hard-to-diagnose out-of-bounds read -- a real, reproducible segfault we
-    hit while developing this against real preselection output.
-    RDataFrame actions handle both scalar and RVec (jagged-array) columns
-    natively, are lazy (booking all of them costs nothing until the first
-    GetValue() triggers one combined pass over the data instead of a
-    separate full-tree scan per branch), and don't have this failure mode.
-    """
-    rdf = ROOT.RDataFrame("Events", filepaths)
-    n_entries = rdf.Count().GetValue()
-    stats = {"n_files": len(filepaths), "n_entries": n_entries, "branches": {}}
-    if n_entries == 0:
-        return stats
-
-    if n_entries > max_entries_for_stats:
-        rdf = rdf.Range(max_entries_for_stats)
-    stats["n_entries_used_for_stats"] = min(n_entries, max_entries_for_stats)
-
-    col_names = [str(c) for c in rdf.GetColumnNames()]
-    booked = {}
-    for name in col_names:
-        col_type = str(rdf.GetColumnType(name))
-        base_t = _base_type(col_type)
-        if base_t in _NON_NUMERIC_TYPES:
-            continue
-        try:
-            booked[name] = {
-                "type": col_type,
-                "min": rdf.Min(name),
-                "max": rdf.Max(name),
-                "mean": rdf.Mean(name),
-                "std": rdf.StdDev(name),
-            }
-        except Exception as e:
-            stats["branches"][name] = {"type": col_type, "error": f"could not book stats action: {e}"}
-
-    # Actually running the event loop happens lazily on first GetValue() below,
-    # in one combined pass across every booked action.
-    for name, r in booked.items():
-        try:
-            stats["branches"][name] = {
-                "type": r["type"],
-                "min": r["min"].GetValue(),
-                "max": r["max"].GetValue(),
-                "mean": r["mean"].GetValue(),
-                "std": r["std"].GetValue(),
-            }
-        except Exception as e:
-            stats["branches"][name] = {"type": r["type"], "error": str(e)}
-
-    return stats
-
-
 def main():
     parser = argparse.ArgumentParser(description="Verify preselection output ROOT files against config.yaml's branch_selection.")
     parser.add_argument("--datasetJSON", required=True, help="Path to preselection_{era}_datasets.json.")
@@ -193,8 +120,6 @@ def main():
     parser.add_argument("--outputReport", required=True, help="Path to write the JSON verification report.")
     parser.add_argument("--include", help='Regex applied to "DataMC/group/dataset"; only matching triples are checked.')
     parser.add_argument("--exclude", help='Regex applied to "DataMC/group/dataset"; matching triples are skipped.')
-    parser.add_argument("--maxEntriesForStats", type=int, default=500_000,
-                        help="Cap on entries drawn per dataset for stats (keeps large full-scale datasets bounded). Default: 500000.")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -247,12 +172,10 @@ def main():
                     if not info["errors"] and not info["warnings"]:
                         print(f"  [OK]    {fp} ({info.get('n_entries', '?')} entries, {info.get('n_branches', '?')} branches)")
 
-                stats = compute_dataset_stats(filepaths, args.maxEntriesForStats)
                 report["datasets"][label] = {
                     "is_data": is_data,
                     "ok": dataset_ok,
                     "files": file_reports,
-                    "stats": stats,
                 }
 
     report["summary"] = {
