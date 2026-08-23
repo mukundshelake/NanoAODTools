@@ -79,10 +79,28 @@ def main():
                        help='[lxplus][CRAB] With --checkCrabStatus: resubmit failed CRAB jobs.')
     parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
                        help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
+    parser.add_argument('--generateCrabDatasetJSON', action='store_true',
+                       help='[3] Scan the raw CRAB output tree {STORAGE}/selectionI/{tag}/{config_hash}/{era} '
+                            '(still nested under CRAB\'s own {primaryDataset}/{outputDatasetTag}/{timestamp}/'
+                            '{counter}/), dedupe multiple submission waves (lxplus only -- see '
+                            'generateDatasetJSON.py), and write crabOutput_{era}_datasets.json. Not the input '
+                            '004A-Reconstruction expects -- run --consolidateCrabOutput and '
+                            '--generateDatasetJSON after this.')
+    parser.add_argument('--consolidateCrabOutput', action='store_true',
+                       help='[4] Move every file listed in crabOutput_{era}_datasets.json (from '
+                            '--generateCrabDatasetJSON) out of CRAB\'s auto-nested layout and up into its '
+                            'dataset directory directly, then delete the now-empty leftover nested directories. '
+                            'Unlike 002-Samples\' version of this step, source and destination are the same '
+                            'directory here (outLFNDirBase already points at the correct final path), so only '
+                            'the leftover nesting is removed -- never the dataset directory itself. Safe to '
+                            'interrupt and re-run: a file already at its destination is treated as already done '
+                            'rather than re-moved.')
     parser.add_argument('--generateDatasetJSON', action='store_true',
-                       help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
+                       help='[5] Scan the now-flat {STORAGE}/selectionI/{tag}/{config_hash}/{era} layout (after '
+                            '--consolidateCrabOutput) using the script generateDatasetJSON.py, and write '
+                            'selectionI_{tag}_{era}_datasets.json, the input 004A-Reconstruction expects.')
     parser.add_argument('--verifyOutput', action='store_true',
-                       help='[4] Run scripts/verifyOutput.py on selectionI_{tag}_{era}_datasets.json (from '
+                       help='[6] Run scripts/verifyOutput.py on selectionI_{tag}_{era}_datasets.json (from '
                             '--generateDatasetJSON): checks each skim ROOT file opens cleanly, has an Events '
                             'tree, and its branch list matches the expected set (everything inherited from '
                             '002-Samples branch_selection.keep, plus the SelMuon_*/leading(b)Jet_*/sel_nJet/'
@@ -108,6 +126,8 @@ def main():
     print(f"  --checkCrabStatus: {args.checkCrabStatus}")
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
+    print(f"  --generateCrabDatasetJSON: {args.generateCrabDatasetJSON}")
+    print(f"  --consolidateCrabOutput: {args.consolidateCrabOutput}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
     print(f"  --verifyOutput: {args.verifyOutput}")
     print(f"  --sample: {args.sample}")
@@ -392,6 +412,78 @@ def main():
                         else:
                             print(f"      Successfully checked CRAB status for dataset: {dataset}. Check the output above for details.")
 
+    # Scan the raw CRAB output tree (still nested under CRAB's own
+    # {primaryDataset}/{outputDatasetTag}/{timestamp}/{counter}/) and build
+    # crabOutput_{era}_datasets.json -- an intermediate JSON, still pointing at
+    # CRAB's auto-nested paths. Not the input 004A-Reconstruction expects; see
+    # --consolidateCrabOutput and --generateDatasetJSON below.
+    if args.generateCrabDatasetJSON:
+        print("\nGenerating CRAB output dataset JSON files (scripts/generateDatasetJSON.py)...")
+        generate_dataset_json_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generate_dataset_json_script.exists():
+            print(f"Error: Script not found: {generate_dataset_json_script}")
+            return 1
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            outputDirectory = output_dir / era
+            outputDirectory.mkdir(parents=True, exist_ok=True)
+            outputFileName = f"crabOutput_{era}_datasets.json"
+            outputFilePath = outputDirectory / outputFileName
+            if outputFilePath.exists() and not args.force:
+                print(f"Output JSON file already exists for {era} and --force not set. Skipping: {outputFilePath}")
+                continue
+            baseDirectory = os.path.join(storageBase, "selectionI", args.tag, config_hash, era)
+            cmd = [
+                sys.executable, str(generate_dataset_json_script),
+                '--outputDirectory', str(outputDirectory),
+                '--outputFileName', outputFileName,
+                '--baseDirectory', baseDirectory
+            ]
+            print(f"Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            else:
+                print(f"Successfully generated CRAB output dataset JSON for era {era}: {outputFilePath}")
+
+    # Move every file crabOutput_{era}_datasets.json lists out of CRAB's auto-nested
+    # layout and up into its dataset directory directly, deleting the now-empty
+    # leftover nested directories once each dataset's files are confirmed moved.
+    if args.consolidateCrabOutput:
+        print("\nConsolidating CRAB output into a flat layout (scripts/consolidateCrabOutput.py)...")
+        consolidate_script = base_dir / 'scripts' / 'consolidateCrabOutput.py'
+        if not consolidate_script.exists():
+            print(f"Error: {consolidate_script} does not exist. Please make sure it is in the correct location.")
+            return 1
+        consolidate_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            crab_json_path = output_dir / era / f"crabOutput_{era}_datasets.json"
+            if not crab_json_path.exists():
+                print(f"Error: {crab_json_path} not found for era {era}. Run --generateCrabDatasetJSON first.")
+                consolidate_failed = True
+                continue
+            base_directory = os.path.join(storageBase, "selectionI", args.tag, config_hash, era)
+            cmd = [
+                sys.executable, str(consolidate_script),
+                '--datasetJSON', str(crab_json_path),
+                '--base', base_directory,
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"consolidateCrabOutput.py reported problems for era {era} (see output above).")
+                consolidate_failed = True
+            else:
+                print(f"Successfully consolidated CRAB output for era {era} into: {base_directory}")
+        if consolidate_failed:
+            return 1
+
+    # Scan the now-flat layout and build selectionI_{tag}_{era}_datasets.json, the
+    # actual input 004A-Reconstruction expects.
     if args.generateDatasetJSON:
         print("\nGenerating dataset JSON file using generateDatasetJSON.py...")
         generate_dataset_json_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
@@ -402,7 +494,7 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            outputDirectory = output_dir / era 
+            outputDirectory = output_dir / era
             outputDirectory.mkdir(parents=True, exist_ok=True)
             outputFileName = f"selectionI_{args.tag}_{era}_datasets.json"
             baseDirectory = os.path.join(storageBase, "selectionI", args.tag, config_hash, era)
