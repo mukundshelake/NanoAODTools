@@ -5,12 +5,22 @@ Master script to generate all outputs for 002-Samples chapter.
 This chapter spans two environments:
   - lxplus: DAS querying, golden JSON download, luminosity info, and CRAB
     submission/monitoring for the preselection stage. Output ROOT files land
-    on EOS under LFN_Base.
-  - Wherever the analysis actually runs (e.g. cms2): once the CRAB output
-    ROOT files have been copied/staged to local disk under
-    {STORAGE}/preselection/{tag}/{era}/..., --generatePreselectionDatasetJSON
-    scans them and produces preselection_{era}_datasets.json, the input
-    003-ObjectSelectionI expects.
+    on EOS under LFN_Base, nested by CRAB itself under
+    {primaryDataset}/{outputDatasetTag}/{timestamp}/{counter}/ -- none of
+    which is meaningful once a winning submission wave is picked, and left
+    in place it pushes output LFNs toward CRAB's 255-char limit.
+  - Wherever the analysis actually runs (e.g. cms2): three steps turn that
+    raw CRAB output into what 003-ObjectSelectionI expects:
+      1. --generateCrabDatasetJSON scans the raw CRAB output tree
+         ({STORAGE}/{config_hash}/{era}), dedupes multiple submission waves
+         (lxplus only), and writes crabOutput_{era}_datasets.json.
+      2. --consolidateCrabOutput moves every file that JSON lists into the
+         clean flat layout {STORAGE}/preselection/{tag}/{config_hash}/{era}/
+         {DataMC}/{group}/{dataset}/{filename}, then deletes the old raw
+         per-dataset subtree once every file for it is confirmed moved.
+      3. --generatePreselectionDatasetJSON scans that clean layout and
+         writes preselection_{era}_datasets.json, the actual input
+         003-ObjectSelectionI expects.
 
 Usage:
     python scripts/run_all.py --tag TAG_NAME [--force] [--filter ...] [step flags]
@@ -103,19 +113,33 @@ def main():
     parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
                        help='[4][lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
 
-    # --- local disk: preselection dataset JSON for 003-ObjectSelectionI --------------
+    # --- local disk: raw CRAB output -> clean layout -> final dataset JSON -----------
+    parser.add_argument('--generateCrabDatasetJSON', action='store_true',
+                       help='[5] Scan the raw CRAB output tree {STORAGE}/{config_hash}/{era} on local disk (after '
+                            'copying it down from EOS) for output ROOT files, dedupe multiple submission waves '
+                            '(lxplus only -- see generateDatasetJSON.py), and write crabOutput_{era}_datasets.json. '
+                            'Not the input 003-ObjectSelectionI expects -- run --consolidateCrabOutput and '
+                            '--generatePreselectionDatasetJSON after this.')
+    parser.add_argument('--consolidateCrabOutput', action='store_true',
+                       help='[6] Move every file listed in crabOutput_{era}_datasets.json (from '
+                            '--generateCrabDatasetJSON) out of CRAB\'s auto-nested layout into the clean flat '
+                            'layout {STORAGE}/preselection/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/'
+                            '{filename}, then delete the old raw per-dataset subtree once every one of its files '
+                            'is confirmed at the new location. Safe to interrupt and re-run: a file already at '
+                            'its destination is treated as already done rather than re-moved, and a dataset\'s '
+                            'old subtree is only deleted once all of its files are verified moved.')
     parser.add_argument('--generatePreselectionDatasetJSON', action='store_true',
-                       help='[5] Scan {STORAGE}/preselection/{tag}/{era} on local disk for CRAB output ROOT files '
-                            '(after copying them down from EOS) and generate preselection_{era}_datasets.json, '
-                            'the input format expected by 003-ObjectSelectionI.')
+                       help='[7] Scan the clean {STORAGE}/preselection/{tag}/{config_hash}/{era} layout (after '
+                            '--consolidateCrabOutput) and generate preselection_{era}_datasets.json, the input '
+                            'format expected by 003-ObjectSelectionI.')
 
     parser.add_argument('--getStatus', action='store_true',
-                       help='[6] Get overall status of the preselection processing by comparing expected number of '
+                       help='[8] Get overall status of the preselection processing by comparing expected number of '
                             'files from DAS with the number of files obtained from getFileInfo.py, the number of '
                             'files for which dataset JSON file is generated, the number of CRAB jobs submitted for '
                             'pre-selection, and the number of pre-selection output root files found on EOS.')
     parser.add_argument('--verifyOutput', action='store_true',
-                       help='[7] Run scripts/verifyOutput.py on preselection_{era}_datasets.json (from '
+                       help='[9] Run scripts/verifyOutput.py on preselection_{era}_datasets.json (from '
                             '--generatePreselectionDatasetJSON): checks each output ROOT file opens cleanly, has '
                             'an Events tree, and its branch list matches config.yaml branch_selection (missing '
                             'expected / unexpected extra branches). Writes a JSON report per era.')
@@ -146,6 +170,8 @@ def main():
     print(f"  --checkCrabStatus: {args.checkCrabStatus}")
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
+    print(f"  --generateCrabDatasetJSON: {args.generateCrabDatasetJSON}")
+    print(f"  --consolidateCrabOutput: {args.consolidateCrabOutput}")
     print(f"  --generatePreselectionDatasetJSON: {args.generatePreselectionDatasetJSON}")
     print(f"  --getStatus: {args.getStatus}")
     print(f"  --verifyOutput: {args.verifyOutput}")
@@ -692,10 +718,85 @@ def main():
 
         print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
 
-    # Scan local disk for CRAB output ROOT files (once copied down from EOS) and
-    # build preselection_{era}_datasets.json, the input 003-ObjectSelectionI expects.
+    # Scan the raw CRAB output tree on local disk (once copied down from EOS) and
+    # build crabOutput_{era}_datasets.json -- an intermediate JSON, still pointing
+    # at CRAB's auto-nested paths. Not the input 003-ObjectSelectionI expects; see
+    # --consolidateCrabOutput and --generatePreselectionDatasetJSON below.
+    if args.generateCrabDatasetJSON:
+        print("\nGenerating CRAB output dataset JSON files from local disk (scripts/generateDatasetJSON.py)...")
+        storageBase = utils.resolve_storage_path(config)
+        print(f"Using storage base: {storageBase}")
+        for era in config['DASQueries']:
+            if not matches_filter(args.filter, era):
+                print(f"Skipping era {era} due to filter")
+                continue
+            generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+            if not generateJSON_script.exists():
+                print(f"Error: {generateJSON_script} does not exist. Please make sure it is in the correct location.")
+                return 1
+            output_json_name = f"crabOutput_{era}_datasets.json"
+            output_json_path = output_dir / era / output_json_name
+            if output_json_path.exists() and not args.force:
+                print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
+                continue
+            base_directory = str(Path(storageBase) / config_hash / era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(output_dir / era),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory
+            ]
+            print(f"Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Error running generateDatasetJSON.py for {era}:\n{result.stderr}")
+                return 1
+            else:
+                print(f"Successfully generated CRAB output dataset JSON for {era}: {output_json_path}")
+
+    # Move every file crabOutput_{era}_datasets.json lists out of CRAB's auto-nested
+    # layout into the clean flat layout this pipeline actually wants, deleting the
+    # old raw per-dataset subtree once each dataset's files are confirmed moved.
+    if args.consolidateCrabOutput:
+        print("\nConsolidating CRAB output into the clean layout (scripts/consolidateCrabOutput.py)...")
+        storageBase = utils.resolve_storage_path(config)
+        print(f"Using storage base: {storageBase}")
+        consolidate_script = base_dir / 'scripts' / 'consolidateCrabOutput.py'
+        if not consolidate_script.exists():
+            print(f"Error: {consolidate_script} does not exist. Please make sure it is in the correct location.")
+            return 1
+        consolidate_failed = False
+        for era in config['DASQueries']:
+            if not matches_filter(args.filter, era):
+                print(f"Skipping era {era} due to filter")
+                continue
+            crab_json_path = output_dir / era / f"crabOutput_{era}_datasets.json"
+            if not crab_json_path.exists():
+                print(f"Error: {crab_json_path} not found for era {era}. Run --generateCrabDatasetJSON first.")
+                consolidate_failed = True
+                continue
+            source_base = str(Path(storageBase) / config_hash / era)
+            destination_base = str(Path(storageBase) / 'preselection' / args.tag / config_hash / era)
+            cmd = [
+                sys.executable, str(consolidate_script),
+                '--datasetJSON', str(crab_json_path),
+                '--sourceBase', source_base,
+                '--destinationBase', destination_base,
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"consolidateCrabOutput.py reported problems for era {era} (see output above).")
+                consolidate_failed = True
+            else:
+                print(f"Successfully consolidated CRAB output for era {era} into: {destination_base}")
+        if consolidate_failed:
+            return 1
+
+    # Scan the clean, consolidated layout and build preselection_{era}_datasets.json,
+    # the actual input 003-ObjectSelectionI expects.
     if args.generatePreselectionDatasetJSON:
-        print("\nGenerating preselection dataset JSON files from local disk (scripts/generateDatasetJSON.py)...")
+        print("\nGenerating preselection dataset JSON files from the consolidated layout (scripts/generateDatasetJSON.py)...")
         storageBase = utils.resolve_storage_path(config)
         print(f"Using storage base: {storageBase}")
         for era in config['DASQueries']:
@@ -711,7 +812,7 @@ def main():
             if output_json_path.exists() and not args.force:
                 print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
                 continue
-            base_directory = str(Path(storageBase) / config_hash / era)
+            base_directory = str(Path(storageBase) / 'preselection' / args.tag / config_hash / era)
             cmd = [
                 sys.executable, str(generateJSON_script),
                 '--outputDirectory', str(output_dir / era),
