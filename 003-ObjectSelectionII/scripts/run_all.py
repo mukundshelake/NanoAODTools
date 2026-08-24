@@ -287,9 +287,14 @@ def main():
                     for dataset in datasetJSON[DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
+                        files = datasetJSON[DataMC][group][dataset]
+                        if not files:
+                            print(f"  Warning: {era}/{DataMC}/{group}/{dataset} has no files in the "
+                                  f"selectionI dataset JSON. Skipping.")
+                            continue
                         datasetName = f'{era}_{DataMC}_{group}_{dataset}'
                         fileset[datasetName] = {
-                            "files": datasetJSON[DataMC][group][dataset],
+                            "files": files,
                             "metadata": {"isData": False, "era": era, "sample": dataset},
                         }
 
@@ -479,6 +484,8 @@ def main():
                     for group in config['NgenandXsec'][era][DataMC]:
                         if not matches_filter(args.filter, era, DataMC, group):
                             continue
+                        log_path = output_dir / era / DataMC / group / f"{args.tag}_{era}_{DataMC}_{group}.log"
+                        log_path.parent.mkdir(parents=True, exist_ok=True)
                         cmd = (
                             f"python3 {base_dir / 'scripts' / 'runSelectionII.py'} "
                             f"--processListJSON {process_list_json} "
@@ -486,7 +493,7 @@ def main():
                             f"{'--force ' if args.force else ''}"
                             f"{'--sample ' if args.sample else ''}"
                             f"{'--filter ' + era + '/' + DataMC + '/' + group}"
-                            f"{' 2>&1 | tee -a ' + str(output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}.log')}"
+                            f"{' 2>&1 | tee -a ' + str(log_path)}"
                         )
                         f.write(cmd + "\n")
         os.chmod(bash_script_path, 0o755)

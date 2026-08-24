@@ -201,8 +201,10 @@ def main():
     # Preprocess (validate file list)
     available, _ = preprocess(fileset, step_size=50_000, skip_bad_files=True)
 
-    # Build dask computation graph
-    to_compute, _ = apply_to_fileset(
+    # Build dask computation graph. apply_to_fileset only returns a (out, report)
+    # tuple when uproot_options requests a report; without it, it returns the
+    # output dict directly.
+    to_compute = apply_to_fileset(
         JetPUIDEfficiencyProcessor(),
         available,
         schemaclass=NanoAODSchema,
