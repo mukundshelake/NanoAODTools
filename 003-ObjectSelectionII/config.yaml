@@ -1,7 +1,13 @@
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:     "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
-  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+  lxplus:    "/eos/user/m/mshelake/DataFiles"
+
+REPO_ROOT:
+  cms2: "/home/mukund/Projects/PhysicsTools/NanoAODTools"
+  lxplus: "/eos/user/m/mshelake/PhysicsTools/NanoAODTools"
+  localhost: "/home/irfan/mukund/Projects/PhysicsTools/NanoAODTools"
+
 LFN_Base : "/store/user/mshelake/DataFiles"
 # ---------------------------------------------------------------------------
 # Where to fetch correctionlib SF files from (run_all.py --fetchSFFiles), keyed

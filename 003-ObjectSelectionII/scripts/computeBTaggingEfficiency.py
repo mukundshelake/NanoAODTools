@@ -228,7 +228,9 @@ def main():
 
     available, _ = preprocess(fileset, step_size=50_000, skip_bad_files=True)
 
-    to_compute, _ = apply_to_fileset(
+    # apply_to_fileset only returns a (out, report) tuple when uproot_options
+    # requests a report; without it, it returns the output dict directly.
+    to_compute = apply_to_fileset(
         BTaggingEfficiencyProcessor(wp_thresholds),
         available,
         schemaclass=NanoAODSchema,

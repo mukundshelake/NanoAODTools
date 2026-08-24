@@ -25,10 +25,9 @@ class MuonIDWeightProducer(Module):
 
         if pt > _SENTINEL_PT:
             wName = self.clibConfig["weightName"]
-            eraName = self.clibConfig["eraName"]
-            IDSF     = self.IDeval[wName].evaluate(eraName, abs(eta), pt, 'sf')
-            IDSFUp   = self.IDeval[wName].evaluate(eraName, abs(eta), pt, 'systup')
-            IDSFDown = self.IDeval[wName].evaluate(eraName, abs(eta), pt, 'systdown')
+            IDSF     = self.IDeval[wName].evaluate(abs(eta), pt, 'nominal')
+            IDSFUp   = self.IDeval[wName].evaluate(abs(eta), pt, 'systup')
+            IDSFDown = self.IDeval[wName].evaluate(abs(eta), pt, 'systdown')
         else:
             IDSF = IDSFUp = IDSFDown = 1.0
 
