@@ -10,7 +10,8 @@ Unlike 002/003-I/003-II/004A/004B, this stage is pure-python (`uproot` /
 `awkward` / `pyarrow`): it does not run the NanoAODTools `PostProcessor` and
 needs no CMSSW environment, so there is no CRAB submission path and no
 `modules/` folder here. Run it in the `latestcoffea` conda env (see
-`condor/README.md`), same as 005-Unfolding's `getParquet.py`, not inside `cmsenv`.
+`environment.yml` at the repo root), same as 005-Unfolding's `getParquet.py`,
+not inside `cmsenv`.
 
 ## Inputs
 
@@ -122,8 +123,8 @@ if `best_params.json` already exists for this `training_hash`;
 running directly. `run_all.py --trainBDT --printHash` prints both the
 extraction `config_hash` and the `training_hash` without running anything.
 
-Needs `xgboost` in the `latestcoffea` env (declared in `environment.yml` /
-`latestcoffea.yml` / `environment_lxplus.yml`).
+Needs `xgboost` in the `latestcoffea` env (declared in `environment.yml` at
+the repo root).
 
 ## Storage
 
