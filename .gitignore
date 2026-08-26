@@ -23,7 +23,6 @@ envs/
 src/
 lib/
 tmp/
-python/
 
 # IDE and editor
 .vscode/
