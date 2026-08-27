@@ -45,7 +45,12 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
     return False
 
 
-def main(): 
+# ABCD_region code -> label, for naming region-scoped histogram files.
+# See 003-ObjectSelectionI's SelectedObjectsProducer for the full convention.
+REGION_LABELS = {0: 'A', 1: 'B', 2: 'C', 3: 'D'}
+
+
+def main():
     parser = argparse.ArgumentParser(description='Generate all outputs for 002-Samples')
     parser.add_argument('-t', '--tag', type=str,
                        help='Create named tag for this run (e.g., baseline, paper_v1)', default='Dump')
@@ -63,8 +68,24 @@ def main():
                             'directory). Required by --fetchFromPreviousChapter.')
     parser.add_argument('--buildSelectionHists', action='store_true',
                        help='Run buildSelectionHists.py to create histograms for selection optimization')
+    parser.add_argument('--regionFilter', type=int, default=0, choices=[0, 1, 2, 3],
+                       help='ABCD_region code to scope --buildSelectionHists/--aggregrateGroupHists to '
+                            '(0=A/signal region, 1=B, 2=C, 3=D/QCD control region). Default: 0 (region A) -- '
+                            'the nominal Data/MC plots. Use 3 to build the region-D ingredients for '
+                            '--buildQCDTemplate. Output filenames get a _region{A,B,C,D} suffix.')
     parser.add_argument('--aggregrateGroupHists', action='store_true',
                        help='Stack up histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}[...]')
+    parser.add_argument('--buildQCDTemplate', action='store_true',
+                       help='Build the data-driven QCD template: max(regionD Data - sum of regionD non-QCD MC '
+                            'groups, 0) per histDetails variable, per era. qcdABCDWeight (from '
+                            '003-ObjectSelectionII\'s ABCDTransferWeight module, folded into the region-D '
+                            'histograms by --regionFilter 3) makes this already the properly-normalized '
+                            'region-A QCD prediction -- requires --aggregrateGroupHists --regionFilter 3 to '
+                            'have been run first for Data_mu/SingleMuon and every non-QCD MC_mu group. Writes '
+                            '{tag}_{era}_QCDTemplate_selectionHists.coffea.')
+    parser.add_argument('--qcdGroup', type=str, default='QCD',
+                       help='With --buildQCDTemplate: MC_mu group to exclude from the background sum and '
+                            'whose stack entry the template replaces (default: QCD).')
     parser.add_argument('--makeplots', action='store_true',
                        help='Run rootHists.py to create publication-ready Data/MC comparison plots')
     parser.add_argument('--printHash', action='store_true',
@@ -82,7 +103,10 @@ def main():
     print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
     print(f"  --previousHash: {args.previousHash}")
     print(f"  --buildSelectionHists: {args.buildSelectionHists}")
+    print(f"  --regionFilter: {args.regionFilter} ({REGION_LABELS[args.regionFilter]})")
     print(f"  --aggregrateGroupHists: {args.aggregrateGroupHists}")
+    print(f"  --buildQCDTemplate: {args.buildQCDTemplate}")
+    print(f"  --qcdGroup: {args.qcdGroup}")
     print(f"  --makeplots: {args.makeplots}")
     print(f"  --workers: {args.workers}")
     print(f"  --force: {args.force}")
@@ -189,7 +213,8 @@ def main():
                             continue
                         outputDirectory = output_dir / era / DataMC / group / dataset
                         outputDirectory.mkdir(parents=True, exist_ok=True)
-                        outputFileName = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_selectionHists.coffea'
+                        region_label = REGION_LABELS[args.regionFilter]
+                        outputFileName = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_region{region_label}_selectionHists.coffea'
                         # Skip if output file already exists and --force is not set
                         if (outputDirectory / outputFileName).exists() and not args.force:
                             print(f"Output file already exists for {era}/{DataMC}/{group}/{dataset} at {outputDirectory / outputFileName}. Skipping (use --force to overwrite).")
@@ -199,13 +224,16 @@ def main():
                             '--fileSet', str(fileSetJSON),
                             '--configFile', str(config_path),
                             '--outputDir', str(outputDirectory),
-                            '--outputFileName', outputFileName
+                            '--outputFileName', outputFileName,
+                            '--regionFilter', str(args.regionFilter),
                         ]
                         subprocess.run(command, check=True)
                         print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
     # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
     if args.aggregrateGroupHists:
-        print(f"Aggregating histograms at the group level for group: {args.aggregrateGroupHists}...")
+        region_label = REGION_LABELS[args.regionFilter]
+        print(f"Aggregating histograms at the group level for group: {args.aggregrateGroupHists} "
+              f"(region {region_label})...")
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
@@ -229,7 +257,7 @@ def main():
                             if not matches_filter(args.filter, era, DataMC, group, dataset):
                                 continue
                             print(f"      Dataset: {dataset}")
-                            histFile = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_selectionHists.coffea'
+                            histFile = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_region{region_label}_selectionHists.coffea'
                             if not histFile.exists():
                                 print(f"Error: Histogram file not found for {era}/{DataMC}/{group}/{dataset} at {histFile}")
                                 continue
@@ -249,15 +277,65 @@ def main():
                             print(f"            Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
                         if hist_ is not None:
                             groupHists[f'{era}_{DataMC}_{group}'][histInfo] = hist_
-                    # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea
-                    output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}_selectionHists.coffea'
+                    # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_region{X}_selectionHists.coffea
+                    output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}_region{region_label}_selectionHists.coffea'
                     # check if output file already exists and --force is not set
                     if output_file.exists() and not args.force:
                         print(f"Aggregated histogram file already exists for {era}/{DataMC}/{group} at {output_file}. Skipping (use --force to overwrite).")
                         continue
                     save(groupHists, output_file)
                     print(f"Finished aggregating histograms for {era}/{DataMC}/{group}. Output saved to {output_file}")
-    
+
+    if args.buildQCDTemplate:
+        print(f"\nBuilding data-driven QCD template (region D, background-subtracted, qcdGroup={args.qcdGroup})...")
+        region_d_label = REGION_LABELS[3]
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"Processing era: {era}")
+            data_file = (output_dir / era / 'Data_mu' / 'SingleMuon' /
+                         f'{args.tag}_{era}_Data_mu_SingleMuon_region{region_d_label}_selectionHists.coffea')
+            if not data_file.exists():
+                print(f"  Error: region-D Data histogram not found: {data_file}. "
+                      f"Run --aggregrateGroupHists --regionFilter 3 first. Skipping era.")
+                continue
+            data_hists = load(data_file)[f'{era}_Data_mu_SingleMuon']
+
+            bkg_groups = [g for g in config['NgenandXsec'][era].get('MC_mu', {}) if g != args.qcdGroup]
+            print(f"  Background groups (region D): {bkg_groups}")
+            template = {}
+            floored_report = {}
+            for histInfo in config['histDetails']:
+                if histInfo not in data_hists:
+                    print(f"  [WARN] '{histInfo}' missing from region-D Data histograms; skipping.")
+                    continue
+                h = data_hists[histInfo].copy()
+                for group in bkg_groups:
+                    bkg_file = (output_dir / era / 'MC_mu' / group /
+                                f'{args.tag}_{era}_MC_mu_{group}_region{region_d_label}_selectionHists.coffea')
+                    if not bkg_file.exists():
+                        print(f"  [WARN] region-D histogram not found for background group '{group}': {bkg_file}. "
+                              f"Treating its contribution as 0 for '{histInfo}'.")
+                        continue
+                    bkg_hists = load(bkg_file)[f'{era}_MC_mu_{group}']
+                    if histInfo not in bkg_hists:
+                        continue
+                    h = h - bkg_hists[histInfo]
+                # Floor negative bins at 0 -- a negative data-driven QCD count is
+                # unphysical, usually background MC modestly overshooting data in a
+                # low-stat bin (same practice as computeABCDScaleFactor.py's floor_at_zero()).
+                view = h.view()
+                n_negative = int((view < 0).sum())
+                if n_negative:
+                    floored_report[histInfo] = n_negative
+                    view[view < 0] = 0
+                template[histInfo] = h
+            output_file = output_dir / era / f'{args.tag}_{era}_QCDTemplate_selectionHists.coffea'
+            save({f'{era}_QCDTemplate': template}, output_file)
+            if floored_report:
+                print(f"  [WARN] Floored negative bins (per variable): {floored_report}")
+            print(f"Finished building QCD template for {era}. Output saved to {output_file}")
+
     # If --makeplots is set, run rootHists.py to create publication-ready plots
     if args.makeplots:
         print("Creating plots from aggregated histograms...")
@@ -274,7 +352,8 @@ def main():
             '--tag', args.tag,
             '--hash', config_hash,
             '--outputDir', str(plots_dir),
-            '--configFile', str(config_path)
+            '--configFile', str(config_path),
+            '--qcdGroup', args.qcdGroup,
         ]
         
         # Add filter argument if provided

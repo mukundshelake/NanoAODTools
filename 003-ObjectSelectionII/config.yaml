@@ -25,8 +25,8 @@ SFSourceSSHRelay: "lxplus.cern.ch"
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
 # ---------------------------------------------------------------------------
 ModuleList:
-  MC:   [lheWeightSign, muonID, muonHLT, bTagging]
-  Data: []
+  MC:   [lheWeightSign, muonID, muonHLT, bTagging, ABCDTransferWeight]
+  Data: [ABCDTransferWeight]
 
 # ---------------------------------------------------------------------------
 
@@ -216,6 +216,38 @@ Modules:
         sfup:   "bTagWeightUp"
         sfdown: "bTagWeightDown"
 
+  # ---------- ABCDTransferWeight --------------------------------------------
+  # Data-driven QCD ABCD transfer factor R = N_C/N_D, binned in
+  # (SelMuon_pt, |SelMuon_eta|), computed by 003-ObjectSelectionI's
+  # computeABCDScaleFactor.py and fetched here as scaleFactorFile.
+  # Written for both MC and Data (see ModuleList above) -- used only by
+  # 003-ObjectSelectionIII when building the region-D QCD template.
+  ABCDTransferWeight:
+    UL2016preVFP:
+      scaleFactorFile: "inputs/SFs/UL2016preVFP_abcdScaleFactor.root"
+      histName:        "ABCD_transferFactor_R"
+      selMuonBranch:   "SelMuon"
+      branchNames:
+        sf: "qcdABCDWeight"
+    UL2016postVFP:
+      scaleFactorFile: "inputs/SFs/UL2016postVFP_abcdScaleFactor.root"
+      histName:        "ABCD_transferFactor_R"
+      selMuonBranch:   "SelMuon"
+      branchNames:
+        sf: "qcdABCDWeight"
+    UL2017:
+      scaleFactorFile: "inputs/SFs/UL2017_abcdScaleFactor.root"
+      histName:        "ABCD_transferFactor_R"
+      selMuonBranch:   "SelMuon"
+      branchNames:
+        sf: "qcdABCDWeight"
+    UL2018:
+      scaleFactorFile: "inputs/SFs/UL2018_abcdScaleFactor.root"
+      histName:        "ABCD_transferFactor_R"
+      selMuonBranch:   "SelMuon"
+      branchNames:
+        sf: "qcdABCDWeight"
+
 weightLookUp:
   lheWeightSign:
     name: "lheWeightSign"
@@ -335,7 +367,7 @@ NgenandXsec:
           Ngen: 149916849
           Xsec: -1.0
         Run2016H_mu:
-          Ngen: 149916849
+          Ngen: 174035164
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -346,7 +378,7 @@ NgenandXsec:
           Ngen: 18121000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPdown:
-          Ngen: 18066000
+          Ngen: 18305000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPup:
           Ngen: 18066000
@@ -362,7 +394,7 @@ NgenandXsec:
           Ngen: 61029000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 57909000
+          Ngen: 19427000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 57909000
@@ -384,7 +416,7 @@ NgenandXsec:
           Ngen: 12591000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 12042000
+          Ngen: 12632000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -400,7 +432,7 @@ NgenandXsec:
           Ngen: 25025000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 23728000
+          Ngen: 24527000
           Xsec: 134.2
     MC_mu:
       Diboson:
@@ -414,14 +446,14 @@ NgenandXsec:
           Ngen: 13526954
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 15928000
           Xsec: 0.974
         ZZTo2Q2L:
           Ngen: 13740600
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 82448544
+          Ngen: 82448537
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
@@ -489,10 +521,10 @@ NgenandXsec:
           Ngen: 159756701
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 167292982
+          Ngen: 167715035
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 26790000
+          Ngen: 85825681
           Xsec: 3276.0
   UL2016preVFP:
     Data_mu:
@@ -510,7 +542,7 @@ NgenandXsec:
           Ngen: 90984718
           Xsec: -1.0
         Run2016F_mu:
-          Ngen: 90984718
+          Ngen: 57465359
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -521,7 +553,7 @@ NgenandXsec:
           Ngen: 15518000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPdown:
-          Ngen: 10381000
+          Ngen: 21583000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPup:
           Ngen: 10381000
@@ -537,7 +569,7 @@ NgenandXsec:
           Ngen: 56166000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 46263000
+          Ngen: 55514300
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 46263000
@@ -559,7 +591,7 @@ NgenandXsec:
           Ngen: 10715000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 10942000
+          Ngen: 11059000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -575,32 +607,32 @@ NgenandXsec:
           Ngen: 21927000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 21590000
+          Ngen: 22933000
           Xsec: 134.2
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 3006596
+          Ngen: 3018000
           Xsec: 11.09
         WWTolnulnu:
           Ngen: 4932000
           Xsec: 10.48
         WZTo2Q2L:
-          Ngen: 9780392
+          Ngen: 15678816
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 16862000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 10406942
+          Ngen: 16060738
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 95170552
+          Ngen: 95170542
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 37202073
+          Ngen: 37505000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -641,33 +673,33 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 131106831
+          Ngen: 132178000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 3592772
+          Ngen: 5518000
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 29205915
+          Ngen: 31024000
           Xsec: 80.0
         Tchannel:
-          Ngen: 52437432
+          Ngen: 55961000
           Xsec: 134.2
         tw_antitop:
-          Ngen: 3176335
+          Ngen: 3176485
           Xsec: 39.65
         tw_top:
-          Ngen: 3294485
+          Ngen: 3294673
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 121208493
+          Ngen: 151109845
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 84198168
+          Ngen: 173468850
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 27463756
+          Ngen: 87929021
           Xsec: 3276.0
   UL2017:
     Data_mu:
@@ -755,27 +787,27 @@ NgenandXsec:
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 7071358
+          Ngen: 7098000
           Xsec: 11.09
         WWTolnulnu:
-          Ngen: 2000000
+          Ngen: 4760000
           Xsec: 10.79
         WZTo2Q2L:
-          Ngen: 18136497
+          Ngen: 29091996
           Xsec: 5.595
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 40839000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 19134840
+          Ngen: 29521496
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 131552392
+          Ngen: 195529774
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 105860011
+          Ngen: 106724000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -816,33 +848,33 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 343257745
+          Ngen: 346052000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 8866570
+          Ngen: 13620000
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 65701149
+          Ngen: 69793000
           Xsec: 80.0
         Tchannel:
-          Ngen: 121728258
+          Ngen: 129903000
           Xsec: 134.2
         tw_antitop:
-          Ngen: 8433562
+          Ngen: 8433998
           Xsec: 39.65
         tw_top:
-          Ngen: 8506765
+          Ngen: 8507203
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 135263983
+          Ngen: 46000306
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 85950236
+          Ngen: 177102579
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 29987306
+          Ngen: 96032711
           Xsec: 3276.0
   UL2018:
     Data_mu:
@@ -857,7 +889,7 @@ NgenandXsec:
           Ngen: 109986009
           Xsec: -1.0
         Run2018D_mu:
-          Ngen: 109986009
+          Ngen: 513909894
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -868,7 +900,7 @@ NgenandXsec:
           Ngen: 59620000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCP5down:
-          Ngen: 57064000
+          Ngen: 59853000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCP5up:
           Ngen: 57064000
@@ -884,7 +916,7 @@ NgenandXsec:
           Ngen: 199323000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 199394000
+          Ngen: 189888000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 199394000
@@ -906,7 +938,7 @@ NgenandXsec:
           Ngen: 36424000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 36144000
+          Ngen: 37552000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -922,7 +954,7 @@ NgenandXsec:
           Ngen: 75582000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 74992000
+          Ngen: 74920000
           Xsec: 134.2
         Tchannel_hdampup:
           Ngen: 59030000
@@ -930,27 +962,27 @@ NgenandXsec:
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 9962019
+          Ngen: 9994000
           Xsec: 11.09
         WWTolnulnu:
           Ngen: 4946000
           Xsec: 2.206
         WZTo2Q2L:
-          Ngen: 17952068
+          Ngen: 28576996
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 56886000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 19082659
+          Ngen: 29357938
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 129037134
+          Ngen: 195510810
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 143830836
+          Ngen: 145020000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -991,17 +1023,17 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 472977862
+          Ngen: 476408000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 12444591
+          Ngen: 19365999
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 89985007
+          Ngen: 95627000
           Xsec: 80.0
         Tchannel:
-          Ngen: 166637158
+          Ngen: 178336000
           Xsec: 134.2
         tw_antitop:
           Ngen: 10949620
@@ -1011,11 +1043,11 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 137259710
+          Ngen: 172138190
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 87594835
+          Ngen: 183483106
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 29028341
+          Ngen: 94925903
           Xsec: 3276.0

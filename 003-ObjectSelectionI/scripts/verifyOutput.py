@@ -93,6 +93,11 @@ def expected_new_branches(branch_names, is_mc):
 
     expected.add("sel_nJet")
     expected.add("sel_nbjet")
+
+    abcd_prefix = branch_names["abcdRegion"]
+    expected.add(f"{abcd_prefix}_isTightIso")
+    expected.add(f"{abcd_prefix}_isHighMET")
+    expected.add(f"{abcd_prefix}_region")
     return expected
 
 
@@ -187,14 +192,14 @@ def compute_dataset_stats(filepaths, new_branches, max_entries_for_stats):
     return stats
 
 
-def check_invariants(filepaths, branch_names, max_entries_for_stats):
+def check_invariants(filepaths, branch_names, abcd_cfg, max_entries_for_stats):
     """Cross-branch invariants that must ALWAYS hold given
     SelectedObjectsProducer's deterministic algorithm -- see module
     docstring. Any nonzero violation count is a real bug.
     """
     rdf = ROOT.RDataFrame("Events", filepaths)
     n_entries = rdf.Count().GetValue()
-    result = {"n_entries_checked": 0, "violations": {}, "sentinel_fraction": {}}
+    result = {"n_entries_checked": 0, "violations": {}, "sentinel_fraction": {}, "region_fraction": {}}
     if n_entries == 0:
         return result
     if n_entries > max_entries_for_stats:
@@ -204,6 +209,12 @@ def check_invariants(filepaths, branch_names, max_entries_for_stats):
 
     lb, slb = branch_names["leadingbJet"], branch_names["subleadingbJet"]
     lj, slj = branch_names["leadingJet"], branch_names["subleadingJet"]
+    muon_prefix = branch_names["muon"]
+    abcd_prefix = branch_names["abcdRegion"]
+    iso_tight_max  = abcd_cfg["isoTightMax"]
+    met_threshold  = abcd_cfg["metThreshold"]
+    met_branch     = abcd_cfg["metBranch"]
+    has_muon       = f"{muon_prefix}_pt > -0.5"
 
     checks = {
         "sel_nbjet_exceeds_sel_nJet": "sel_nbjet > sel_nJet",
@@ -211,6 +222,22 @@ def check_invariants(filepaths, branch_names, max_entries_for_stats):
         f"{slb}_slot_inconsistent": f"(sel_nbjet >= 2) != ({slb}_pt > -0.5)",
         f"{lj}_slot_inconsistent":  f"({_LIGHT_JET_SLOTS_EXPR} >= 1) != ({lj}_pt > -0.5)",
         f"{slj}_slot_inconsistent": f"({_LIGHT_JET_SLOTS_EXPR} >= 2) != ({slj}_pt > -0.5)",
+        # ABCD region tagging (SelectedObjectsProducer._fill_abcd_region): must
+        # always hold given that module's deterministic region-code assignment.
+        f"{abcd_prefix}_region_out_of_range":
+            f"({abcd_prefix}_region < -1) || ({abcd_prefix}_region > 3)",
+        f"{abcd_prefix}_region_undefined_mismatch":
+            f"({abcd_prefix}_region == -1) != !({has_muon})",
+        f"{abcd_prefix}_isHighMET_inconsistent":
+            f"{abcd_prefix}_isHighMET != ({met_branch} >= {met_threshold})",
+        f"{abcd_prefix}_isTightIso_inconsistent":
+            f"({has_muon}) && ({abcd_prefix}_isTightIso != ({muon_prefix}_pfRelIso04_all <= {iso_tight_max}))",
+        f"{abcd_prefix}_region_code_inconsistent":
+            f"({has_muon}) && ("
+            f"({abcd_prefix}_region == 0) != ({abcd_prefix}_isTightIso && {abcd_prefix}_isHighMET) || "
+            f"({abcd_prefix}_region == 1) != (!{abcd_prefix}_isTightIso && {abcd_prefix}_isHighMET) || "
+            f"({abcd_prefix}_region == 2) != ({abcd_prefix}_isTightIso && !{abcd_prefix}_isHighMET) || "
+            f"({abcd_prefix}_region == 3) != (!{abcd_prefix}_isTightIso && !{abcd_prefix}_isHighMET))",
     }
     for label, expr in checks.items():
         try:
@@ -218,7 +245,6 @@ def check_invariants(filepaths, branch_names, max_entries_for_stats):
         except Exception as e:
             result["violations"][label] = f"check failed: {e}"
 
-    muon_prefix = branch_names["muon"]
     sentinel_branches = {
         "muon": f"{muon_prefix}_pt",
         "leadingbJet": f"{lb}_pt", "subleadingbJet": f"{slb}_pt",
@@ -230,6 +256,14 @@ def check_invariants(filepaths, branch_names, max_entries_for_stats):
             result["sentinel_fraction"][label] = n_missing / n_used
         except Exception as e:
             result["sentinel_fraction"][label] = f"check failed: {e}"
+
+    region_labels = {-1: "undefined", 0: "A", 1: "B", 2: "C", 3: "D"}
+    for code, label in region_labels.items():
+        try:
+            n = rdf.Filter(f"{abcd_prefix}_region == {code}").Count().GetValue()
+            result["region_fraction"][label] = n / n_used
+        except Exception as e:
+            result["region_fraction"][label] = f"check failed: {e}"
 
     return result
 
@@ -255,6 +289,10 @@ def main():
     branch_names = mod_cfg.get("branchNames")
     if not branch_names:
         print(f"ERROR: config.yaml has no Modules.selectedObjects[{args.era}].branchNames -- nothing to verify against.", file=sys.stderr)
+        sys.exit(1)
+    abcd_cfg = mod_cfg.get("abcdRegion")
+    if not abcd_cfg:
+        print(f"ERROR: config.yaml has no Modules.selectedObjects[{args.era}].abcdRegion -- nothing to verify ABCD tagging against.", file=sys.stderr)
         sys.exit(1)
 
     with open(args.datasetJSON) as f:
@@ -301,7 +339,7 @@ def main():
                         print(f"  [OK]    {fp} ({info.get('n_entries', '?')} entries)")
 
                 stats = compute_dataset_stats(filepaths, expected_branches, args.maxEntriesForStats)
-                invariants = check_invariants(filepaths, branch_names, args.maxEntriesForStats)
+                invariants = check_invariants(filepaths, branch_names, abcd_cfg, args.maxEntriesForStats)
 
                 bad_invariants = {k: v for k, v in invariants["violations"].items() if isinstance(v, int) and v > 0}
                 if bad_invariants:
@@ -313,6 +351,9 @@ def main():
                     if isinstance(frac, float) and frac > 0:
                         total_warnings += 1
                         print(f"  [WARN]  {label}: {slabel} missing (sentinel) in {frac:.1%} of events")
+                region_report = {k: f"{v:.1%}" for k, v in invariants["region_fraction"].items() if isinstance(v, float)}
+                if region_report:
+                    print(f"  [INFO]  {label}: ABCD region split -- {region_report}")
 
                 report["datasets"][label] = {
                     "is_data": is_data,

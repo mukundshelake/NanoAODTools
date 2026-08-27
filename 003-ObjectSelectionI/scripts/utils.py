@@ -98,31 +98,6 @@ def create_output_directory(base_dir, config_path, inputs_folder):
     return output_dir, config_hash, is_new_run
 
 
-def fetch_and_snapshot(source_path, inputs_folder, output_dir, filename):
-    """
-    Copy a file fetched from a previous chapter into both the local inputs/
-    folder and this run's hash-versioned outputs/inputs/ snapshot.
-
-    create_output_directory() only snapshots inputs_folder -> output_dir/inputs
-    as it exists at the start of a run_all.py invocation, which is before any
-    --fetchFromPreviousChapter step runs within that same invocation. Without
-    this explicit dual-write, the file just fetched in this invocation would be
-    missing from that invocation's own outputs/inputs/ snapshot (it would only
-    show up in the snapshot on a later, separate invocation).
-
-    Returns:
-        tuple: (local_path, output_path)
-    """
-    import shutil
-    local_path = Path(inputs_folder) / filename
-    output_path = Path(output_dir) / 'inputs' / filename
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source_path, local_path)
-    shutil.copy2(source_path, output_path)
-    return local_path, output_path
-
-
 def update_run_history(history_file, config_hash, metadata=None):
     """
     Append run information to run_history.txt

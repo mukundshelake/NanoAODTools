@@ -11,7 +11,6 @@ import dask
 import dask_awkward as dak
 import dask_histogram as dh
 import boost_histogram as bh
-import awkward as ak
 from coffea.nanoevents import NanoAODSchema, BaseSchema
 from coffea import processor
 from coffea.dataset_tools import (
@@ -31,22 +30,60 @@ logger = logging.getLogger(__name__)
 
 
 class WeightLookupProcessor(processor.ProcessorABC):
-    def __init__(self, config):
+    def __init__(self, config, region_filter):
         self.config = config
+        # ABCD_region code: 0=A (signal region), 1=B, 2=C, 3=D (QCD control region).
+        # See 003-ObjectSelectionI's SelectedObjectsProducer for the full convention.
+        self.region_filter = region_filter
 
     def process(self, events):
         dataset = events.metadata['dataset']
         isData = events.metadata['isData']
-        logger.info(f"Processing dataset: {dataset}")
+        logger.info(f"Processing dataset: {dataset} (ABCD_region == {self.region_filter})")
+
+        # Scope to one ABCD region. This didn't exist before ABCD tagging: every event
+        # used to be implicitly region A/C only (tight isolation was the only option at
+        # the event-selection stage), so "no filter" silently meant "region A ∪ C" -- now
+        # that 003-ObjectSelectionI admits loose-isolation (B/D) events too, this filter
+        # is required to keep the "nominal" (region A) plots meaning what they always meant.
+        #
+        # IMPORTANT: mask at the dask.array level (convert with dak.to_dask_array() first,
+        # *then* compare/index), not at the awkward level (events[events.ABCD_region == x]
+        # or events[var][awkward_mask]). Awkward-level boolean masking on this dataset hangs
+        # indefinitely in dask.compute() (reproduced directly, independent of scheduler --
+        # threads and synchronous both hang; isolated by bisecting a minimal repro script).
+        # dask.array-level masking (region_mask below) computes correctly in ~1-2s. Root
+        # cause not fully understood (looks like a dask-awkward inefficiency/bug with
+        # per-partition-length-changing boolean masks in this environment), but the
+        # dask.array workaround is fully equivalent for our purposes (every array here is
+        # 1D, event-flat) and reliably fast.
+        region_mask = dak.to_dask_array(events.ABCD_region) == self.region_filter
+
         # Build total weights by multiplying the individual weights together
         total_weights = None
         weightList = self.config['weightList']['Data'] if isData else self.config['weightList']['MC']
         for weight in weightList:
             if weight in events.fields:
-                w = dak.to_dask_array(events[weight])
+                w = dak.to_dask_array(events[weight])[region_mask]
                 total_weights = w if total_weights is None else total_weights * w
             else:
                 logger.warning(f"Weight '{weight}' not found in events. Skipping this weight.")
+
+        # For the region-D (QCD-enriched) pass only, additionally fold in the ABCD
+        # transfer-factor weight qcdABCDWeight (003-ObjectSelectionII's ABCDTransferWeight
+        # module). This converts this region-D histogram -- once background-subtracted at
+        # the aggregation stage (Data minus non-QCD MC) -- directly into the
+        # properly-normalized region-A QCD prediction: the standard "shape from control
+        # region, per-event-reweighted normalization" ABCD technique, needing no separate
+        # overall-normalization step afterward.
+        if self.region_filter == 3:
+            if 'qcdABCDWeight' in events.fields:
+                w = dak.to_dask_array(events['qcdABCDWeight'])[region_mask]
+                total_weights = w if total_weights is None else total_weights * w
+            else:
+                logger.warning("qcdABCDWeight not found in events for the region-D pass -- "
+                                "run 003-ObjectSelectionII with the ABCDTransferWeight module first.")
+
         # Fill histograms lazily using dask_histogram
         hists = {}
         for hist_ in self.config['histDetails']:
@@ -55,7 +92,7 @@ class WeightLookupProcessor(processor.ProcessorABC):
             if var_name not in events.fields:
                 logger.warning(f"Variable '{var_name}' not found in events. Skipping histogram '{hist_}'.")
                 continue
-            data = dak.to_dask_array(events[var_name])
+            data = dak.to_dask_array(events[var_name])[region_mask]
             hists[hist_] = dh.factory(
                 data,
                 axes=[bh.axis.Regular(cfg['bins'], cfg['range'][0], cfg['range'][1],
@@ -64,7 +101,7 @@ class WeightLookupProcessor(processor.ProcessorABC):
                 weights=total_weights,
             )
         return {
-            "nEvents": ak.num(events, axis=0),
+            "nEvents": region_mask.sum(),
             "hists": hists
         }
     def postprocess(self, accumulator):
@@ -76,6 +113,10 @@ def main():
     parser.add_argument('--configFile', type=str, required=True, help='Path to the YAML config file')
     parser.add_argument('--outputDir', type=str, required=True, help='Directory to save the output .coffea file')
     parser.add_argument('--outputFileName', type=str, required=True, help='Name of the output .coffea file')
+    parser.add_argument('--regionFilter', type=int, required=True, choices=[0, 1, 2, 3],
+                        help='ABCD_region code to scope histograms to: 0=A (signal region, the nominal '
+                             'Data/MC plots), 1=B, 2=C, 3=D (QCD control region -- used to build the '
+                             'data-driven QCD template, not for direct plotting).')
     args = parser.parse_args()
 
     # Load config
@@ -87,7 +128,7 @@ def main():
         fileset = json.load(f)
 
     # Create processor instance
-    processor_instance = WeightLookupProcessor(config)
+    processor_instance = WeightLookupProcessor(config, args.regionFilter)
 
     # Preprocess and run with dask
     logger.info("Preprocessing fileset...")

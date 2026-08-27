@@ -80,8 +80,16 @@ def bh_to_th1(bh_hist, name: str, title: str) -> TH1F:
 
 
 def get_aggregated_coffea_path(output_dir: Path, tag: str, era: str,
-                               data_mc: str, group: str) -> Path:
-    return output_dir / era / data_mc / group / f"{tag}_{era}_{data_mc}_{group}_selectionHists.coffea"
+                               data_mc: str, group: str, region_label: str = "A") -> Path:
+    return output_dir / era / data_mc / group / f"{tag}_{era}_{data_mc}_{group}_region{region_label}_selectionHists.coffea"
+
+
+def get_qcd_template_path(output_dir: Path, tag: str, era: str) -> Path:
+    """Data-driven QCD template (run_all.py --buildQCDTemplate): region-D Data minus
+    non-QCD MC, already reweighted by the ABCD transfer factor -- see that step's
+    docstring in run_all.py. Replaces the QCD group's entry in the stack.
+    """
+    return output_dir / era / f"{tag}_{era}_QCDTemplate_selectionHists.coffea"
 
 
 def make_mc_total(mc_hists: list) -> TH1F:
@@ -297,6 +305,23 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
             continue
         mc_coffea[group] = load(mc_coffea_path)
 
+    # Replace the QCD group's stack entry with the data-driven QCD template
+    # (run_all.py --buildQCDTemplate: region-D Data minus non-QCD MC, already
+    # reweighted by the ABCD transfer factor) if it's been built for this era.
+    # Falls back to plain QCD MC (with a warning) if it hasn't -- keeps this
+    # script usable before that step has been run, rather than hard-failing.
+    qcd_group = getattr(args, 'qcdGroup', 'QCD')
+    if qcd_group in mc_coffea:
+        qcd_template_path = get_qcd_template_path(args.input_base, tag, era)
+        if qcd_template_path.exists():
+            qcd_template = load(qcd_template_path)[f"{era}_QCDTemplate"]
+            mc_coffea[qcd_group] = {f"{era}_MC_mu_{qcd_group}": qcd_template}
+            print(f"  Using data-driven QCD template for '{qcd_group}': {qcd_template_path}")
+        else:
+            print(f"  [WARN] QCD template not found for {era} ({qcd_template_path}) -- "
+                  f"using plain '{qcd_group}' MC instead. Run --buildQCDTemplate first for the "
+                  f"data-driven estimate.")
+
     if not mc_coffea:
         print(f"  [WARN] No MC coffea loaded for {era}. Skipping era.")
         root_file.Close()
@@ -390,6 +415,11 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                         help='Filter by era[/DataMC[/group]]. '
                              'Multiple filters are OR-ed. E.g.: --filter UL2018 UL2017/MC_mu/SingleTop')
+    parser.add_argument('--qcdGroup', type=str, default='QCD',
+                        help='MC_mu group whose stack entry gets replaced by the data-driven QCD template '
+                             '(run_all.py --buildQCDTemplate), if that template file exists for the era '
+                             '(default: QCD). Falls back to plain QCD MC with a warning if the template '
+                             "hasn't been built yet.")
     args = parser.parse_args()
 
     config = load_config(Path(args.configFile))

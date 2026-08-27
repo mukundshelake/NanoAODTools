@@ -12,6 +12,7 @@ Options:
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 import subprocess
@@ -55,13 +56,24 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch preselection_{era}_datasets.json and {era}_goldenJSON.json from '
-                            '002-Samples outputs into inputs/ (and this run\'s outputs/inputs/ snapshot). '
-                            'Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 002-Samples run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generatePreselectionDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/preselection/{preselectionTag}/{preselectionHash}/{era} on disk '
+                            '(the 002-Samples preselection output) and build inputs/preselection_{era}_datasets.json '
+                            'via scripts/generateDatasetJSON.py -- the same health-checked scan 002-Samples itself '
+                            'uses, run fresh each time so the recorded file paths always reflect where the files '
+                            'actually are right now (also copied into this run\'s outputs/{tag}/{hash}/inputs/ '
+                            'snapshot). Requires --preselectionTag and --preselectionHash.')
+    parser.add_argument('--preselectionTag', type=str, default=None,
+                       help='[0] Tag of the 002-Samples preselection run to scan (e.g. "midAugust"). '
+                            'Required by --generatePreselectionDatasetJSON.')
+    parser.add_argument('--preselectionHash', type=str, default=None,
+                       help='[0] Config hash of the 002-Samples preselection run to scan. '
+                            'Required by --generatePreselectionDatasetJSON.')
+    parser.add_argument('--downloadGoldenJSONs', action='store_true',
+                       help='[0] Download {era}_goldenJSON.json for each era directly from the CMS URLs in '
+                            'config.yaml\'s golden_json_urls, into inputs/ (and this run\'s outputs/{tag}/{hash}/'
+                            'inputs/ snapshot). Independent of any particular 002-Samples run -- the golden JSON '
+                            'only depends on era, not on a preselection tag/hash.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
@@ -96,13 +108,41 @@ def main():
                             'min/max/mean/stddev and cross-branch invariant checks scoped to those branches '
                             '(not the pass-through NanoAOD branches -- see the script for why). '
                             'Writes a JSON report per era.')
+    parser.add_argument('--plotABCDVariables', action='store_true',
+                       help='[exploratory] Run scripts/plotABCDVariables.py on selectionI_{tag}_{era}_datasets.json '
+                            '(from --generateDatasetJSON): overlays normalized shape distributions of the '
+                            'ABCDVariables config block (muon isolation, MET) for --abcdGroups, straight from the '
+                            'selectionI skims -- ahead of picking any ABCD region-boundary values. '
+                            'Writes PNG/PDF/ROOT per era to outputs/{tag}/{hash}/{era}/abcdPlots/.')
+    parser.add_argument('--abcdDataMC', type=str, default='MC_mu',
+                       help='With --plotABCDVariables: DataMC key to plot from (default: MC_mu).')
+    parser.add_argument('--abcdGroups', nargs='+', default=['SemiLeptonic', 'QCD'],
+                       help='With --plotABCDVariables: groups to overlay (default: SemiLeptonic QCD).')
+    parser.add_argument('--abcdClosureTest', action='store_true',
+                       help='[exploratory] Run scripts/abcdClosureTest.py on selectionI_{tag}_{era}_datasets.json '
+                            '(from --generateDatasetJSON): checks N_A ~= N_B*N_C/N_D on the ABCD_region branch '
+                            'SelectedObjectsProducer already writes, for --closureGroups (default: QCD -- the '
+                            'actual ABCD estimate target) under --abcdDataMC. The standard sanity check for '
+                            'whether muon isolation and MET are independent enough within that process for the '
+                            'ABCD estimate to be valid. Writes a JSON report per era.')
+    parser.add_argument('--closureGroups', nargs='+', default=['QCD'],
+                       help='With --abcdClosureTest: groups to test (default: QCD).')
+    parser.add_argument('--computeABCDScaleFactor', action='store_true',
+                       help='[exploratory] Run scripts/computeABCDScaleFactor.py on '
+                            'selectionI_{tag}_{era}_datasets.json (from --generateDatasetJSON): computes the '
+                            'data-driven QCD transfer factor R = N_C/N_D (Data minus non-QCD MC backgrounds, '
+                            'Lumi*Xsec/Ngen-weighted), binned in (SelMuon_pt, |SelMuon_eta|) -- mirroring '
+                            '003-ObjectSelectionII\'s computeBTaggingEfficiency.py binning strategy. Writes a ROOT '
+                            'file of TH2 maps and a JSON report per era to outputs/{tag}/{hash}/{era}/.')
     args = parser.parse_args()
 
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generatePreselectionDatasetJSON: {args.generatePreselectionDatasetJSON}")
+    print(f"  --preselectionTag: {args.preselectionTag}")
+    print(f"  --preselectionHash: {args.preselectionHash}")
+    print(f"  --downloadGoldenJSONs: {args.downloadGoldenJSONs}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
@@ -116,6 +156,12 @@ def main():
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
     print(f"  --verifyOutput: {args.verifyOutput}")
+    print(f"  --plotABCDVariables: {args.plotABCDVariables}")
+    print(f"  --abcdDataMC: {args.abcdDataMC}")
+    print(f"  --abcdGroups: {args.abcdGroups}")
+    print(f"  --abcdClosureTest: {args.abcdClosureTest}")
+    print(f"  --closureGroups: {args.closureGroups}")
+    print(f"  --computeABCDScaleFactor: {args.computeABCDScaleFactor}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -152,26 +198,83 @@ def main():
         print(f"Config hash: {config_hash}")
         return 0
 
-    # Fetch preselection dataset JSON + golden JSON from 002-Samples into inputs/
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 002-Samples' preselection ROOT files on disk and build
+    # inputs/preselection_{era}_datasets.json fresh via generateDatasetJSON.py --
+    # replaces the old --fetchFromPreviousChapter, which just copied a JSON that
+    # 002-Samples had generated at some earlier point and could go stale (its
+    # recorded paths pointing at files that had since moved or become
+    # unreachable from this machine, with nothing to catch the drift).
+    if args.generatePreselectionDatasetJSON:
+        if not args.preselectionTag or not args.preselectionHash:
+            print("Error: --generatePreselectionDatasetJSON requires --preselectionTag and --preselectionHash.")
             return 1
-        print(f"\nFetching inputs from 002-Samples (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '002-Samples' / 'outputs' / args.tag / args.previousHash
+        print(f"\nGenerating preselection dataset JSON from disk (tag: {args.preselectionTag}, "
+              f"hash: {args.preselectionHash})...")
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            return 1
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            source_dir = previous_chapter_outputs / era
-            for filename in (f'preselection_{era}_datasets.json', f'{era}_goldenJSON.json'):
-                source_path = source_dir / filename
-                if not source_path.exists():
-                    print(f"    Error: Source file not found: {source_path}. Skipping.")
-                    continue
-                local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-                print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 002-Samples.")
+            output_json_name = f"preselection_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "preselection", args.preselectionTag,
+                                           args.preselectionHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory,
+            ]
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            # Also copy into this run's own outputs/{tag}/{hash}/inputs/ snapshot --
+            # create_output_directory() only snapshotted inputs/ as it existed at the
+            # start of this invocation, before this step ran.
+            output_path = output_dir / 'inputs' / output_json_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / output_json_name, output_path)
+            print(f"    Generated {inputs_folder / output_json_name} and copied to {output_path}")
+        print("Finished generating preselection dataset JSON files.")
+
+    # Download {era}_goldenJSON.json directly from the CMS URLs in config.yaml's
+    # golden_json_urls. Independent of any particular 002-Samples run -- the golden
+    # JSON content only depends on era.
+    if args.downloadGoldenJSONs:
+        print("\nDownloading golden JSON files specified in config...")
+        download_script = base_dir / 'scripts' / 'downloadGoldenJsons.py'
+        if not download_script.exists():
+            print(f"Error: {download_script} not found!")
+            return 1
+        golden_json_urls = config.get('golden_json_urls', {})
+        if not golden_json_urls:
+            print("Error: config.yaml has no golden_json_urls section.")
+            return 1
+        for era, url in golden_json_urls.items():
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"  Era: {era}")
+            output_filename = f"{era}_goldenJSON.json"
+            local_path = inputs_folder / output_filename
+            if local_path.exists() and not args.force:
+                print(f"    Already exists and --force not specified, skipping download: {local_path}")
+            else:
+                cmd = [sys.executable, str(download_script), '-u', url,
+                       '-o', output_filename, '-outDir', str(inputs_folder)]
+                print(f"    Running command: {' '.join(cmd)}")
+                result = subprocess.run(cmd)
+                if result.returncode != 0:
+                    print(f"    Error downloading golden JSON for era {era}")
+                    return 1
+            output_path = output_dir / 'inputs' / output_filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(local_path, output_path)
+            print(f"    {local_path} copied to {output_path}")
+        print("Finished downloading golden JSON files.")
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
@@ -348,7 +451,7 @@ def main():
             print(f"\nSubmitting object-selection jobs for era: {era}")
             dataset_json_path = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
             if not dataset_json_path.exists():
-                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --generatePreselectionDatasetJSON first.")
                 continue
             golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
             # Enumerate DataMC/group/dataset from the actual fetched preselection dataset
@@ -521,6 +624,112 @@ def main():
             else:
                 print(f"verifyOutput.py: all files OK for era {era}. Report: {report_path}")
         if verify_failed:
+            return 1
+
+    if args.plotABCDVariables:
+        print("\nPlotting ABCD-plane variable distributions (scripts/plotABCDVariables.py)...")
+        plot_script = base_dir / 'scripts' / 'plotABCDVariables.py'
+        if not plot_script.exists():
+            print(f"Error: {plot_script} not found!")
+            return 1
+        plot_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                plot_failed = True
+                continue
+            plots_dir = output_dir / era / 'abcdPlots'
+            cmd = [
+                sys.executable, str(plot_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--era', era,
+                '--outputDir', str(plots_dir),
+                '--dataMC', args.abcdDataMC,
+                '--groups', *args.abcdGroups,
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"plotABCDVariables.py reported problems for era {era}.")
+                plot_failed = True
+            else:
+                print(f"plotABCDVariables.py: plots written for era {era} to {plots_dir}")
+        if plot_failed:
+            return 1
+
+    if args.abcdClosureTest:
+        print("\nRunning ABCD closure test (scripts/abcdClosureTest.py)...")
+        closure_script = base_dir / 'scripts' / 'abcdClosureTest.py'
+        if not closure_script.exists():
+            print(f"Error: {closure_script} not found!")
+            return 1
+        closure_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                closure_failed = True
+                continue
+            report_path = output_dir / era / f"abcdClosureTest_{era}_report.json"
+            cmd = [
+                sys.executable, str(closure_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--era', era,
+                '--outputReport', str(report_path),
+                '--dataMC', args.abcdDataMC,
+                '--groups', *args.closureGroups,
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"abcdClosureTest.py reported problems for era {era}.")
+                closure_failed = True
+            else:
+                print(f"abcdClosureTest.py: report written for era {era} to {report_path}")
+        if closure_failed:
+            return 1
+
+    if args.computeABCDScaleFactor:
+        print("\nComputing data-driven ABCD scale factor (scripts/computeABCDScaleFactor.py)...")
+        sf_script = base_dir / 'scripts' / 'computeABCDScaleFactor.py'
+        if not sf_script.exists():
+            print(f"Error: {sf_script} not found!")
+            return 1
+        sf_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                sf_failed = True
+                continue
+            sf_dir = output_dir / era
+            cmd = [
+                sys.executable, str(sf_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--era', era,
+                '--outputDir', str(sf_dir),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"computeABCDScaleFactor.py reported problems for era {era}.")
+                sf_failed = True
+            else:
+                print(f"computeABCDScaleFactor.py: output written for era {era} to {sf_dir}")
+        if sf_failed:
             return 1
 
     # exit(0)

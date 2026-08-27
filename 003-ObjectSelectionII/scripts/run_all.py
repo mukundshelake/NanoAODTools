@@ -85,6 +85,20 @@ def main():
                             'from the fileset(s) built by --prepareEfficiencyFileset, writing ROOT files into '
                             "<repo-root>/SFs/Efficiency/<era>/<sample>.root (config.yaml's "
                             "bTagging.efficiencyFolder).")
+    parser.add_argument('--fetchABCDScaleFactor', action='store_true',
+                       help='[0e] Fetch abcdScaleFactor_{era}.root (the ABCD_transferFactor_R TH2 map computed by '
+                            "003-ObjectSelectionI's computeABCDScaleFactor.py) from that chapter's own output into "
+                            "inputs/SFs/{era}_abcdScaleFactor.root (and this run's outputs/{tag}/{hash}/inputs/SFs/ "
+                            'snapshot). Requires --abcdTag and --abcdHash. Deliberately a direct, explicit copy '
+                            "from 003-ObjectSelectionI's own outputs/{abcdTag}/{abcdHash}/{era}/ -- not routed "
+                            'through --fetchFromPreviousChapter, which only fetches the selectionI dataset/golden '
+                            'JSONs, not chapter-computed artifacts like this one.')
+    parser.add_argument('--abcdTag', type=str, default=None,
+                       help='[0e] Tag of the 003-ObjectSelectionI run that produced abcdScaleFactor_{era}.root. '
+                            'Required by --fetchABCDScaleFactor.')
+    parser.add_argument('--abcdHash', type=str, default=None,
+                       help='[0e] Config hash of the 003-ObjectSelectionI run that produced '
+                            'abcdScaleFactor_{era}.root. Required by --fetchABCDScaleFactor.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
@@ -125,6 +139,9 @@ def main():
     print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
     print(f"  --previousHash: {args.previousHash}")
     print(f"  --fetchSFFiles: {args.fetchSFFiles}")
+    print(f"  --fetchABCDScaleFactor: {args.fetchABCDScaleFactor}")
+    print(f"  --abcdTag: {args.abcdTag}")
+    print(f"  --abcdHash: {args.abcdHash}")
     print(f"  --prepareEfficiencyFileset: {args.prepareEfficiencyFileset}")
     print(f"  --computeJetPUIDEfficiency: {args.computeJetPUIDEfficiency}")
     print(f"  --computeBTaggingEfficiency: {args.computeBTaggingEfficiency}")
@@ -256,6 +273,35 @@ def main():
                     print(f"  Fetched {src_desc} -> {local_path}")
         if not any_fetched:
             print("  All SF files already present in inputs/SFs/ (use --force to refetch).")
+
+    if args.fetchABCDScaleFactor:
+        print("\nFetching ABCD scale factor files from 003-ObjectSelectionI...")
+        if not args.abcdTag or not args.abcdHash:
+            print("Error: --fetchABCDScaleFactor requires --abcdTag and --abcdHash.")
+            return 1
+        abcd_source_base = base_dir.parent / '003-ObjectSelectionI' / 'outputs' / args.abcdTag / args.abcdHash
+        any_fetched = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            source_path = abcd_source_base / era / f"abcdScaleFactor_{era}.root"
+            if not source_path.exists():
+                print(f"  Error: source not found: {source_path}. Skipping era {era}.")
+                continue
+            rel_path = Path('SFs') / f"{era}_abcdScaleFactor.root"
+            local_path = inputs_folder / rel_path
+            snapshot_path = output_dir / 'inputs' / rel_path
+            if local_path.exists() and not args.force:
+                print(f"  [skip, already fetched] {rel_path}")
+                continue
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, local_path)
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, snapshot_path)
+            any_fetched = True
+            print(f"  Fetched {source_path} -> {local_path}")
+        if not any_fetched:
+            print("  All ABCD scale factor files already present in inputs/SFs/ (use --force to refetch).")
 
     # Build a per-era, MC-only coffea fileset from the selectionI (pre-weight) skims,
     # for the two efficiency-map computers below. Deliberately sourced from selectionI's
