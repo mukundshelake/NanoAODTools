@@ -27,7 +27,7 @@ bTaggingWeight (e.g. "ttbar_SemiLeptonic").
 Usage:
     python computeBTaggingEfficiency.py \\
         --fileList <fileset.json> \\
-        --outputDir SFs/Efficiency \\
+        --outputDir inputs/SFs/Efficiency \\
         --bTagSFFile SFs/UL2018_jet_Btagging.json \\
         [--sample <nWorkers>]
 
@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 #  Binning for the efficiency maps                                             #
 # --------------------------------------------------------------------------- #
-# These edges match the binning already shipped in SFs/Efficiency/<era>/*.root.
+# These edges match the binning already shipped in inputs/SFs/Efficiency/<era>/*.root.
 PT_EDGES  = np.array([20., 30., 40., 70., 100., 140., 200., 300., 600., 1000.], dtype=float)
 ETA_EDGES = np.array([0., 0.2, 0.7, 1.4, 2.0, 2.2, 2.4, 2.5],                   dtype=float)
 
@@ -191,7 +191,7 @@ def main():
         help=(
             "Base output directory for ROOT files. "
             "Files are written to <outputDir>/<era>/<sample>.root. "
-            "Typically 'SFs/Efficiency' relative to NanoAODTools/."
+            "Typically 'inputs/SFs/Efficiency' relative to 003-ObjectSelectionII/."
         ),
     )
     parser.add_argument(

@@ -10,6 +10,16 @@ REPO_ROOT:
 
 LFN_Base : "/store/user/mshelake/DataFiles"
 # ---------------------------------------------------------------------------
+# Golden JSON URLs per era (run_all.py --downloadGoldenJSONs). Same CMS-published
+# files 003-ObjectSelectionI uses -- content only depends on era, not on any
+# particular 003-ObjectSelectionI run, so this chapter downloads them directly
+# rather than fetching a copy from 003-ObjectSelectionI's own output.
+golden_json_urls:
+  "UL2016preVFP": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions16/13TeV/Legacy_2016/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
+  "UL2016postVFP": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions16/13TeV/Legacy_2016/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
+  "UL2017": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"
+  "UL2018": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"
+# ---------------------------------------------------------------------------
 # Where to fetch correctionlib SF files from (run_all.py --fetchSFFiles), keyed
 # the same way as STORAGE -- a substring of socket.gethostname(). Only lxplus is
 # confirmed to have this CVMFS mount; add other machines here once verified.
@@ -25,8 +35,8 @@ SFSourceSSHRelay: "lxplus.cern.ch"
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
 # ---------------------------------------------------------------------------
 ModuleList:
-  MC:   [lheWeightSign, muonID, muonHLT, bTagging, ABCDTransferWeight]
-  Data: [ABCDTransferWeight]
+  MC:   [lheWeightSign, muonID, muonHLT, bTagging, jetPUID]
+  Data: []
 
 # ---------------------------------------------------------------------------
 
@@ -142,32 +152,32 @@ Modules:
   # ---------- jetPUIdWeight ------------------------------------------------
   # Per-jet PU ID scale factor for jets with 12.5 < pT <= 50 GeV.
   # efficiencyFolder: base folder; ROOT files expected at <folder>/<era>/<channel>.root
-  #   Generate with: python scripts/computeJetPUIDEfficiency.py --outputDir SFs/JetPUID/Efficiency
+  #   Generate with: run_all.py --computeJetPUIDEfficiency (writes to inputs/SFs/JetPUID/Efficiency)
   # jetPUIdFile:    correctionlib file providing PUJetID_eff correction.
   jetPUID:
     UL2016preVFP:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
       jetPUIdFile:    "inputs/SFs/UL2016preVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2016postVFP:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
       jetPUIdFile:    "inputs/SFs/UL2016postVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2017:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
       jetPUIdFile:    "inputs/SFs/UL2017_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2018:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
       jetPUIdFile:    "inputs/SFs/UL2018_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
@@ -182,7 +192,7 @@ Modules:
     UL2016preVFP:
       era:             "UL2016preVFP"
       bTagSFFile:      "inputs/SFs/UL2016preVFP_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2598
       branchNames:
         sf:     "bTagWeight"
@@ -191,7 +201,7 @@ Modules:
     UL2016postVFP:
       era:             "UL2016postVFP"
       bTagSFFile:      "inputs/SFs/UL2016postVFP_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2489
       branchNames:
         sf:     "bTagWeight"
@@ -200,7 +210,7 @@ Modules:
     UL2017:
       era:             "UL2017"
       bTagSFFile:      "inputs/SFs/UL2017_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.3040
       branchNames:
         sf:     "bTagWeight"
@@ -209,44 +219,31 @@ Modules:
     UL2018:
       era:             "UL2018"
       bTagSFFile:      "inputs/SFs/UL2018_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2783
       branchNames:
         sf:     "bTagWeight"
         sfup:   "bTagWeightUp"
         sfdown: "bTagWeightDown"
 
-  # ---------- ABCDTransferWeight --------------------------------------------
-  # Data-driven QCD ABCD transfer factor R = N_C/N_D, binned in
-  # (SelMuon_pt, |SelMuon_eta|), computed by 003-ObjectSelectionI's
-  # computeABCDScaleFactor.py and fetched here as scaleFactorFile.
-  # Written for both MC and Data (see ModuleList above) -- used only by
-  # 003-ObjectSelectionIII when building the region-D QCD template.
-  ABCDTransferWeight:
-    UL2016preVFP:
-      scaleFactorFile: "inputs/SFs/UL2016preVFP_abcdScaleFactor.root"
-      histName:        "ABCD_transferFactor_R"
-      selMuonBranch:   "SelMuon"
-      branchNames:
-        sf: "qcdABCDWeight"
-    UL2016postVFP:
-      scaleFactorFile: "inputs/SFs/UL2016postVFP_abcdScaleFactor.root"
-      histName:        "ABCD_transferFactor_R"
-      selMuonBranch:   "SelMuon"
-      branchNames:
-        sf: "qcdABCDWeight"
-    UL2017:
-      scaleFactorFile: "inputs/SFs/UL2017_abcdScaleFactor.root"
-      histName:        "ABCD_transferFactor_R"
-      selMuonBranch:   "SelMuon"
-      branchNames:
-        sf: "qcdABCDWeight"
-    UL2018:
-      scaleFactorFile: "inputs/SFs/UL2018_abcdScaleFactor.root"
-      histName:        "ABCD_transferFactor_R"
-      selMuonBranch:   "SelMuon"
-      branchNames:
-        sf: "qcdABCDWeight"
+  # ---------- abcdScaleFactor ------------------------------------------------
+  # Not a NanoAODTools Module (no ModuleList entry, nothing runs per-event) --
+  # just the branch-name lookup scripts/computeABCDScaleFactor.py needs to read
+  # the muon kinematics and ABCD region tag that 003-ObjectSelectionI's
+  # SelectedObjectsProducer already wrote onto every selectionII skim (passed
+  # straight through unchanged by this chapter's own modules). Era-independent
+  # -- these prefixes don't change per era, unlike Modules.selectedObjects[era]
+  # in 003-ObjectSelectionI, which this mirrors.
+  #
+  # The transfer factor R = N_C/N_D itself is computed by --computeABCDScaleFactor
+  # (after the SF modules above have produced selectionII skims), written to
+  # outputs/{tag}/{hash}/{era}/abcdScaleFactor_{era}.root. There is no
+  # per-event module/branch for it here -- 003-ObjectSelectionIII looks it up
+  # live, per event, only when building region-B histograms.
+  abcdScaleFactor:
+    branchNames:
+      muon:       "SelMuon"
+      abcdRegion: "ABCD"
 
 weightLookUp:
   lheWeightSign:

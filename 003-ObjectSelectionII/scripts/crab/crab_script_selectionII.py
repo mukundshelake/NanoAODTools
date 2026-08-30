@@ -9,9 +9,9 @@ going through PostProcessor for parity with the local path).
 
 This script is sent to the grid worker node as an inputFile and executed by
 crab_selectionII.sh. The module .py files (LHEWeightSign.py, MuonIDWeight.py,
-MuonHLTWeight.py, bTaggingWeight.py, ABCDTransferWeight.py) are shipped
-alongside it (flat, no modules/ subpackage) since they aren't part of the
-installed NanoAODTools package.
+MuonHLTWeight.py, bTaggingWeight.py) are shipped alongside it (flat, no
+modules/ subpackage) since they aren't part of the installed NanoAODTools
+package.
 
 NOTE on input file resolution: same as crab_script_selection.py in
 003-ObjectSelectionI -- the /store/... LFN CRAB assigns us is translated
@@ -24,9 +24,10 @@ NOTE on SF file layout: correctionlib file paths in config.yaml
 (fetched by run_all.py --fetchSFFiles) -- the shared module code (same files
 the local Pool-based path uses, unmodified) expects that literal relative
 layout. CRAB flattens all JobType.inputFiles into the sandbox root, so this
-script recreates the expected inputs/SFs/ and SFs/Efficiency/<era>/ layouts
-(the latter still repo-root relative -- a shared, self-computed artifact, not
-a fetched input) by moving the flat-shipped files into place before
+script recreates the expected inputs/SFs/... layout, including
+inputs/SFs/Efficiency/<era>/ (config.yaml's bTagging.efficiencyFolder --
+a chapter-local, self-computed artifact, same as every other SF input here
+now, not a repo-root one), by moving the flat-shipped files into place before
 instantiating any module.
 
 NOTE on correctionlib/coffea/awkward: these are NOT part of the stock CMSSW
@@ -61,7 +62,6 @@ from LHEWeightSign import LHEWeightSignProducer
 from MuonIDWeight import MuonIDWeightProducer
 from MuonHLTWeight import MuonHLTWeightProducer
 from bTaggingWeight import bTaggingWeightProducer
-from ABCDTransferWeight import ABCDTransferWeightProducer
 
 print("Running crab_script_selectionII.py")
 
@@ -116,8 +116,8 @@ cut_string = " && ".join(v for v in _era_cuts.values() if v and v.strip()) or No
 print("Cut string:", cut_string)
 
 # Same module list / era-resolved config the local process-list JSON carries.
-# Read from config.yaml's ModuleList.Data/.MC rather than assuming Data is always
-# empty -- ABCDTransferWeight is the first module ever added to ModuleList.Data.
+# Read from config.yaml's ModuleList.Data/.MC rather than hardcoding Data as
+# empty, in case a future Data-side module gets added there.
 module_names = _config["ModuleList"]["Data" if is_data else "MC"]
 module_configs = []
 for mod_name in module_names:
@@ -125,10 +125,9 @@ for mod_name in module_names:
     mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
     module_configs.append((mod_name, mod_cfg))
 
-# Recreate the SFs/ layout the shared module code expects, from the flat-shipped files.
-os.makedirs(f"SFs/Efficiency/{era}", exist_ok=True)
+# Recreate the inputs/SFs/ layout the shared module code expects, from the flat-shipped files.
 for mod_name, mod_cfg in module_configs:
-    for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile", "scaleFactorFile"):
+    for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
         if file_key in mod_cfg:
             expected_path = mod_cfg[file_key]  # e.g. "inputs/SFs/UL2018_mu_ID.json"
             flat_name = os.path.basename(expected_path)
@@ -137,8 +136,9 @@ for mod_name, mod_cfg in module_configs:
                 shutil.move(flat_name, expected_path)
     if mod_name == "bTagging":
         eff_flat = f"{dataset_key}.root"
-        eff_expected = f"{mod_cfg['efficiencyFolder']}/{era}/{dataset_key}.root"
+        eff_expected = f"{mod_cfg['efficiencyFolder']}/{era}/{dataset_key}.root"  # e.g. "inputs/SFs/Efficiency/UL2018/<dataset>.root"
         if os.path.isfile(eff_flat) and not os.path.isfile(eff_expected):
+            os.makedirs(os.path.dirname(eff_expected), exist_ok=True)
             shutil.move(eff_flat, eff_expected)
 
 # Golden JSON: shipped flat as an inputFile only for data jobs (same as 003-ObjectSelectionI).
@@ -192,8 +192,6 @@ for mod_name, mod_cfg in module_configs:
         modules.append(MuonHLTWeightProducer(mod_cfg))
     elif mod_name == "bTagging":
         modules.append(bTaggingWeightProducer(mod_cfg, dataset_key))
-    elif mod_name == "ABCDTransferWeight":
-        modules.append(ABCDTransferWeightProducer(mod_cfg))
     else:
         raise RuntimeError(f"Unknown module: {mod_name}")
 

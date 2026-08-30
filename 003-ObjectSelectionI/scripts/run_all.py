@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Master script to generate all outputs for 002-Samples chapter.
+Master script to generate all outputs for 003-ObjectSelectionI chapter.
 
 Usage:
     python scripts/run_all.py [--force] [--tag TAG_NAME]
@@ -48,7 +48,7 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
 
 
 def main(): 
-    parser = argparse.ArgumentParser(description='Generate all outputs for 002-Samples')
+    parser = argparse.ArgumentParser(description='Generate all outputs for 003-ObjectSelectionI')
     parser.add_argument('-t', '--tag', type=str,
                        help='Create named tag for this run (e.g., baseline, paper_v1)', default='Dump')
     parser.add_argument('--force', action='store_true',
@@ -127,13 +127,6 @@ def main():
                             'ABCD estimate to be valid. Writes a JSON report per era.')
     parser.add_argument('--closureGroups', nargs='+', default=['QCD'],
                        help='With --abcdClosureTest: groups to test (default: QCD).')
-    parser.add_argument('--computeABCDScaleFactor', action='store_true',
-                       help='[exploratory] Run scripts/computeABCDScaleFactor.py on '
-                            'selectionI_{tag}_{era}_datasets.json (from --generateDatasetJSON): computes the '
-                            'data-driven QCD transfer factor R = N_C/N_D (Data minus non-QCD MC backgrounds, '
-                            'Lumi*Xsec/Ngen-weighted), binned in (SelMuon_pt, |SelMuon_eta|) -- mirroring '
-                            '003-ObjectSelectionII\'s computeBTaggingEfficiency.py binning strategy. Writes a ROOT '
-                            'file of TH2 maps and a JSON report per era to outputs/{tag}/{hash}/{era}/.')
     args = parser.parse_args()
 
     # parsing arguments
@@ -161,7 +154,6 @@ def main():
     print(f"  --abcdGroups: {args.abcdGroups}")
     print(f"  --abcdClosureTest: {args.abcdClosureTest}")
     print(f"  --closureGroups: {args.closureGroups}")
-    print(f"  --computeABCDScaleFactor: {args.computeABCDScaleFactor}")
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -696,40 +688,6 @@ def main():
             else:
                 print(f"abcdClosureTest.py: report written for era {era} to {report_path}")
         if closure_failed:
-            return 1
-
-    if args.computeABCDScaleFactor:
-        print("\nComputing data-driven ABCD scale factor (scripts/computeABCDScaleFactor.py)...")
-        sf_script = base_dir / 'scripts' / 'computeABCDScaleFactor.py'
-        if not sf_script.exists():
-            print(f"Error: {sf_script} not found!")
-            return 1
-        sf_failed = False
-        for era in config['NgenandXsec']:
-            if not matches_filter(args.filter, era):
-                continue
-            dataset_json_path = output_dir / era / f"selectionI_{args.tag}_{era}_datasets.json"
-            if not dataset_json_path.exists():
-                print(f"Error: selectionI dataset JSON not found for era {era} at {dataset_json_path}. "
-                      f"Run --generateDatasetJSON first.")
-                sf_failed = True
-                continue
-            sf_dir = output_dir / era
-            cmd = [
-                sys.executable, str(sf_script),
-                '--datasetJSON', str(dataset_json_path),
-                '--config', str(config_path),
-                '--era', era,
-                '--outputDir', str(sf_dir),
-            ]
-            print(f"\nRunning command: {' '.join(cmd)}")
-            result = subprocess.run(cmd)
-            if result.returncode != 0:
-                print(f"computeABCDScaleFactor.py reported problems for era {era}.")
-                sf_failed = True
-            else:
-                print(f"computeABCDScaleFactor.py: output written for era {era} to {sf_dir}")
-        if sf_failed:
             return 1
 
     # exit(0)

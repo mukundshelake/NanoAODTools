@@ -4,7 +4,7 @@
 # Output: ROOT files with added BDT variable branches
 
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 

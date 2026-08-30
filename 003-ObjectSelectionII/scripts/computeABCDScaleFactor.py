@@ -1,37 +1,41 @@
 #!/usr/bin/env python3
 """
 Compute the data-driven ABCD (QCD multijet) transfer factor, binned in
-(SelMuon_pt, |SelMuon_eta|), mirroring the binning strategy of
-003-ObjectSelectionII's computeBTaggingEfficiency.py: fixed variable-width
-2D bin edges defined as module constants, filled into ROOT TH2 histograms
-and saved to a file, so a later weight-application module could look them
-up the same way bTaggingWeight.py looks up the b-tag efficiency maps
-(coffea.lookup_tools.extractor is compatible with plain ROOT TH2s, so
-nothing about that compatibility is lost by filling them here with
-RDataFrame instead of coffea/hist -- 003-ObjectSelectionI's own tooling is
-plain PyROOT throughout, unlike 003-ObjectSelectionII/III).
+(SelMuon_pt, |SelMuon_eta|), from selectionII skims -- i.e. after the muon
+ID/HLT and b-tagging scale factors (this chapter's own SF modules) have
+already been written, so the background subtraction below uses exactly the
+same per-event weight definition as the rest of the analysis (this
+chapter's config.yaml weightList.MC / 003-ObjectSelectionIII's weightList),
+not just Lumi*Xsec/Ngen*sign(LHEWeight_originalXWGTUP).
+
+This used to live in 003-ObjectSelectionI, using only Lumi*Xsec/Ngen and the
+LHE-weight sign, because the SF branches didn't exist yet at that stage --
+see that chapter's README. Moving it here, after the SF-writing modules run
+but with no ABCDTransferWeight module left in this chapter's ModuleList
+(the transfer factor R computed here is now looked up live by
+003-ObjectSelectionIII at histogram-fill time instead of being pre-baked
+into a skim branch), avoids the circular dependency that keeping R inside
+this same PostProcessor pass would create: R can't be an input to the pass
+that's also required to produce the branches R itself depends on.
 
 Per (pt, |eta|) bin:
     N_data_X   = raw Data count in region X (weight = 1)
-    N_bkg_X    = Lumi*Xsec/Ngen-weighted, sign(LHEWeight_originalXWGTUP)-corrected
-                 sum of every MC_mu group *except* --qcdGroup (the known,
-                 non-QCD backgrounds), for region X
+    N_bkg_X    = Lumi*Xsec/Ngen-weighted sum of every MC_mu group *except*
+                 --qcdGroup (the known, non-QCD backgrounds), for region X --
+                 each event additionally weighted by every branch in
+                 _MC_SF_BRANCHES below that's present on the skim
+                 (muonIDWeight, muonHLTWeight, bTagWeight,
+                 L1PreFiringWeight_Nom, lheWeightSign)
     N_qcd_X    = max(N_data_X - N_bkg_X, 0)   (floored at 0 -- a negative
                  data-driven QCD count is unphysical; floors get reported)
     R          = N_qcd_C / N_qcd_D             (the "transfer factor")
     N_A_pred   = N_qcd_B * N_qcd_C / N_qcd_D = R * N_qcd_B
 
-This chapter only tags events (ABCD_region) and validates the method
-(abcdClosureTest.py, on QCD MC only); this script is the first place an
-actual data-driven QCD estimate/scale factor gets computed, using the
-Data_mu group that flows through the exact same SelectedObjectsProducer
-tagging as everything else.
-
-Input is a selectionI_{tag}_{era}_datasets.json (from --generateDatasetJSON),
+Input is a selectionII_{tag}_{era}_datasets.json (from --generateDatasetJSON),
 keyed {DataMC: {group: {dataset: {filepath: "Events"}}}}.
 
 Usage:
-    python3 computeABCDScaleFactor.py --datasetJSON <selectionI_{tag}_{era}_datasets.json> \\
+    python3 computeABCDScaleFactor.py --datasetJSON <selectionII_{tag}_{era}_datasets.json> \\
         --config <config.yaml> --era <era> --outputDir <dir> \\
         [--dataDataMC Data_mu] [--dataGroup SingleMuon] [--mcDataMC MC_mu] [--qcdGroup QCD]
 """
@@ -49,13 +53,22 @@ ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 ROOT.gErrorIgnoreLevel = ROOT.kWarning
 
-# Fixed binning -- see module docstring. Deliberately coarse: the closure test
-# (abcdClosureTest.py) already showed QCD MC statistics are thin even in a
-# single flat bin, so a finer 2D grid would fragment them further.
+# Fixed binning -- see module docstring. Deliberately coarse: 003-ObjectSelectionI's
+# closure test (abcdClosureTest.py) already showed QCD MC statistics are thin even
+# in a single flat bin, so a finer 2D grid would fragment them further.
 PT_EDGES  = [0.0, 35.0, 50.0, 1.0e6]
 ETA_EDGES = [0.0, 1.2, 2.4]
 
 _REGION_CODES = {"B": 1, "C": 2, "D": 3}
+
+# This chapter's MC weight branches (config.yaml's weightList.MC in
+# 003-ObjectSelectionIII, mirrored here) -- multiplied in on top of
+# Lumi*Xsec/Ngen so this background subtraction uses exactly the same
+# per-event weight as the rest of the analysis. Each is included only if
+# actually present on the dataset (mirrors 003-ObjectSelectionIII's
+# buildSelectionHists.py, which skips a missing weightList entry with a
+# warning rather than failing).
+_MC_SF_BRANCHES = ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
 
 
 def _make_model(name):
@@ -64,12 +77,12 @@ def _make_model(name):
     return ROOT.RDF.TH2DModel(name, "", len(PT_EDGES) - 1, pt_arr, len(ETA_EDGES) - 1, eta_arr)
 
 
-def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, weight, is_mc, unique_tag):
+def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, unique_tag):
     """2D (pt, |eta|) histograms of the muon-selection branches for each of
-    B/C/D, for one dataset. `weight` is the flat per-event scalar (1.0 for
-    data, Lumi*Xsec/Ngen for MC); for MC it's additionally corrected by
-    sign(LHEWeight_originalXWGTUP) if that branch exists (same convention as
-    plotABCDVariables.py / abcdClosureTest.py), else assumed +1.
+    B/C/D, for one dataset. `flat_weight` is the per-dataset scalar (1.0 for
+    data, Lumi*Xsec/Ngen for MC); for MC it's additionally multiplied by every
+    branch in _MC_SF_BRANCHES that's present on this dataset -- see module
+    docstring.
     """
     rdf = ROOT.RDataFrame("Events", filepaths)
     available = {str(c) for c in rdf.GetColumnNames()}
@@ -78,12 +91,16 @@ def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, weight, is_mc,
     if region_branch not in available or pt_branch not in available:
         return None
 
-    if is_mc and "LHEWeight_originalXWGTUP" in available:
-        sign_expr = "(LHEWeight_originalXWGTUP > 0) ? 1.0 : ((LHEWeight_originalXWGTUP < 0) ? -1.0 : 0.0)"
-    else:
-        sign_expr = "1.0"
+    weight_terms = [str(flat_weight)]
+    if is_mc:
+        for branch in _MC_SF_BRANCHES:
+            if branch in available:
+                weight_terms.append(branch)
+            else:
+                print(f"    [WARN] '{branch}' not found on this dataset; treating as 1.0.")
+    weight_expr = " * ".join(weight_terms)
 
-    rdf = rdf.Define("_sf_w", f"({sign_expr}) * {weight}").Define("_abs_eta", f"abs({eta_branch})")
+    rdf = rdf.Define("_sf_w", weight_expr).Define("_abs_eta", f"abs({eta_branch})")
     hists = {}
     for label, code in _REGION_CODES.items():
         model = _make_model(f"h_{label}_{unique_tag}")
@@ -117,7 +134,7 @@ def combine_group(files_by_dataset, muon_prefix, abcd_prefix, ngen_xsec, lumi, i
             continue
 
         if ngen_xsec is None:
-            weight = 1.0
+            flat_weight = 1.0
         else:
             if dataset not in ngen_xsec:
                 print(f"    [WARN] No Ngen/Xsec entry for dataset '{dataset}'; skipping.")
@@ -126,15 +143,15 @@ def combine_group(files_by_dataset, muon_prefix, abcd_prefix, ngen_xsec, lumi, i
             if ngen <= 0:
                 print(f"    [WARN] Ngen <= 0 for dataset '{dataset}'; skipping.")
                 continue
-            weight = lumi * xsec / ngen
+            flat_weight = lumi * xsec / ngen
 
-        hists = region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, weight, is_mc, f"{dataset}_{i}")
+        hists = region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, f"{dataset}_{i}")
         if hists is None:
             print(f"    [WARN] Required branches not found for dataset '{dataset}'; skipping.")
             continue
         for label in _REGION_CODES:
             per_region[label].append(hists[label])
-        print(f"    Added dataset '{dataset}' ({len(filepaths)} files, weight={weight:.6g})")
+        print(f"    Added dataset '{dataset}' ({len(filepaths)} files, flat_weight={flat_weight:.6g})")
     return {label: sum_hists(hlist) for label, hlist in per_region.items()}
 
 
@@ -161,8 +178,9 @@ def floor_at_zero(hist, label, report):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute the (pt, |eta|)-binned data-driven ABCD transfer factor for QCD.")
-    parser.add_argument("--datasetJSON", required=True, help="Path to selectionI_{tag}_{era}_datasets.json.")
+        description="Compute the (pt, |eta|)-binned data-driven ABCD transfer factor for QCD, "
+                     "from fully SF-weighted selectionII skims.")
+    parser.add_argument("--datasetJSON", required=True, help="Path to selectionII_{tag}_{era}_datasets.json.")
     parser.add_argument("--config", required=True, help="Path to config.yaml.")
     parser.add_argument("--era", required=True, help="Era whose DataLumiInfo/NgenandXsec/branchNames to use.")
     parser.add_argument("--outputDir", required=True, help="Directory to write the ROOT/JSON output.")
@@ -174,11 +192,9 @@ def main():
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
-    mod_cfg_raw = config.get("Modules", {}).get("selectedObjects", {})
-    mod_cfg = mod_cfg_raw.get(args.era, mod_cfg_raw)
-    branch_names = mod_cfg.get("branchNames")
+    branch_names = config.get("Modules", {}).get("abcdScaleFactor", {}).get("branchNames")
     if not branch_names:
-        print(f"ERROR: config.yaml has no Modules.selectedObjects[{args.era}].branchNames.", file=sys.stderr)
+        print("ERROR: config.yaml has no Modules.abcdScaleFactor.branchNames.", file=sys.stderr)
         sys.exit(1)
     muon_prefix, abcd_prefix = branch_names["muon"], branch_names["abcdRegion"]
 

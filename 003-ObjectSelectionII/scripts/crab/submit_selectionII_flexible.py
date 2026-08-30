@@ -14,7 +14,7 @@ Usage
 -----
     # Dry run — print what would be submitted, no actual submission
     python3 submit_selectionII_flexible.py --era UL2018 \\
-        --dataset-json inputs/selectionI_earlyApril_UL2018_datasets.json \\
+        --dataset-json inputs/selectionI_UL2018_datasets.json \\
         --golden-json inputs/UL2018_goldenJSON.json \\
         --output-lfn /store/user/mshelake/DataFiles/selectionII/earlyApril/<hash>/UL2018 \\
         --work-area /tmp/crab_selectionII_UL2018
@@ -30,7 +30,7 @@ Options
     --include        Regex matched against "DataMC/group/dataset"; only matching triples are processed.
     --exclude        Regex matched against "DataMC/group/dataset"; matching triples are skipped.
     --era            Data-taking era (e.g., UL2016preVFP, UL2017, UL2018). Required.
-    --dataset-json   Path to selectionI_{tag}_{era}_datasets.json (from inputs/). Required.
+    --dataset-json   Path to selectionI_{era}_datasets.json (from inputs/). Required.
     --golden-json    Path to the era's golden JSON (shipped to Data jobs only). Required if any Data job matches.
     --output-lfn     Base LFN for CRAB output on T3_CH_CERNBOX. Required.
     --work-area      Directory where CRAB project folders are created.
@@ -47,18 +47,16 @@ sys.path.insert(0, str(SCRIPT_DIR.parent))
 import utils
 
 CHAPTER_DIR = SCRIPT_DIR.parent.parent           # 003-ObjectSelectionII/
-REPO_ROOT   = CHAPTER_DIR.parent                 # repo root
 CONFIG_YAML = CHAPTER_DIR / "config.yaml"
 PSET        = SCRIPT_DIR / "PSet.py"
 SCRIPT_SH   = SCRIPT_DIR / "crab_selectionII.sh"
 SCRIPT_PY   = SCRIPT_DIR / "crab_script_selectionII.py"
 MODULES_DIR = CHAPTER_DIR / "scripts" / "modules"
 MODULE_FILES = {
-    "lheWeightSign":      MODULES_DIR / "LHEWeightSign.py",
-    "muonID":             MODULES_DIR / "MuonIDWeight.py",
-    "muonHLT":            MODULES_DIR / "MuonHLTWeight.py",
-    "bTagging":           MODULES_DIR / "bTaggingWeight.py",
-    "ABCDTransferWeight": MODULES_DIR / "ABCDTransferWeight.py",
+    "lheWeightSign": MODULES_DIR / "LHEWeightSign.py",
+    "muonID":        MODULES_DIR / "MuonIDWeight.py",
+    "muonHLT":       MODULES_DIR / "MuonHLTWeight.py",
+    "bTagging":      MODULES_DIR / "bTaggingWeight.py",
 }
 
 # ---------------------------------------------------------------------------
@@ -91,14 +89,14 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn,
         input_files.append(str(MODULE_FILES[mod_name]))
         mod_cfg_raw = config["Modules"].get(mod_name, {})
         mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
-        for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile", "scaleFactorFile"):
+        for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
             if file_key in mod_cfg:
-                # These are chapter-relative ("inputs/SFs/...", fetched by run_all.py
-                # --fetchSFFiles), unlike efficiencyFolder below which stays repo-root
-                # relative ("SFs/Efficiency", a shared, self-computed artifact).
+                # Chapter-relative ("inputs/SFs/...", fetched by run_all.py --fetchSFFiles).
                 input_files.append(str(CHAPTER_DIR / mod_cfg[file_key]))
         if mod_name == "bTagging":
-            eff_file = REPO_ROOT / mod_cfg["efficiencyFolder"] / era / f"{key}.root"
+            # efficiencyFolder is also chapter-relative ("inputs/SFs/Efficiency"), same as
+            # the file_key SF files above -- written by run_all.py --computeBTaggingEfficiency.
+            eff_file = CHAPTER_DIR / mod_cfg["efficiencyFolder"] / era / f"{key}.root"
             if not eff_file.is_file():
                 raise FileNotFoundError(f"b-tagging efficiency file not found: {eff_file}")
             input_files.append(str(eff_file))
@@ -143,7 +141,7 @@ def main():
     parser.add_argument("--era", required=True,
                         help="Data-taking era (e.g., UL2016preVFP, UL2017, UL2018). Required.")
     parser.add_argument("--dataset-json", required=True,
-                        help="Path to selectionI_{tag}_{era}_datasets.json listing the local/EOS-mounted "
+                        help="Path to selectionI_{era}_datasets.json listing the local/EOS-mounted "
                              "selectionI skim file paths.")
     parser.add_argument("--golden-json", default=None,
                         help="Path to the era's golden JSON. Required if any matching job is Data.")

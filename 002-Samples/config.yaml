@@ -8,7 +8,7 @@ LFN_Base : '/store/user/mshelake/DataFiles'
 # hostname). Used by --generatePreselectionDatasetJSON to scan for CRAB
 # output ROOT files once they've been copied down from EOS.
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 

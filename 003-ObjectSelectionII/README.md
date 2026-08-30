@@ -1,13 +1,29 @@
 # 003-ObjectSelectionII — Scale-Factor Weights
 
-Takes the `selectionI` skims and adds per-event MC scale-factor branches. No new
-kinematic cuts are applied — object selection already happened in 003-ObjectSelectionI.
+Takes the `selectionI` skims and adds per-event MC scale-factor branches (muon ID/HLT,
+b-tagging). No new kinematic cuts are applied — object selection already happened in
+003-ObjectSelectionI.
+
+This chapter is also where the data-driven QCD ABCD transfer factor `R = N_C/N_D` gets
+computed (`--computeABCDScaleFactor`, after the SF-weight skims exist) — see "ABCD scale
+factor" below. It's computed here rather than in 003-ObjectSelectionI because the
+background subtraction underneath it needs the muon ID/HLT and b-tagging SFs this chapter
+writes; it's computed as an offline step reading this chapter's own already-produced
+output, not as a per-event module, so 003-ObjectSelectionIII looks `R` up live when it
+needs it rather than this chapter baking it into a skim branch.
 
 ## Inputs
 
-- `selectionI_{tag}_{era}_datasets.json` and `{era}_goldenJSON.json` (unused here — no
-  cuts — but kept for parity/pass-through to later chapters), fetched from
-  003-ObjectSelectionI into `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
+- `inputs/selectionI_{era}_datasets.json` — built by `run_all.py --generateSelectionIDatasetJSON
+  --selectionITag <tag> --selectionIHash <hash>`, which scans
+  `{STORAGE}/selectionI/{selectionITag}/{selectionIHash}/{era}` on disk fresh via
+  `scripts/generateDatasetJSON.py` (the same health-checked scan 003-ObjectSelectionI itself
+  uses), so the recorded paths always reflect where the files actually are right now rather
+  than a copied-once snapshot that can go stale (mirrors 003-ObjectSelectionI's own
+  `--generatePreselectionDatasetJSON`).
+- `inputs/{era}_goldenJSON.json` (unused here — no cuts — but kept for parity/pass-through to
+  later chapters) — downloaded directly from the CMS URLs in `config.yaml`'s `golden_json_urls`
+  via `run_all.py --downloadGoldenJSONs`, independent of any particular 003-ObjectSelectionI run.
 - `inputs/SFs/UL{era}_mu_ID.json` / `_mu_HLT.json` / `_jet_jmar.json.gz` / `_jet_Btagging.json`
   — correctionlib JSON files for muon ID/HLT, jet PU ID, and b-tagging, obtained from the
   relevant CMS POGs (MUO/JME/BTV) via `run_all.py --fetchSFFiles` — see "Fetching the
@@ -15,44 +31,72 @@ kinematic cuts are applied — object selection already happened in 003-ObjectSe
   chapter-local input: re-synced into `outputs/{tag}/{hash}/inputs/` on every `run_all.py`
   invocation, so the worker script's relative `inputs/SFs/...` paths resolve after it
   `chdir`s into the run folder.
-- `SFs/` (repo root, one level up) — PU-ID/b-tag efficiency ROOT files, generated in-repo
-  from the selectionI skims (see "Regenerating the efficiency maps" below) rather than
-  fetched from outside. Unlike `inputs/SFs/`, this is shared across config hashes/tags —
-  re-synced into `outputs/{tag}/{hash}/SFs/` by `utils.create_output_directory` on every
-  invocation, so a freshly (re)computed efficiency map is always picked up without needing
-  a new config hash.
+- `inputs/SFs/Efficiency/{era}/*.root` and `inputs/SFs/JetPUID/Efficiency/{era}/*.root` — PU-ID/
+  b-tag efficiency ROOT files, generated in-repo from the selectionI skims (see "Regenerating
+  the efficiency maps" below) rather than fetched from outside. Chapter-local, same as every
+  other entry under `inputs/SFs/` above: copied into this run's own
+  `outputs/{tag}/{hash}/inputs/SFs/...` snapshot right after being computed.
 
 ## What it does
 
-Runs NanoAOD `PostProcessor` (no `cut=`) with, for MC only, these modules from
-`scripts/modules/`:
+Runs NanoAOD `PostProcessor` (no `cut=`) with these modules from `scripts/modules/`:
 
-| Module | Adds |
-|---|---|
-| `lheWeightSign` | Sign of `LHEWeight_originalXWGTUP` |
-| `muonID` | Tight muon ID SF (correctionlib) on `SelMuon` |
-| `muonHLT` | HLT/isolation SF (correctionlib) on `SelMuon` |
-| `bTagging` | Per-jet DeepJet b-tag SF (product method) |
+| Module | Adds | MC | Data |
+|---|---|---|---|
+| `lheWeightSign` | Sign of `LHEWeight_originalXWGTUP` | ✓ | |
+| `muonID` | Tight muon ID SF (correctionlib) on `SelMuon` | ✓ | |
+| `muonHLT` | HLT/isolation SF (correctionlib) on `SelMuon` | ✓ | |
+| `bTagging` | Per-jet DeepJet b-tag SF (product method) | ✓ | |
 
 (`jetPUID` also exists in `scripts/modules/` and `config.yaml` but isn't in `ModuleList.MC`
 currently — not run.)
 
-Data gets no modules (`ModuleList.Data: []`).
+`ModuleList.Data` is empty — Data jobs still run through `PostProcessor` (for parity with
+the local path and to produce a `selectionII` skim at all), just with no modules attached;
+every module here is MC-only.
+
+## ABCD scale factor
+
+After the SF-weight skims above exist, `--computeABCDScaleFactor` runs
+`scripts/computeABCDScaleFactor.py` on `selectionII_{tag}_{era}_datasets.json` (from
+`--generateDatasetJSON`): computes the data-driven QCD transfer factor, binned in
+`(SelMuon_pt, |SelMuon_eta|)`. Per bin: `N_qcd_X = max(N_data_X - N_bkg_X, 0)` for each
+region `X ∈ {B, C, D}` (raw Data count under `--dataDataMC`/`--dataGroup`, default
+`Data_mu`/`SingleMuon`, minus the full-weight sum of every `--mcDataMC` group except
+`--qcdGroup`, default `MC_mu` excluding `QCD`), floored at 0 (floors are reported). The
+non-QCD MC background sum uses the **same full per-event weight** as the rest of the
+analysis — `Lumi*Xsec/Ngen` times every branch this chapter's own SF modules just wrote
+(`muonIDWeight`, `muonHLTWeight`, `bTagWeight`, `L1PreFiringWeight_Nom`, `lheWeightSign`) —
+unlike the version of this script that used to live in 003-ObjectSelectionI, which could
+only use `Lumi*Xsec/Ngen*sign(LHEWeight)` since none of those SF branches existed yet at
+that stage. Writes the transfer factor `R = N_qcd_C / N_qcd_D` as an `ABCD_transferFactor_R`
+TH2 to `abcdScaleFactor_{era}.root`, plus `abcdScaleFactor_{era}_report.json`, both under
+`outputs/{tag}/{hash}/{era}/`.
+
+There is no per-event branch or module that writes `R` onto a skim in this chapter — doing
+so would need `R` as an input to the very PostProcessor pass that produces the SF branches
+`R`'s own background subtraction depends on. Instead, 003-ObjectSelectionIII fetches
+`abcdScaleFactor_{era}.root` directly from this chapter's output and looks `R` up live, per
+event, only when building region-B histograms (see that chapter's README).
 
 ## Outputs
 
 - Skim ROOT files: `{STORAGE}/selectionII/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/*_Skim.root`
 - `selectionII_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — input for 003-ObjectSelectionIII.
+- `abcdScaleFactor_{era}.root` / `abcdScaleFactor_{era}_report.json` (via `--computeABCDScaleFactor`)
+  — the ABCD transfer factor `R`, fetched directly by 003-ObjectSelectionIII.
 - Coffea filesets (via `--prepareFileset`) — also input for 003-ObjectSelectionIII's histogramming step.
 
 ## Running it
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateSelectionIDatasetJSON --selectionITag <tag> --selectionIHash <hash>
+run_all.py --downloadGoldenJSONs
 run_all.py --fetchSFFiles
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript --runBashScript
 run_all.py --generateDatasetJSON
+run_all.py --computeABCDScaleFactor
 run_all.py --prepareFileset
 ```
 
@@ -94,10 +138,10 @@ gzipped (matching what's already in the repo); `btagging.json.gz` is decompresse
 `bTagging` and `jetPUID` both need a per-(pT, |eta|) MC efficiency map (see Inputs above)
 computed from the selectionI skims themselves, before their weight modules can run.
 Needed once per config hash the first time (or whenever the underlying MC samples
-change) — run right after `--fetchFromPreviousChapter`:
+change) — run right after `--generateSelectionIDatasetJSON`:
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateSelectionIDatasetJSON --selectionITag <tag> --selectionIHash <hash>
 run_all.py --prepareEfficiencyFileset
 run_all.py --computeBTaggingEfficiency
 run_all.py --computeJetPUIDEfficiency
@@ -107,10 +151,10 @@ run_all.py --computeJetPUIDEfficiency
 dataset JSON (not this chapter's own output — the maps are an input the weight modules
 need, so they can't depend on selectionII having already run). The two `--compute*`
 flags then run `scripts/computeBTaggingEfficiency.py` / `scripts/computeJetPUIDEfficiency.py`
-against that fileset, writing ROOT files into the shared, repo-root `SFs/Efficiency/` and
-`SFs/JetPUID/Efficiency/` respectively — picked up by every subsequent run regardless of
-tag/hash (see Inputs above: the `SFs/` snapshot is re-synced into `outputs/{tag}/{hash}/SFs/`
-on every `run_all.py` invocation, not just the first).
+against that fileset, writing ROOT files into `inputs/SFs/Efficiency/` and
+`inputs/SFs/JetPUID/Efficiency/` respectively, and copying the freshly computed per-era
+files into this run's own `outputs/{tag}/{hash}/inputs/SFs/...` snapshot right away (same
+dual-write as every other fetch/compute step in this chapter).
 
 `jetPUID` is not currently in `ModuleList.MC` (see What it does) — computing its
 efficiency map doesn't re-enable it by itself; that's a separate, deliberate edit to
@@ -128,7 +172,7 @@ run_all.py --generateDatasetJSON
 ```
 
 `scripts/crab/submit_selectionII_flexible.py` builds `Data.userInputFiles` from
-`selectionI_{tag}_{era}_datasets.json` the same way (selectionI output isn't DBS-registered
+`selectionI_{era}_datasets.json` the same way (selectionI output isn't DBS-registered
 either), and `scripts/crab/crab_script_selectionII.py` resolves each LFN to
 `root://eosuser.cern.ch/...` directly, bypassing `crabhelper.inputFiles()` for the same
 reason as 003-I.
@@ -137,12 +181,13 @@ The one real difference from 003-I: this stage's modules need real SF files
 (`inputs/SFs/UL{era}_mu_ID.json`, `_mu_HLT.json`, `_jet_Btagging.json` — run
 `--fetchSFFiles` on lxplus before submitting, since `submit_selectionII_flexible.py`
 reads them straight off disk at submission time to build `JobType.inputFiles` — plus a
-per-dataset b-tagging efficiency ROOT file, `SFs/Efficiency/{era}/{dataset}.root`) — CRAB
-flattens `JobType.inputFiles` into the sandbox root, so `crab_script_selectionII.py`
-recreates the expected `inputs/SFs/...` and `SFs/Efficiency/...` relative layouts by
-moving the flat-shipped files into place before instantiating any module. Data jobs
-(`ModuleList.Data: []`) ship no SF files at all and just run `PostProcessor` with an empty
-module list, mirroring the local path exactly.
+per-dataset b-tagging efficiency ROOT file, `inputs/SFs/Efficiency/{era}/{dataset}.root`,
+from `--computeBTaggingEfficiency`) — CRAB flattens `JobType.inputFiles` into the sandbox
+root, so `crab_script_selectionII.py` recreates the expected `inputs/SFs/...` relative
+layout by moving the flat-shipped files into place before instantiating any module. Both
+branches build `module_names` from `config["ModuleList"]["Data" if is_data else "MC"]`, so
+Data jobs still run through `PostProcessor` even though `ModuleList.Data` is currently
+empty.
 
 Another real difference from 003-I: `correctionlib`/`coffea`/`awkward` (needed by
 `muonID`/`muonHLT`/`bTagging`) are **not** part of the stock CMSSW python environment —

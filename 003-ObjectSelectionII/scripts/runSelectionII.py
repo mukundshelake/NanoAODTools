@@ -33,7 +33,6 @@ from modules.JetPUIDWeight import jetPUIdWeightProducer
 from modules.LHEWeightSign import LHEWeightSignProducer
 from modules.MuonHLTWeight import MuonHLTWeightProducer
 from modules.MuonIDWeight import MuonIDWeightProducer
-from modules.ABCDTransferWeight import ABCDTransferWeightProducer
 
 
 def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
@@ -71,8 +70,6 @@ def _instantiate_module(module_name, era, DataMC, key, config):
         return MuonHLTWeightProducer(config)
     elif module_name == "muonID":
         return MuonIDWeightProducer(config)
-    elif module_name == "ABCDTransferWeight":
-        return ABCDTransferWeightProducer(config)
     else:
         logging.error(f"Unknown module: {module_name}")
         return None

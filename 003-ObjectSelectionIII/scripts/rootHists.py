@@ -85,7 +85,7 @@ def get_aggregated_coffea_path(output_dir: Path, tag: str, era: str,
 
 
 def get_qcd_template_path(output_dir: Path, tag: str, era: str) -> Path:
-    """Data-driven QCD template (run_all.py --buildQCDTemplate): region-D Data minus
+    """Data-driven QCD template (run_all.py --buildQCDTemplate): region-B Data minus
     non-QCD MC, already reweighted by the ABCD transfer factor -- see that step's
     docstring in run_all.py. Replaces the QCD group's entry in the stack.
     """
@@ -306,7 +306,7 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
         mc_coffea[group] = load(mc_coffea_path)
 
     # Replace the QCD group's stack entry with the data-driven QCD template
-    # (run_all.py --buildQCDTemplate: region-D Data minus non-QCD MC, already
+    # (run_all.py --buildQCDTemplate: region-B Data minus non-QCD MC, already
     # reweighted by the ABCD transfer factor) if it's been built for this era.
     # Falls back to plain QCD MC (with a warning) if it hasn't -- keeps this
     # script usable before that step has been run, rather than hard-failing.

@@ -69,75 +69,33 @@ def get_git_info():
         }
 
 
-def create_output_directory(base_dir, config_path, inputs_folder, sfs_folder=None):
+def create_output_directory(base_dir, config_path, inputs_folder):
     """
     Create hash-based output directory and copy config.
-    
+
     Args:
         base_dir: Base outputs directory
         config_path: Path to config.yaml
         inputs_folder: Path to inputs folder
-        sfs_folder: Path to SFs folder (optional). Copied to output_dir/SFs/ so
-                    relative SF paths in processListJSON configs resolve correctly
-                    when runSelectionII.py chdirs to the run folder.
-    
+
     Returns:
         tuple: (output_dir_path, config_hash, is_new_run)
     """
     config_hash = compute_config_hash(config_path)
     output_dir = Path(base_dir) / config_hash
-    
+
     is_new_run = not output_dir.exists()
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Copy config to output directory
     import shutil
     shutil.copy2(config_path, output_dir / 'config.yaml')
-    
+
     # Copy inputs folder to output directory
     if inputs_folder.exists():
         shutil.copytree(inputs_folder, output_dir / 'inputs', dirs_exist_ok=True)
 
-    # Copy SFs folder to output directory so relative SF paths work from the run folder.
-    # Re-synced (not copy-once) every invocation, same as inputs_folder above: SFs/ is
-    # shared, external state (correctionlib files, efficiency maps) that can change
-    # without the config hash changing, e.g. after --computeJetPUIDEfficiency or
-    # --computeBTaggingEfficiency regenerate an efficiency map into the repo-root SFs/.
-    # Some entries under SFs/ (e.g. GoldenJSON/*.txt) are themselves symlinks, and
-    # os.symlink() refuses to overwrite an existing link -- so a merge-in-place
-    # (dirs_exist_ok=True) fails on the second run. Removing and recopying avoids that.
-    if sfs_folder is not None and Path(sfs_folder).exists():
-        sfs_dst = output_dir / 'SFs'
-        if sfs_dst.exists():
-            shutil.rmtree(sfs_dst)
-        shutil.copytree(sfs_folder, sfs_dst, symlinks=True)
-    
     return output_dir, config_hash, is_new_run
-
-
-def fetch_and_snapshot(source_path, inputs_folder, output_dir, filename):
-    """
-    Copy a file fetched from a previous chapter into both the local inputs/
-    folder and this run's hash-versioned outputs/inputs/ snapshot.
-
-    create_output_directory() only snapshots inputs_folder -> output_dir/inputs
-    as it exists at the start of a run_all.py invocation, which is before any
-    --fetchFromPreviousChapter step runs within that same invocation. Without
-    this explicit dual-write, the file just fetched in this invocation would be
-    missing from that invocation's own outputs/inputs/ snapshot (it would only
-    show up in the snapshot on a later, separate invocation).
-
-    Returns:
-        tuple: (local_path, output_path)
-    """
-    import shutil
-    local_path = Path(inputs_folder) / filename
-    output_path = Path(output_dir) / 'inputs' / filename
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source_path, local_path)
-    shutil.copy2(source_path, output_path)
-    return local_path, output_path
 
 
 def update_run_history(history_file, config_hash, metadata=None):

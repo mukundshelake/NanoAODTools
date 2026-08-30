@@ -1,5 +1,5 @@
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 LFN_Base : "/store/user/mshelake/DataFiles"
@@ -774,6 +774,11 @@ histDetails:
     ylimits: [0.5, 100000000]
 
 weightList:
+  # jetPUIdWeight deliberately excluded: JetPUIDWeight.py's per-jet "failing" weight
+  # formula (1 - sf*eff)/(1-eff) blows up (seen up to ~1.3e5 on real UL2016preVFP MC)
+  # when a low-statistics efficiency-map bin lands close to eff=1 without being caught
+  # by that module's abs(1-eff)<1e-8 guard. Re-add only once that's fixed (e.g. clipped
+  # to a sane range) -- until then this silently corrupts every weighted histogram.
   MC: ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
   Data: ["L1PreFiringWeight_Nom"]
 

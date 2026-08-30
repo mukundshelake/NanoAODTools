@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Master script to generate all outputs for 002-Samples chapter.
+Master script to generate all outputs for 003-ObjectSelectionII chapter.
 
 Usage:
     python scripts/run_all.py [--force] [--tag TAG_NAME]
@@ -49,7 +49,7 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
 
 
 def main(): 
-    parser = argparse.ArgumentParser(description='Generate all outputs for 002-Samples')
+    parser = argparse.ArgumentParser(description='Generate all outputs for 003-ObjectSelectionII')
     parser.add_argument('-t', '--tag', type=str,
                        help='Create named tag for this run (e.g., baseline, paper_v1)', default='Dump')
     parser.add_argument('--force', action='store_true',
@@ -57,13 +57,24 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch selectionI_{tag}_{era}_datasets.json and {era}_goldenJSON.json from '
-                            '003-ObjectSelectionI outputs into inputs/ (and this run\'s outputs/inputs/ snapshot). '
-                            'Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 003-ObjectSelectionI run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generateSelectionIDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/selectionI/{selectionITag}/{selectionIHash}/{era} on disk '
+                            '(the 003-ObjectSelectionI output) and build inputs/selectionI_{era}_datasets.json '
+                            'via scripts/generateDatasetJSON.py -- the same health-checked scan 003-ObjectSelectionI '
+                            'itself uses, run fresh each time so the recorded file paths always reflect where the '
+                            'files actually are right now (also copied into this run\'s outputs/{tag}/{hash}/inputs/ '
+                            'snapshot). Requires --selectionITag and --selectionIHash.')
+    parser.add_argument('--selectionITag', type=str, default=None,
+                       help='[0] Tag of the 003-ObjectSelectionI run to scan (e.g. "midAugust"). '
+                            'Required by --generateSelectionIDatasetJSON.')
+    parser.add_argument('--selectionIHash', type=str, default=None,
+                       help='[0] Config hash of the 003-ObjectSelectionI run to scan. '
+                            'Required by --generateSelectionIDatasetJSON.')
+    parser.add_argument('--downloadGoldenJSONs', action='store_true',
+                       help='[0] Download {era}_goldenJSON.json for each era directly from the CMS URLs in '
+                            'config.yaml\'s golden_json_urls, into inputs/ (and this run\'s outputs/{tag}/{hash}/'
+                            'inputs/ snapshot). Independent of any particular 003-ObjectSelectionI run -- the '
+                            'golden JSON only depends on era, not on a selectionI tag/hash.')
     parser.add_argument('--fetchSFFiles', action='store_true',
                        help='[0a] Fetch correctionlib SF files (muon ID/HLT, jet PU ID, b-tagging) from '
                             "SFSource (hostname-resolved, e.g. lxplus's CVMFS jsonpog-integration mount) into "
@@ -71,34 +82,22 @@ def main():
                             're-fetched -- pass --force to refetch everything regardless.')
     parser.add_argument('--prepareEfficiencyFileset', action='store_true',
                        help='[0b] Build a per-era, MC-only coffea fileset JSON from the selectionI dataset JSON '
-                            '(fetched via --fetchFromPreviousChapter) for --computeJetPUIDEfficiency / '
+                            '(built via --generateSelectionIDatasetJSON) for --computeJetPUIDEfficiency / '
                             '--computeBTaggingEfficiency. Uses selectionI (pre-weight) skims, not this '
                             "chapter's own output, since the efficiency maps are needed by the weight "
                             'modules themselves.')
     parser.add_argument('--computeJetPUIDEfficiency', action='store_true',
                        help='[0c] Compute Jet PU ID efficiency maps (scripts/computeJetPUIDEfficiency.py) from '
                             'the fileset(s) built by --prepareEfficiencyFileset, writing ROOT files into '
-                            "<repo-root>/SFs/JetPUID/Efficiency/<era>/<sample>.root (config.yaml's "
-                            "jetPUID.efficiencyFolder).")
+                            "inputs/SFs/JetPUID/Efficiency/<era>/<sample>.root (config.yaml's "
+                            "jetPUID.efficiencyFolder) and copying them into this run's own "
+                            "outputs/{tag}/{hash}/inputs/SFs/JetPUID/Efficiency/<era>/ snapshot.")
     parser.add_argument('--computeBTaggingEfficiency', action='store_true',
                        help='[0d] Compute per-flavor b-tagging efficiency maps (scripts/computeBTaggingEfficiency.py) '
                             'from the fileset(s) built by --prepareEfficiencyFileset, writing ROOT files into '
-                            "<repo-root>/SFs/Efficiency/<era>/<sample>.root (config.yaml's "
-                            "bTagging.efficiencyFolder).")
-    parser.add_argument('--fetchABCDScaleFactor', action='store_true',
-                       help='[0e] Fetch abcdScaleFactor_{era}.root (the ABCD_transferFactor_R TH2 map computed by '
-                            "003-ObjectSelectionI's computeABCDScaleFactor.py) from that chapter's own output into "
-                            "inputs/SFs/{era}_abcdScaleFactor.root (and this run's outputs/{tag}/{hash}/inputs/SFs/ "
-                            'snapshot). Requires --abcdTag and --abcdHash. Deliberately a direct, explicit copy '
-                            "from 003-ObjectSelectionI's own outputs/{abcdTag}/{abcdHash}/{era}/ -- not routed "
-                            'through --fetchFromPreviousChapter, which only fetches the selectionI dataset/golden '
-                            'JSONs, not chapter-computed artifacts like this one.')
-    parser.add_argument('--abcdTag', type=str, default=None,
-                       help='[0e] Tag of the 003-ObjectSelectionI run that produced abcdScaleFactor_{era}.root. '
-                            'Required by --fetchABCDScaleFactor.')
-    parser.add_argument('--abcdHash', type=str, default=None,
-                       help='[0e] Config hash of the 003-ObjectSelectionI run that produced '
-                            'abcdScaleFactor_{era}.root. Required by --fetchABCDScaleFactor.')
+                            "inputs/SFs/Efficiency/<era>/<sample>.root (config.yaml's "
+                            "bTagging.efficiencyFolder) and copying them into this run's own "
+                            "outputs/{tag}/{hash}/inputs/SFs/Efficiency/<era>/ snapshot.")
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
@@ -123,6 +122,19 @@ def main():
                        help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
+    parser.add_argument('--computeABCDScaleFactor', action='store_true',
+                       help='[3b] Run scripts/computeABCDScaleFactor.py on selectionII_{tag}_{era}_datasets.json '
+                            '(from --generateDatasetJSON): computes the data-driven QCD transfer factor '
+                            'R = N_C/N_D, binned in (SelMuon_pt, |SelMuon_eta|). Runs after the SF-weight skims '
+                            'exist, so the background subtraction underneath R uses the same full per-event '
+                            'weight (muonIDWeight, muonHLTWeight, bTagWeight, L1PreFiringWeight_Nom, '
+                            'lheWeightSign, on top of Lumi*Xsec/Ngen) as the rest of the analysis -- unlike the '
+                            'old 003-ObjectSelectionI version of this script, which could only use '
+                            'Lumi*Xsec/Ngen*sign(LHEWeight) since the SF branches did not exist yet at that '
+                            'stage. Writes a ROOT file of TH2 maps and a JSON report per era to '
+                            'outputs/{tag}/{hash}/{era}/. 003-ObjectSelectionIII fetches this file directly from '
+                            "here and looks up R live, per event, when building region-B histograms -- there is "
+                            'no per-event branch/module for it in this chapter.')
     parser.add_argument('--prepareFileset', action='store_true',
                        help='[4] Prepare the fileset for coffea processing.')
     parser.add_argument('--printHash', action='store_true',
@@ -136,12 +148,11 @@ def main():
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generateSelectionIDatasetJSON: {args.generateSelectionIDatasetJSON}")
+    print(f"  --selectionITag: {args.selectionITag}")
+    print(f"  --selectionIHash: {args.selectionIHash}")
+    print(f"  --downloadGoldenJSONs: {args.downloadGoldenJSONs}")
     print(f"  --fetchSFFiles: {args.fetchSFFiles}")
-    print(f"  --fetchABCDScaleFactor: {args.fetchABCDScaleFactor}")
-    print(f"  --abcdTag: {args.abcdTag}")
-    print(f"  --abcdHash: {args.abcdHash}")
     print(f"  --prepareEfficiencyFileset: {args.prepareEfficiencyFileset}")
     print(f"  --computeJetPUIDEfficiency: {args.computeJetPUIDEfficiency}")
     print(f"  --computeBTaggingEfficiency: {args.computeBTaggingEfficiency}")
@@ -153,6 +164,7 @@ def main():
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
+    print(f"  --computeABCDScaleFactor: {args.computeABCDScaleFactor}")
     print(f"  --prepareFileset: {args.prepareFileset}")
     print(f"  --sample: {args.sample}")
     print(f"  --workers: {args.workers}")
@@ -165,16 +177,15 @@ def main():
     config_path = base_dir / 'config.yaml'
     outputs_base = base_dir / 'outputs' / f'{args.tag}'
     inputs_folder = base_dir / 'inputs'
-    sfs_folder = base_dir.parent / 'SFs'
 
     print(f"Using config: {config_path}")
-    
+
     # Load config and compute hash
     config = utils.load_config(config_path)
-    
+
     # Create output directory
     output_dir, config_hash, is_new_run = utils.create_output_directory(
-        outputs_base, config_path, inputs_folder, sfs_folder
+        outputs_base, config_path, inputs_folder
     )
     if is_new_run:
         print(f"Config file has changed. Created new output directory: {output_dir}")
@@ -195,39 +206,91 @@ def main():
         print(f"Config hash: {config_hash}")
         return 0
 
-    # Fetch selection-I dataset JSON + golden JSON (pass-through) into inputs/
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 003-ObjectSelectionI's selectionI ROOT files on disk and build
+    # inputs/selectionI_{era}_datasets.json fresh via generateDatasetJSON.py --
+    # replaces the old --fetchFromPreviousChapter, which just copied a JSON that
+    # 003-ObjectSelectionI had generated at some earlier point and could go stale (its
+    # recorded paths pointing at files that had since moved or become
+    # unreachable from this machine, with nothing to catch the drift).
+    if args.generateSelectionIDatasetJSON:
+        if not args.selectionITag or not args.selectionIHash:
+            print("Error: --generateSelectionIDatasetJSON requires --selectionITag and --selectionIHash.")
             return 1
-        print(f"\nFetching inputs from 003-ObjectSelectionI (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '003-ObjectSelectionI' / 'outputs' / args.tag / args.previousHash
+        print(f"\nGenerating selectionI dataset JSON from disk (tag: {args.selectionITag}, "
+              f"hash: {args.selectionIHash})...")
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            return 1
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            dataset_filename = f'selectionI_{args.tag}_{era}_datasets.json'
-            golden_filename = f'{era}_goldenJSON.json'
-            sources = [
-                previous_chapter_outputs / era / dataset_filename,       # this chapter's own deliverable
-                previous_chapter_outputs / 'inputs' / golden_filename,   # pass-through from 002-Samples
+            output_json_name = f"selectionI_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "selectionI", args.selectionITag,
+                                           args.selectionIHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory,
             ]
-            for source_path in sources:
-                filename = source_path.name
-                if not source_path.exists():
-                    print(f"    Error: Source file not found: {source_path}. Skipping.")
-                    continue
-                local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-                print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 003-ObjectSelectionI.")
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            # Also copy into this run's own outputs/{tag}/{hash}/inputs/ snapshot --
+            # create_output_directory() only snapshotted inputs/ as it existed at the
+            # start of this invocation, before this step ran.
+            output_path = output_dir / 'inputs' / output_json_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / output_json_name, output_path)
+            print(f"    Generated {inputs_folder / output_json_name} and copied to {output_path}")
+        print("Finished generating selectionI dataset JSON files.")
+
+    # Download {era}_goldenJSON.json directly from the CMS URLs in config.yaml's
+    # golden_json_urls. Independent of any particular 003-ObjectSelectionI run -- the
+    # golden JSON content only depends on era.
+    if args.downloadGoldenJSONs:
+        print("\nDownloading golden JSON files specified in config...")
+        download_script = base_dir / 'scripts' / 'downloadGoldenJsons.py'
+        if not download_script.exists():
+            print(f"Error: {download_script} not found!")
+            return 1
+        golden_json_urls = config.get('golden_json_urls', {})
+        if not golden_json_urls:
+            print("Error: config.yaml has no golden_json_urls section.")
+            return 1
+        for era, url in golden_json_urls.items():
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"  Era: {era}")
+            output_filename = f"{era}_goldenJSON.json"
+            local_path = inputs_folder / output_filename
+            if local_path.exists() and not args.force:
+                print(f"    Already exists and --force not specified, skipping download: {local_path}")
+            else:
+                cmd = [sys.executable, str(download_script), '-u', url,
+                       '-o', output_filename, '-outDir', str(inputs_folder)]
+                print(f"    Running command: {' '.join(cmd)}")
+                result = subprocess.run(cmd)
+                if result.returncode != 0:
+                    print(f"    Error downloading golden JSON for era {era}")
+                    return 1
+            output_path = output_dir / 'inputs' / output_filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(local_path, output_path)
+            print(f"    {local_path} copied to {output_path}")
+        print("Finished downloading golden JSON files.")
 
     # Fetch correctionlib SF files from CVMFS (or wherever SFSource resolves to on this
     # machine) into inputs/SFs/. Treated as an input like the selectionI dataset JSON
     # above: idempotent (skip a file already present locally, unless --force), and
     # dual-written into both the persistent inputs_folder and this run's own
-    # output_dir/inputs snapshot for the same reason fetch_and_snapshot() does -- the
-    # snapshot copy at the top of this script only reflects inputs_folder as it was
-    # before this invocation's own fetch runs.
+    # output_dir/inputs snapshot for the same reason as above -- the snapshot copy at
+    # the top of this script only reflects inputs_folder as it was before this
+    # invocation's own fetch runs.
     if args.fetchSFFiles:
         print("\nFetching correctionlib SF files...")
         sf_source_base, ssh_relay_host = utils.resolve_sf_source(config)
@@ -274,35 +337,6 @@ def main():
         if not any_fetched:
             print("  All SF files already present in inputs/SFs/ (use --force to refetch).")
 
-    if args.fetchABCDScaleFactor:
-        print("\nFetching ABCD scale factor files from 003-ObjectSelectionI...")
-        if not args.abcdTag or not args.abcdHash:
-            print("Error: --fetchABCDScaleFactor requires --abcdTag and --abcdHash.")
-            return 1
-        abcd_source_base = base_dir.parent / '003-ObjectSelectionI' / 'outputs' / args.abcdTag / args.abcdHash
-        any_fetched = False
-        for era in config['NgenandXsec']:
-            if not matches_filter(args.filter, era):
-                continue
-            source_path = abcd_source_base / era / f"abcdScaleFactor_{era}.root"
-            if not source_path.exists():
-                print(f"  Error: source not found: {source_path}. Skipping era {era}.")
-                continue
-            rel_path = Path('SFs') / f"{era}_abcdScaleFactor.root"
-            local_path = inputs_folder / rel_path
-            snapshot_path = output_dir / 'inputs' / rel_path
-            if local_path.exists() and not args.force:
-                print(f"  [skip, already fetched] {rel_path}")
-                continue
-            local_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, local_path)
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, snapshot_path)
-            any_fetched = True
-            print(f"  Fetched {source_path} -> {local_path}")
-        if not any_fetched:
-            print("  All ABCD scale factor files already present in inputs/SFs/ (use --force to refetch).")
-
     # Build a per-era, MC-only coffea fileset from the selectionI (pre-weight) skims,
     # for the two efficiency-map computers below. Deliberately sourced from selectionI's
     # dataset JSON, not this chapter's own (selectionII) output: the efficiency maps are
@@ -313,10 +347,10 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            selectionI_dataset_json = output_dir / 'inputs' / f'selectionI_{args.tag}_{era}_datasets.json'
+            selectionI_dataset_json = output_dir / 'inputs' / f'selectionI_{era}_datasets.json'
             if not selectionI_dataset_json.exists():
                 print(f"  Warning: Dataset JSON not found for era {era}: {selectionI_dataset_json}. "
-                      f"Run --fetchFromPreviousChapter first. Skipping.")
+                      f"Run --generateSelectionIDatasetJSON first. Skipping.")
                 continue
             with open(selectionI_dataset_json) as f:
                 datasetJSON = json.load(f)
@@ -350,11 +384,15 @@ def main():
                 json.dump(fileset, f, indent=2)
             print(f"  Era {era}: {len(fileset)} MC dataset(s) -> {fileset_output_path}")
 
-    # Compute Jet PU ID efficiency maps into the shared, repo-root SFs/ folder.
+    # Compute Jet PU ID efficiency maps into the chapter-local inputs/SFs/ folder --
+    # the same location --fetchSFFiles uses for every other SF input, and what
+    # config.yaml's jetPUID.efficiencyFolder now points to (no longer the shared,
+    # repo-root SFs/ folder). Also copied into this run's own
+    # outputs/{tag}/{hash}/inputs/SFs/ snapshot, same as every other fetch/compute step.
     if args.computeJetPUIDEfficiency:
         print("\nComputing Jet PU ID efficiency maps...")
         compute_script = base_dir / 'scripts' / 'computeJetPUIDEfficiency.py'
-        jetpuid_outdir = sfs_folder / 'JetPUID' / 'Efficiency'
+        jetpuid_outdir = inputs_folder / 'SFs' / 'JetPUID' / 'Efficiency'
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
@@ -376,13 +414,21 @@ def main():
             if result.returncode != 0:
                 print(f"Error computing Jet PU ID efficiency for era {era}")
                 return 1
+            era_outdir = jetpuid_outdir / era
+            if era_outdir.exists():
+                snapshot_dir = output_dir / 'inputs' / 'SFs' / 'JetPUID' / 'Efficiency' / era
+                if snapshot_dir.exists():
+                    shutil.rmtree(snapshot_dir)
+                shutil.copytree(era_outdir, snapshot_dir)
+                print(f"  Era {era}: copied {era_outdir} -> {snapshot_dir}")
         print(f"Jet PU ID efficiency maps written under: {jetpuid_outdir}")
 
-    # Compute per-flavor b-tagging efficiency maps into the shared, repo-root SFs/ folder.
+    # Compute per-flavor b-tagging efficiency maps into the chapter-local inputs/SFs/
+    # folder, same reasoning as --computeJetPUIDEfficiency above.
     if args.computeBTaggingEfficiency:
         print("\nComputing b-tagging efficiency maps...")
         compute_script = base_dir / 'scripts' / 'computeBTaggingEfficiency.py'
-        btag_outdir = sfs_folder / 'Efficiency'
+        btag_outdir = inputs_folder / 'SFs' / 'Efficiency'
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
@@ -412,6 +458,13 @@ def main():
             if result.returncode != 0:
                 print(f"Error computing b-tagging efficiency for era {era}")
                 return 1
+            era_outdir = btag_outdir / era
+            if era_outdir.exists():
+                snapshot_dir = output_dir / 'inputs' / 'SFs' / 'Efficiency' / era
+                if snapshot_dir.exists():
+                    shutil.rmtree(snapshot_dir)
+                shutil.copytree(era_outdir, snapshot_dir)
+                print(f"  Era {era}: copied {era_outdir} -> {snapshot_dir}")
         print(f"b-tagging efficiency maps written under: {btag_outdir}")
 
     # Generate process list JSON for runSelection.py
@@ -425,7 +478,7 @@ def main():
             print(f"\nProcessing era: {era}")
             if not matches_filter(args.filter, era):
                 continue
-            selectionI_dataset_json = output_dir / 'inputs' / f'selectionI_{args.tag}_{era}_datasets.json'
+            selectionI_dataset_json = output_dir / 'inputs' / f'selectionI_{era}_datasets.json'
             golden_json_file = output_dir / 'inputs' / f'{era}_goldenJSON.json'
 
             if not selectionI_dataset_json.exists():
@@ -581,9 +634,9 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'selectionI_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'selectionI_{era}_datasets.json'
             if not dataset_json_path.exists():
-                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --generateSelectionIDatasetJSON first.")
                 continue
             golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
             with open(dataset_json_path) as jf:
@@ -655,7 +708,7 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'selectionI_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'selectionI_{era}_datasets.json'
             if not dataset_json_path.exists():
                 print(f"  Warning: selectionI dataset JSON not found for era {era}: {dataset_json_path}. Skipping.")
                 continue
@@ -734,6 +787,41 @@ def main():
                 return 1
             else:
                 print(f"Successfully generated dataset JSON for era {era}: {outputDirectory / outputFileName}")
+
+    if args.computeABCDScaleFactor:
+        print("\nComputing data-driven ABCD scale factor (scripts/computeABCDScaleFactor.py)...")
+        sf_script = base_dir / 'scripts' / 'computeABCDScaleFactor.py'
+        if not sf_script.exists():
+            print(f"Error: {sf_script} not found!")
+            return 1
+        sf_failed = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            dataset_json_path = output_dir / era / f"selectionII_{args.tag}_{era}_datasets.json"
+            if not dataset_json_path.exists():
+                print(f"Error: selectionII dataset JSON not found for era {era} at {dataset_json_path}. "
+                      f"Run --generateDatasetJSON first.")
+                sf_failed = True
+                continue
+            sf_dir = output_dir / era
+            cmd = [
+                sys.executable, str(sf_script),
+                '--datasetJSON', str(dataset_json_path),
+                '--config', str(config_path),
+                '--era', era,
+                '--outputDir', str(sf_dir),
+            ]
+            print(f"\nRunning command: {' '.join(cmd)}")
+            result = subprocess.run(cmd)
+            if result.returncode != 0:
+                print(f"computeABCDScaleFactor.py reported problems for era {era}.")
+                sf_failed = True
+            else:
+                print(f"computeABCDScaleFactor.py: output written for era {era} to {sf_dir}")
+        if sf_failed:
+            return 1
+
     # Prepare fileset for coffea processing
     if args.prepareFileset:
         print("\nPreparing fileset for coffea processing...")

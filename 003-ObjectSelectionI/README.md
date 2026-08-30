@@ -41,11 +41,14 @@ The single source of truth for the entire chapter. Key sections:
 | Section | Purpose |
 |---|---|
 | `STORAGE` | Dict mapping a machine-identifying key to the root path on disk for that machine, e.g. `{cms2: "/mnt/disk2/mukund/DataFiles", lxplus: "/eos/user/m/mshelake/DataFiles/"}`. Resolved at runtime by `utils.resolve_storage_path()`, which matches the key as a substring of `socket.gethostname()` (not an exact match) |
+| `LFN_Base` | `/store/...` base path CRAB writes selectionI output under, on EOS. Only used by `--submitSelectionJobs` |
+| `golden_json_urls` | Golden JSON URL per era, used by `--downloadGoldenJSONs` |
 | `SelectionCuts` | Era-dependent event-level cut strings passed directly to `PostProcessor(cut=...)`. Includes muon, jet, b-jet, HLT, and MET flag requirements |
 | `ModuleList` | Which analysis modules run on MC vs Data (`selectedObjects` for both) |
 | `Modules.selectedObjects` | Per-era kinematic thresholds and output branch name prefixes for the object-selection module |
 | `DataLumiInfo` | Integrated luminosity (pb⁻¹) and uncertainty per era, for downstream normalisation |
 | `NgenandXsec` | Number of generated events and cross-section (pb) for every MC dataset in every era, also for downstream normalisation |
+| `ABCDVariables` | Variable/binning definitions for `--plotABCDVariables` (muon isolation, MET) |
 
 ### 3. Preselection ROOT files on disk
 
@@ -163,6 +166,24 @@ After the skim files are written, `--generateDatasetJSON` scans the output stora
 `--plotABCDVariables` runs `scripts/plotABCDVariables.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`), as a first look at candidate ABCD-method discriminating variables (muon isolation, MET) ahead of picking any region-boundary values -- see `config.yaml`'s `ABCDVariables` block for the variable/binning definitions. For each era it overlays normalized (unit-area) shape distributions across `--abcdGroups` (default: `SemiLeptonic` and `QCD` under `--abcdDataMC`, default `MC_mu`). Since 003-ObjectSelectionII's SF weights don't exist yet at this stage (and these skims have no `genWeight` branch), each dataset is combined into its group total using only `sign(LHEWeight_originalXWGTUP) * Lumi*Xsec/Ngen` -- the same sign convention as 003-ObjectSelectionII's `LHEWeightSignProducer`, and the same per-dataset `Lumi*Xsec/Ngen` scalar-weight convention 003-ObjectSelectionIII's `--aggregrateGroupHists` uses when merging a group's datasets (e.g. QCD's several pT-binned samples) into one. This is a shape-comparison tool only, not an ABCD yield estimate. Writes `{var}_{era}.png`/`.pdf` and a `abcdVariables_{era}.root` (raw weighted + normalized histograms) per era to `outputs/{tag}/{hash}/{era}/abcdPlots/`.
 
 Note: with the current `SelectionCuts` (`Muon_pfRelIso04_all <= 0.06`), the muon-isolation shape is only visible up to that cut -- the anti-isolated tail needed for the eventual ABCD sideband regions isn't in these skims yet. The MET shape, by contrast, is unconstrained by any existing cut and is fully visible now.
+
+### ABCD closure test (exploratory)
+
+`--abcdClosureTest` runs `scripts/abcdClosureTest.py` on `selectionI_{tag}_{era}_datasets.json`
+(from `--generateDatasetJSON`): the standard sanity check for whether muon isolation and MET
+are independent enough, within a target process, for the ABCD method to be valid. Sums the
+`ABCD_region` branch `SelectedObjectsProducer` already wrote (no re-derivation from
+`SelMuon_pfRelIso04_all`/`MET_pt` needed) across `--groups` under `--dataMC` (default: `QCD`
+under `MC_mu` -- the actual ABCD estimate target) and checks `N_A ≈ N_B·N_C/N_D`; a large
+deviation means the two variables are correlated within that process and the estimate would
+be biased. Datasets within a group are combined with the same `Lumi*Xsec/Ngen`-weighted,
+`sign(LHEWeight_originalXWGTUP)`-corrected convention as `--plotABCDVariables`. Writes
+`abcdClosureTest_{era}_report.json` to `outputs/{tag}/{hash}/{era}/`.
+
+Note: the actual data-driven QCD transfer factor `R = N_C/N_D` is **not** computed in this
+chapter -- it needs the muon ID/HLT and b-tagging scale factors that only exist starting in
+003-ObjectSelectionII, so `computeABCDScaleFactor.py` lives there instead (reading
+`selectionII` skims, once the SF branches exist) -- see that chapter's README.
 
 ---
 
@@ -312,6 +333,7 @@ Both `run_all.py` and `runSelection.py` accept `--filter ERA[/DataMC[/group[/dat
 │   ├── downloadGoldenJsons.py         # Pre-run: download {era}_goldenJSON.json from CMS URLs
 │   ├── verifyOutput.py                # Post-run: verify selectionI skim branches/invariants
 │   ├── plotABCDVariables.py           # Exploratory: ABCD-plane variable shape distributions
+│   ├── abcdClosureTest.py             # Exploratory: N_A ~= N_B*N_C/N_D closure test
 │   ├── utils.py                       # Config hashing, output directory management
 │   ├── crab/                          # CRAB alternative to local runSelection.py execution
 │   └── modules/

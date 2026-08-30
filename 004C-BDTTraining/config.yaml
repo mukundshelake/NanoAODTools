@@ -10,7 +10,7 @@
 # 002/003-I/003-II/004A/004B there is no CRAB submission path here.
 
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 

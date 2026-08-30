@@ -24,7 +24,7 @@ JetPUIDWeight (e.g. "ttbar_SemiLeptonic").
 Usage:
     python computeJetPUIDEfficiency.py \\
         --fileList <fileset.json> \\
-        --outputDir SFs/JetPUID/Efficiency \\
+        --outputDir inputs/SFs/JetPUID/Efficiency \\
         [--sample <nWorkers>]
 
 The fileset JSON must follow the coffea format produced by run_all.py with
@@ -169,7 +169,7 @@ def main():
         help=(
             "Base output directory for ROOT files. "
             "Files are written to <outputDir>/<era>/<sample>.root. "
-            "Typically 'SFs/JetPUID/Efficiency' relative to NanoAODTools/."
+            "Typically 'inputs/SFs/JetPUID/Efficiency' relative to 003-ObjectSelectionII/."
         ),
     )
     parser.add_argument(

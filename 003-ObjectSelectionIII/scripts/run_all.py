@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Master script to generate all outputs for 002-Samples chapter.
+Master script to generate all outputs for 003-ObjectSelectionIII chapter.
 
 Usage:
     python scripts/run_all.py [--force] [--tag TAG_NAME]
@@ -12,6 +12,7 @@ Options:
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 import subprocess
@@ -51,7 +52,7 @@ REGION_LABELS = {0: 'A', 1: 'B', 2: 'C', 3: 'D'}
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate all outputs for 002-Samples')
+    parser = argparse.ArgumentParser(description='Generate all outputs for 003-ObjectSelectionIII')
     parser.add_argument('-t', '--tag', type=str,
                        help='Create named tag for this run (e.g., baseline, paper_v1)', default='Dump')
     parser.add_argument('--force', action='store_true',
@@ -59,29 +60,48 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch {tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json for every era/DataMC/'
-                            'group/dataset from 003-ObjectSelectionII outputs into inputs/ (and this run\'s '
-                            'outputs/inputs/ snapshot). Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 003-ObjectSelectionII run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generateSelectionIIDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/selectionII/{selectionIITag}/{selectionIIHash}/{era} on disk '
+                            '(the 003-ObjectSelectionII output) via scripts/generateDatasetJSON.py -- the same '
+                            'health-checked scan 003-ObjectSelectionII itself uses, run fresh each time so the '
+                            'recorded file paths always reflect where the files actually are right now -- and '
+                            'build the per-dataset coffea fileset '
+                            'inputs/{DataMC}_{group}_{dataset}_{era}_fileset.json for every era/DataMC/group/'
+                            'dataset (also copied into this run\'s outputs/{tag}/{hash}/inputs/ snapshot). '
+                            'Requires --selectionIITag and --selectionIIHash.')
+    parser.add_argument('--selectionIITag', type=str, default=None,
+                       help='[0] Tag of the 003-ObjectSelectionII run to scan (e.g. "midAugust"). '
+                            'Required by --generateSelectionIIDatasetJSON.')
+    parser.add_argument('--selectionIIHash', type=str, default=None,
+                       help='[0] Config hash of the 003-ObjectSelectionII run to scan. '
+                            'Required by --generateSelectionIIDatasetJSON.')
+    parser.add_argument('--fetchABCDScaleFactor', action='store_true',
+                       help='[0b] Fetch abcdScaleFactor_{era}.root (the ABCD_transferFactor_R TH2 map computed '
+                            "by 003-ObjectSelectionII's computeABCDScaleFactor.py) from that chapter's own "
+                            'output into inputs/SFs/{era}_abcdScaleFactor.root (and this run\'s '
+                            "outputs/{tag}/{hash}/inputs/SFs/ snapshot). Reuses --selectionIITag/--selectionIIHash "
+                            '-- the same 003-ObjectSelectionII run being read for selectionII skims is also where '
+                            'R was computed. A direct, explicit copy, same as --generateSelectionIIDatasetJSON is '
+                            'for the selectionII skims themselves.')
     parser.add_argument('--buildSelectionHists', action='store_true',
                        help='Run buildSelectionHists.py to create histograms for selection optimization')
     parser.add_argument('--regionFilter', type=int, default=0, choices=[0, 1, 2, 3],
                        help='ABCD_region code to scope --buildSelectionHists/--aggregrateGroupHists to '
-                            '(0=A/signal region, 1=B, 2=C, 3=D/QCD control region). Default: 0 (region A) -- '
-                            'the nominal Data/MC plots. Use 3 to build the region-D ingredients for '
-                            '--buildQCDTemplate. Output filenames get a _region{A,B,C,D} suffix.')
+                            '(0=A/signal region, 1=B/QCD control region, 2=C, 3=D). Default: 0 (region A) -- '
+                            'the nominal Data/MC plots. Use 1 to build the region-B ingredients for '
+                            '--buildQCDTemplate -- region-B histograms additionally get the ABCD transfer '
+                            'factor R (from --fetchABCDScaleFactor, looked up live per event by SelMuon '
+                            'pt/|eta|) folded into their weight. Output filenames get a _region{A,B,C,D} suffix.')
     parser.add_argument('--aggregrateGroupHists', action='store_true',
                        help='Stack up histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}[...]')
     parser.add_argument('--buildQCDTemplate', action='store_true',
-                       help='Build the data-driven QCD template: max(regionD Data - sum of regionD non-QCD MC '
-                            'groups, 0) per histDetails variable, per era. qcdABCDWeight (from '
-                            '003-ObjectSelectionII\'s ABCDTransferWeight module, folded into the region-D '
-                            'histograms by --regionFilter 3) makes this already the properly-normalized '
-                            'region-A QCD prediction -- requires --aggregrateGroupHists --regionFilter 3 to '
-                            'have been run first for Data_mu/SingleMuon and every non-QCD MC_mu group. Writes '
+                       help='Build the data-driven QCD template: max(regionB Data - sum of regionB non-QCD MC '
+                            'groups, 0) per histDetails variable, per era. Region-B histograms are already '
+                            'weighted by the ABCD transfer factor R = N_C/N_D (folded in per event by '
+                            '--regionFilter 1, looked up from --fetchABCDScaleFactor\'s output), so this '
+                            'background-subtracted region-B shape is already the properly-normalized region-A '
+                            'QCD prediction: N_A_pred = R * N_B -- requires --aggregrateGroupHists --regionFilter 1 '
+                            'to have been run first for Data_mu/SingleMuon and every non-QCD MC_mu group. Writes '
                             '{tag}_{era}_QCDTemplate_selectionHists.coffea.')
     parser.add_argument('--qcdGroup', type=str, default='QCD',
                        help='With --buildQCDTemplate: MC_mu group to exclude from the background sum and '
@@ -100,8 +120,10 @@ def main():
     print("Arguments:")
     print(f"  --tag: {args.tag}")
     print(f"  --sample: {args.sample}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generateSelectionIIDatasetJSON: {args.generateSelectionIIDatasetJSON}")
+    print(f"  --selectionIITag: {args.selectionIITag}")
+    print(f"  --selectionIIHash: {args.selectionIIHash}")
+    print(f"  --fetchABCDScaleFactor: {args.fetchABCDScaleFactor}")
     print(f"  --buildSelectionHists: {args.buildSelectionHists}")
     print(f"  --regionFilter: {args.regionFilter} ({REGION_LABELS[args.regionFilter]})")
     print(f"  --aggregrateGroupHists: {args.aggregrateGroupHists}")
@@ -118,16 +140,15 @@ def main():
     config_path = base_dir / 'config.yaml'
     outputs_base = base_dir / 'outputs' / f'{args.tag}'
     inputs_folder = base_dir / 'inputs'
-    sfs_folder = base_dir.parent / 'SFs'
 
     print(f"Using config: {config_path}")
-    
+
     # Load config and compute hash
     config = utils.load_config(config_path)
-    
+
     # Create output directory
     output_dir, config_hash, is_new_run = utils.create_output_directory(
-        outputs_base, config_path, inputs_folder, sfs_folder
+        outputs_base, config_path, inputs_folder
     )
     if is_new_run:
         print(f"Config file has changed. Created new output directory: {output_dir}")
@@ -148,39 +169,113 @@ def main():
     storageBase = utils.resolve_storage_path(config)
     print(f"Using storage base: {storageBase}")
 
-    # Fetch the per-dataset coffea fileset JSON (built by 003-ObjectSelectionII's
-    # --prepareFileset) into inputs/. This is the only thing this chapter actually
-    # consumes from 003-ObjectSelectionII -- its filename already encodes
-    # DataMC/group/dataset/era, so all fetched files live flat in inputs/, same as
-    # every other chapter's fetch step.
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 003-ObjectSelectionII's selectionII ROOT files on disk fresh via
+    # generateDatasetJSON.py, then build the per-dataset coffea fileset directly from
+    # that scan -- replaces the old --fetchFromPreviousChapter, which just copied a
+    # fileset JSON 003-ObjectSelectionII had generated at some earlier point and could
+    # go stale (its recorded paths pointing at files that had since moved or become
+    # unreachable from this machine, with nothing to catch the drift). Same pattern as
+    # 003-ObjectSelectionI's --generatePreselectionDatasetJSON and
+    # 003-ObjectSelectionII's --generateSelectionIDatasetJSON.
+    if args.generateSelectionIIDatasetJSON:
+        if not args.selectionIITag or not args.selectionIIHash:
+            print("Error: --generateSelectionIIDatasetJSON requires --selectionIITag and --selectionIIHash.")
             sys.exit(1)
-        print(f"\nFetching inputs from 003-ObjectSelectionII (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '003-ObjectSelectionII' / 'outputs' / args.tag / args.previousHash
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            sys.exit(1)
+        print(f"\nGenerating selectionII dataset JSON / filesets from disk (tag: {args.selectionIITag}, "
+              f"hash: {args.selectionIIHash})...")
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            for DataMC in config['NgenandXsec'][era]:
+            dataset_json_name = f"selectionII_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "selectionII", args.selectionIITag,
+                                           args.selectionIIHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', dataset_json_name,
+                '--baseDirectory', base_directory,
+            ]
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                sys.exit(1)
+            dataset_json_path = inputs_folder / dataset_json_name
+            output_dataset_json_path = output_dir / 'inputs' / dataset_json_name
+            output_dataset_json_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(dataset_json_path, output_dataset_json_path)
+            print(f"    Generated {dataset_json_path} and copied to {output_dataset_json_path}")
+
+            # Build the per-dataset coffea fileset directly from the freshly-scanned
+            # dataset JSON -- same wrapping 003-ObjectSelectionII's --prepareFileset does,
+            # done here instead of fetching 003-ObjectSelectionII's own already-built copy.
+            with open(dataset_json_path) as f:
+                datasetJSON = json.load(f)
+            for DataMC in datasetJSON:
                 if not matches_filter(args.filter, era, DataMC):
                     continue
-                for group in config['NgenandXsec'][era][DataMC]:
+                for group in datasetJSON[DataMC]:
                     if not matches_filter(args.filter, era, DataMC, group):
                         continue
-                    for dataset in config['NgenandXsec'][era][DataMC][group]:
+                    for dataset in datasetJSON[DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
-                        filename = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json'
-                        source_path = previous_chapter_outputs / era / DataMC / group / dataset / filename
-                        if not source_path.exists():
-                            print(f"    Error: Source file not found: {source_path}. Skipping.")
-                            continue
-                        local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-                        print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 003-ObjectSelectionII.")
-    
+                        datasetName = f'{era}_{DataMC}_{group}_{dataset}'
+                        fileset = {datasetName: {"files": datasetJSON[DataMC][group][dataset], "metadata": {}}}
+                        if 'data' in DataMC.lower():
+                            fileset[datasetName]['metadata']['isData'] = True
+                        else:
+                            fileset[datasetName]['metadata']['isData'] = False
+                            fileset[datasetName]['metadata']['era'] = era
+                            fileset[datasetName]['metadata']['sample'] = dataset
+                        fileset_filename = f'{DataMC}_{group}_{dataset}_{era}_fileset.json'
+                        local_path = inputs_folder / fileset_filename
+                        with open(local_path, 'w') as f:
+                            json.dump(fileset, f, indent=2)
+                        output_path = output_dir / 'inputs' / fileset_filename
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(local_path, output_path)
+                        print(f"    Built {fileset_filename}")
+        print("Finished generating selectionII dataset JSON / filesets.")
+
+    # Fetch abcdScaleFactor_{era}.root directly from 003-ObjectSelectionII's own output --
+    # deliberately a direct, explicit copy (mirrors --generateSelectionIIDatasetJSON reusing
+    # the same --selectionIITag/--selectionIIHash), not routed through the dataset-JSON scan
+    # above, since this is a chapter-computed artifact, not a selectionII skim file list.
+    if args.fetchABCDScaleFactor:
+        print("\nFetching ABCD scale factor files from 003-ObjectSelectionII...")
+        if not args.selectionIITag or not args.selectionIIHash:
+            print("Error: --fetchABCDScaleFactor requires --selectionIITag and --selectionIIHash.")
+            sys.exit(1)
+        abcd_source_base = base_dir.parent / '003-ObjectSelectionII' / 'outputs' / args.selectionIITag / args.selectionIIHash
+        any_fetched = False
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            source_path = abcd_source_base / era / f"abcdScaleFactor_{era}.root"
+            if not source_path.exists():
+                print(f"  Error: source not found: {source_path}. Skipping era {era}.")
+                continue
+            rel_path = Path('SFs') / f"{era}_abcdScaleFactor.root"
+            local_path = inputs_folder / rel_path
+            snapshot_path = output_dir / 'inputs' / rel_path
+            if local_path.exists() and not args.force:
+                print(f"  [skip, already fetched] {rel_path}")
+                continue
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, local_path)
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, snapshot_path)
+            any_fetched = True
+            print(f"  Fetched {source_path} -> {local_path}")
+        if not any_fetched:
+            print("  All ABCD scale factor files already present in inputs/SFs/ (use --force to refetch).")
+
     if args.buildSelectionHists:
         print("Building selection histograms...")
         # Find the buildSelectionHists.py script in the current directory
@@ -206,10 +301,10 @@ def main():
                         if not matches_filter(args.filter, era, DataMC, group, dataset):
                             continue
                         print(f"      Dataset: {dataset}")
-                        fileSetJSON = output_dir / 'inputs' / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_fileset.json'
+                        fileSetJSON = output_dir / 'inputs' / f'{DataMC}_{group}_{dataset}_{era}_fileset.json'
                         if not fileSetJSON.exists():
                             print(f"Error: FileSet JSON not found for {era}/{DataMC}/{group}/{dataset} at {fileSetJSON}. "
-                                  f"Run --fetchFromPreviousChapter --previousHash <hash> first.")
+                                  f"Run --generateSelectionIIDatasetJSON --selectionIITag <tag> --selectionIIHash <hash> first.")
                             continue
                         outputDirectory = output_dir / era / DataMC / group / dataset
                         outputDirectory.mkdir(parents=True, exist_ok=True)
@@ -227,6 +322,13 @@ def main():
                             '--outputFileName', outputFileName,
                             '--regionFilter', str(args.regionFilter),
                         ]
+                        if args.regionFilter == 1:
+                            abcd_sf_file = inputs_folder / 'SFs' / f'{era}_abcdScaleFactor.root'
+                            if not abcd_sf_file.exists():
+                                print(f"Error: {abcd_sf_file} not found. Run --fetchABCDScaleFactor first "
+                                      f"(needed for --regionFilter 1).")
+                                sys.exit(1)
+                            command += ['--abcdScaleFactorFile', str(abcd_sf_file)]
                         subprocess.run(command, check=True)
                         print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
     # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
@@ -287,34 +389,34 @@ def main():
                     print(f"Finished aggregating histograms for {era}/{DataMC}/{group}. Output saved to {output_file}")
 
     if args.buildQCDTemplate:
-        print(f"\nBuilding data-driven QCD template (region D, background-subtracted, qcdGroup={args.qcdGroup})...")
-        region_d_label = REGION_LABELS[3]
+        print(f"\nBuilding data-driven QCD template (region B, background-subtracted, qcdGroup={args.qcdGroup})...")
+        region_b_label = REGION_LABELS[1]
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"Processing era: {era}")
             data_file = (output_dir / era / 'Data_mu' / 'SingleMuon' /
-                         f'{args.tag}_{era}_Data_mu_SingleMuon_region{region_d_label}_selectionHists.coffea')
+                         f'{args.tag}_{era}_Data_mu_SingleMuon_region{region_b_label}_selectionHists.coffea')
             if not data_file.exists():
-                print(f"  Error: region-D Data histogram not found: {data_file}. "
-                      f"Run --aggregrateGroupHists --regionFilter 3 first. Skipping era.")
+                print(f"  Error: region-B Data histogram not found: {data_file}. "
+                      f"Run --aggregrateGroupHists --regionFilter 1 first. Skipping era.")
                 continue
             data_hists = load(data_file)[f'{era}_Data_mu_SingleMuon']
 
             bkg_groups = [g for g in config['NgenandXsec'][era].get('MC_mu', {}) if g != args.qcdGroup]
-            print(f"  Background groups (region D): {bkg_groups}")
+            print(f"  Background groups (region B): {bkg_groups}")
             template = {}
             floored_report = {}
             for histInfo in config['histDetails']:
                 if histInfo not in data_hists:
-                    print(f"  [WARN] '{histInfo}' missing from region-D Data histograms; skipping.")
+                    print(f"  [WARN] '{histInfo}' missing from region-B Data histograms; skipping.")
                     continue
                 h = data_hists[histInfo].copy()
                 for group in bkg_groups:
                     bkg_file = (output_dir / era / 'MC_mu' / group /
-                                f'{args.tag}_{era}_MC_mu_{group}_region{region_d_label}_selectionHists.coffea')
+                                f'{args.tag}_{era}_MC_mu_{group}_region{region_b_label}_selectionHists.coffea')
                     if not bkg_file.exists():
-                        print(f"  [WARN] region-D histogram not found for background group '{group}': {bkg_file}. "
+                        print(f"  [WARN] region-B histogram not found for background group '{group}': {bkg_file}. "
                               f"Treating its contribution as 0 for '{histInfo}'.")
                         continue
                     bkg_hists = load(bkg_file)[f'{era}_MC_mu_{group}']
