@@ -8,14 +8,12 @@ class PUWeightProducer(Module):
     LUM POG's puWeights.json.gz correctionlib file (SF_FETCH_SPECS in
     utils.py).
 
-    NOT YET VERIFIED against the real file -- written without /cvmfs access.
-    config['correctionLib']['weightName'] is a best-guess
-    ("Collisions{16,17,18}_UltraLegacy_goldenJSON", the standard
-    jsonpog-integration LUM POG convention -- 2016preVFP and 2016postVFP both
-    use "Collisions16_..."). Confirm the actual correction name and its
-    "weights" category keys (assumed 'nominal'/'up'/'down') with
-    `correctionlib.CorrectionSet.from_file(path).keys()` once the file is
-    fetched on a CVMFS-capable machine, and fix config.yaml if it differs.
+    config['correctionLib']['weightName'] ("Collisions{16,17,18}_UltraLegacy_goldenJSON",
+    2016preVFP and 2016postVFP both use "Collisions16_...") and the "weights"
+    category's 'nominal'/'up'/'down' keys are VERIFIED against the real fetched
+    files for all four eras (2025-09-03, via --fetchSFFiles + correctionlib.
+    CorrectionSet.from_file(path).keys() / .evaluate() on each) -- both match
+    exactly, no config.yaml changes needed.
 
     Also requires Pileup_nTrueInt to actually be on the skim -- checked
     directly on a real UL2016preVFP ttbar sample and found it wasn't:

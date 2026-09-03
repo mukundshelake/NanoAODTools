@@ -244,11 +244,9 @@ def resolve_storage_path(config):
 # set; the module config just picks the correction key it needs out of
 # either copy). 'gunzip' controls whether the .gz is decompressed on the way
 # in, matching what's already checked into this repo's SFs/ layout.
-#   LUM/puWeights.json.gz: NOT yet verified against the real file (no /cvmfs
-#   mount available in the environment this was written in -- see PUWeight.py's
-#   docstring). Correction name/input order there is a best-guess from the
-#   standard jsonpog-integration LUM POG convention; confirm both once this is
-#   actually fetched on a machine with CVMFS access, before trusting its output.
+#   LUM/puWeights.json.gz: correction name and "weights" category keys are
+#   VERIFIED against the real fetched file for all four eras (2025-09-03, on
+#   lxplus with CVMFS access) -- see PUWeight.py's docstring.
 SF_FETCH_SPECS = [
     {"pog": "MUO", "source_filename": "muon_Z.json.gz",  "outputs": ["mu_ID.json", "mu_HLT.json"], "gunzip": True},
     {"pog": "JME", "source_filename": "jmar.json.gz",     "outputs": ["jet_jmar.json.gz"],           "gunzip": False},
