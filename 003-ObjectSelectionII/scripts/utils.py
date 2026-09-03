@@ -6,6 +6,7 @@ Utility functions for managing configs, provenance, and outputs.
 import hashlib
 import json
 import os
+import shlex
 import socket
 import subprocess
 import yaml
@@ -68,67 +69,33 @@ def get_git_info():
         }
 
 
-def create_output_directory(base_dir, config_path, inputs_folder, sfs_folder=None):
+def create_output_directory(base_dir, config_path, inputs_folder):
     """
     Create hash-based output directory and copy config.
-    
+
     Args:
         base_dir: Base outputs directory
         config_path: Path to config.yaml
         inputs_folder: Path to inputs folder
-        sfs_folder: Path to SFs folder (optional). Copied to output_dir/SFs/ so
-                    relative SF paths in processListJSON configs resolve correctly
-                    when runSelectionII.py chdirs to the run folder.
-    
+
     Returns:
         tuple: (output_dir_path, config_hash, is_new_run)
     """
     config_hash = compute_config_hash(config_path)
     output_dir = Path(base_dir) / config_hash
-    
+
     is_new_run = not output_dir.exists()
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Copy config to output directory
     import shutil
     shutil.copy2(config_path, output_dir / 'config.yaml')
-    
+
     # Copy inputs folder to output directory
     if inputs_folder.exists():
         shutil.copytree(inputs_folder, output_dir / 'inputs', dirs_exist_ok=True)
 
-    # Copy SFs folder to output directory so relative SF paths work from the run folder
-    if sfs_folder is not None and Path(sfs_folder).exists():
-        sfs_dst = output_dir / 'SFs'
-        if not sfs_dst.exists():
-            shutil.copytree(sfs_folder, sfs_dst, symlinks=True)
-    
     return output_dir, config_hash, is_new_run
-
-
-def fetch_and_snapshot(source_path, inputs_folder, output_dir, filename):
-    """
-    Copy a file fetched from a previous chapter into both the local inputs/
-    folder and this run's hash-versioned outputs/inputs/ snapshot.
-
-    create_output_directory() only snapshots inputs_folder -> output_dir/inputs
-    as it exists at the start of a run_all.py invocation, which is before any
-    --fetchFromPreviousChapter step runs within that same invocation. Without
-    this explicit dual-write, the file just fetched in this invocation would be
-    missing from that invocation's own outputs/inputs/ snapshot (it would only
-    show up in the snapshot on a later, separate invocation).
-
-    Returns:
-        tuple: (local_path, output_path)
-    """
-    import shutil
-    local_path = Path(inputs_folder) / filename
-    output_path = Path(output_dir) / 'inputs' / filename
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source_path, local_path)
-    shutil.copy2(source_path, output_path)
-    return local_path, output_path
 
 
 def update_run_history(history_file, config_hash, metadata=None):
@@ -264,6 +231,117 @@ def resolve_storage_path(config):
         f"Could not resolve STORAGE path: hostname '{hostname}' does not match "
         f"any key in config STORAGE ({list(storage.keys())})."
     )
+
+
+# --------------------------------------------------------------------------- #
+#  Correctionlib SF fetching (from CVMFS-hosted jsonpog-integration)          #
+# --------------------------------------------------------------------------- #
+# What to fetch, per era, from the central jsonpog-integration POG/ tree:
+#   POG/<pog>/<era_dir>/<source_filename>
+# 'outputs' lists the repo-local filename suffix(es) to write it to under
+# SFs/UL<era>_<suffix> -- muon_Z.json.gz is deliberately duplicated under two
+# names (mu_ID.json and mu_HLT.json both contain the full muon_Z correction
+# set; the module config just picks the correction key it needs out of
+# either copy). 'gunzip' controls whether the .gz is decompressed on the way
+# in, matching what's already checked into this repo's SFs/ layout.
+#   LUM/puWeights.json.gz: NOT yet verified against the real file (no /cvmfs
+#   mount available in the environment this was written in -- see PUWeight.py's
+#   docstring). Correction name/input order there is a best-guess from the
+#   standard jsonpog-integration LUM POG convention; confirm both once this is
+#   actually fetched on a machine with CVMFS access, before trusting its output.
+SF_FETCH_SPECS = [
+    {"pog": "MUO", "source_filename": "muon_Z.json.gz",  "outputs": ["mu_ID.json", "mu_HLT.json"], "gunzip": True},
+    {"pog": "JME", "source_filename": "jmar.json.gz",     "outputs": ["jet_jmar.json.gz"],           "gunzip": False},
+    {"pog": "BTV", "source_filename": "btagging.json.gz", "outputs": ["jet_Btagging.json"],          "gunzip": True},
+    {"pog": "LUM", "source_filename": "puWeights.json.gz", "outputs": ["pu_Weights.json"],            "gunzip": True},
+]
+
+
+def cvmfs_era_dir(era: str) -> str:
+    """Translate this repo's era string to jsonpog-integration's era directory name.
+
+    "UL2018" -> "2018_UL", "UL2016preVFP" -> "2016preVFP_UL", etc. -- strip the
+    leading "UL" and move it to a suffix instead.
+    """
+    if not era.startswith("UL"):
+        raise ValueError(f"Unrecognized era '{era}': expected a 'UL...' era string.")
+    return era[2:] + "_UL"
+
+
+def resolve_sf_source(config):
+    """
+    Resolve where to read the jsonpog-integration POG/ tree from, for the machine this
+    script is running on.
+
+    Returns (base_path, ssh_host):
+      ssh_host is None -> base_path is a local filesystem path (a CVMFS mount on this
+                           machine); read files directly.
+      ssh_host is a str -> base_path is the path AS IT EXISTS on ssh_host; every file
+                            must be read remotely (see ssh_read_file()) instead of via
+                            local filesystem I/O.
+
+    SFSource in config.yaml is a dict keyed the same way as STORAGE (a substring of
+    socket.gethostname()):
+        SFSource:
+          lxplus: "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG"
+
+    If the current hostname doesn't match any SFSource key (e.g. a machine with no local
+    CVMFS mount), SFSourceSSHRelay -- a plain hostname/alias string -- is used as a
+    fallback: relay every fetch through that host over SSH instead, reusing SFSource's
+    "lxplus" entry as the path valid there (the only CVMFS-reachable endpoint any of
+    this repo's known machines can reach). The SSH session runs fully interactively (see
+    ssh_read_file()), so the caller needs a real, attached terminal -- password/2FA
+    prompts land there exactly like a manual `ssh <relay>` login would.
+        SFSourceSSHRelay: "lxplus.cern.ch"
+    """
+    sf_source = config.get('SFSource', {})
+    hostname = socket.gethostname()
+    for key, path in sf_source.items():
+        if key in hostname:
+            return path, None
+
+    relay_host = config.get('SFSourceSSHRelay')
+    relay_base = sf_source.get('lxplus')
+    if relay_host and relay_base:
+        return relay_base, relay_host
+
+    raise ValueError(
+        f"Could not resolve SFSource path: hostname '{hostname}' does not match "
+        f"any key in config SFSource ({list(sf_source.keys())}), and no usable "
+        f"SFSourceSSHRelay fallback is configured (needs both SFSourceSSHRelay and an "
+        f"SFSource.lxplus entry to relay through). Add a direct SFSource entry for "
+        f"this machine, or configure SFSourceSSHRelay, the same way STORAGE is "
+        f"configured."
+    )
+
+
+# SSH multiplexing options shared by every relayed fetch: the first call authenticates
+# interactively (password/2FA land on the real terminal, since stdin/stderr are left
+# attached -- only stdout, the file's own bytes, is captured) and opens a background
+# ControlMaster; every subsequent call in this process (or a concurrent one) reuses that
+# same connection via ControlPath, so the user is prompted once per session, not once per
+# file. ControlPersist keeps the master alive for a while after the last call returns.
+_SSH_RELAY_CONTROL_OPTS = [
+    "-o", "ControlMaster=auto",
+    "-o", "ControlPersist=600",
+    "-o", "ControlPath=~/.ssh/cm-sf-%r@%h:%p",
+]
+
+
+def ssh_read_file(ssh_host, remote_path):
+    """Read one remote file's raw bytes via `ssh <ssh_host> cat <remote_path>`.
+
+    Runs interactively (stdin/stderr inherited from the caller's terminal, so SSH's own
+    password/2FA prompts work normally) while capturing only stdout -- the file's bytes.
+    Raises FileNotFoundError if the remote `cat` fails (missing file, permission, etc).
+    """
+    cmd = ["ssh"] + _SSH_RELAY_CONTROL_OPTS + [ssh_host, "cat", shlex.quote(str(remote_path))]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        raise FileNotFoundError(
+            f"ssh {ssh_host} cat {remote_path} failed (exit code {result.returncode})"
+        )
+    return result.stdout
 
 
 def lfn_path_for_local_file(local_path, storage_base, lfn_base):

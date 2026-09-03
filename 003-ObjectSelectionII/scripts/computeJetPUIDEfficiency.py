@@ -24,7 +24,7 @@ JetPUIDWeight (e.g. "ttbar_SemiLeptonic").
 Usage:
     python computeJetPUIDEfficiency.py \\
         --fileList <fileset.json> \\
-        --outputDir SFs/JetPUID/Efficiency \\
+        --outputDir inputs/SFs/JetPUID/Efficiency \\
         [--sample <nWorkers>]
 
 The fileset JSON must follow the coffea format produced by run_all.py with
@@ -100,13 +100,13 @@ class JetPUIDEfficiencyProcessor(processor.ProcessorABC):
         jet_mask = (
             (events.Jet.pt > 12.5) &
             (events.Jet.pt <= 50.0) &
-            (ak.abs(events.Jet.eta) < 5.0)
+            (abs(events.Jet.eta) < 5.0)
         )
         jets = events.Jet[jet_mask]
 
         # Materialise the dask arrays (called once per chunk)
         pt_all   = ak.to_numpy(ak.flatten(jets.pt).compute())
-        eta_all  = ak.to_numpy(ak.flatten(ak.abs(jets.eta)).compute())
+        eta_all  = ak.to_numpy(ak.flatten(abs(jets.eta)).compute())
         pass_L   = ak.to_numpy(ak.flatten(jets.puId > 0).compute())
 
         # Fill histograms
@@ -169,7 +169,7 @@ def main():
         help=(
             "Base output directory for ROOT files. "
             "Files are written to <outputDir>/<era>/<sample>.root. "
-            "Typically 'SFs/JetPUID/Efficiency' relative to NanoAODTools/."
+            "Typically 'inputs/SFs/JetPUID/Efficiency' relative to 003-ObjectSelectionII/."
         ),
     )
     parser.add_argument(
@@ -201,8 +201,10 @@ def main():
     # Preprocess (validate file list)
     available, _ = preprocess(fileset, step_size=50_000, skip_bad_files=True)
 
-    # Build dask computation graph
-    to_compute, _ = apply_to_fileset(
+    # Build dask computation graph. apply_to_fileset only returns a (out, report)
+    # tuple when uproot_options requests a report; without it, it returns the
+    # output dict directly.
+    to_compute = apply_to_fileset(
         JetPUIDEfficiencyProcessor(),
         available,
         schemaclass=NanoAODSchema,

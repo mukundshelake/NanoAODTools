@@ -1,7 +1,11 @@
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
+
+# LFN base for CRAB Data.userInputFiles / output LFNs (lxplus only). Must match the
+# EOS mount STORAGE.lxplus points at above.
+LFN_Base : "/store/user/mshelake/DataFiles"
 
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
@@ -208,9 +212,6 @@ NgenandXsec:
   UL2016preVFP:
     Data_mu:
       SingleMuon:
-        Run2016B_ver1_mu:
-          Ngen: 2789243
-          Xsec: -1.0
         Run2016B_ver2_mu:
           Ngen: 158145722
           Xsec: -1.0

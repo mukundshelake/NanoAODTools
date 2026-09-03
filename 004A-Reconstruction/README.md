@@ -46,6 +46,32 @@ run_all.py --generateDatasetJSON
 reconstruction is CPU-heavy (one SLSQP minimisation per permutation per event), so
 expect this stage to run noticeably slower than 003-I/II.
 
+### CRAB alternative to Step 2/3 (lxplus only)
+
+This is the chapter's main CRAB target -- it's the CPU-heavy stage. Same pattern as
+003-ObjectSelectionI/II's CRAB support:
+
+```
+source scripts/crab/getcrabReady.sh
+run_all.py --submitReconstructionJobs [--sample]
+run_all.py --checkCrabStatus [--resubmitFailedCrabJobs] [--removeSubmitFailedCrabJobs]
+run_all.py --generateDatasetJSON
+```
+
+`scripts/crab/submit_reconstruction_flexible.py` builds `Data.userInputFiles` from
+`selectionII_{tag}_{era}_datasets.json` the same way (selectionII output isn't
+DBS-registered either), and `scripts/crab/crab_script_reconstruction.py` resolves each
+LFN to `root://eosuser.cern.ch/...` directly, bypassing `crabhelper.inputFiles()` for the
+same reason as 003-I. Unlike 003-I/II, no golden JSON is shipped or needed -- neither a
+cut string nor golden-JSON filtering is re-applied here (both already handled upstream in
+selectionII).
+
+The one real dependency to watch: `RecoModule`'s chi2 fit uses `scipy.optimize.minimize`,
+which -- like `correctionlib`/`coffea`/`awkward` in 003-ObjectSelectionII -- is not part of
+the stock CMSSW python environment and only imports on lxplus because it's pip-installed
+under the user's own AFS home. `crab_script_reconstruction.py` reuses 003-II's fix:
+prepending the CVMFS-hosted LCG software stack's site-packages to `sys.path`.
+
 ## Storage
 
 `STORAGE` in `config.yaml` is a dict keyed by machine (matched as a substring of

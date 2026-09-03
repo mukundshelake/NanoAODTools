@@ -9,8 +9,9 @@ _SENTINEL_PT = -1.0
 class SelectedObjectsProducer(Module):
     """
     Identifies the selected leading muon and the 4 reconstructable jets
-    (2 b-tagged + 2 light, taken from the 4 highest-pT selected jets) and
-    writes their kinematics to flat branches.
+    (2 b-tagged + 2 light, taken from the 4 highest-pT selected jets), writes
+    their kinematics to flat branches, and tags each event with its ABCD-plane
+    region (muon isolation x MET) for a QCD-multijet background estimate.
 
     Selection logic mirrors the event-level cut string in config.yaml so that
     downstream modules (SF weights, reco, BDT) have a single consistent source
@@ -18,6 +19,19 @@ class SelectedObjectsProducer(Module):
 
     Output sentinel: *_pt = -1 when the object is absent (no muon found, or
     the top-4 jets do not split into exactly 2b+2l).
+
+    ABCD region tagging (branchNames.abcdRegion prefix, e.g. "ABCD"): this only
+    *tags* events, it never cuts -- every event that reaches this module gets a
+    region. Reuses the exact muon _fill_muon() already selected (NanoAODTools
+    builds each Event strictly from the input tree -- see eventloop.py -- so a
+    separate module could not read a branch this module writes; tagging has to
+    happen here, in the same pass, to reuse sel_muon directly). Region codes:
+        0 = A: tight iso, high MET  -- signal region
+        1 = B: loose iso, high MET
+        2 = C: tight iso, low MET
+        3 = D: loose iso, low MET   -- QCD-enriched template region
+       -1 = undefined (no selected muon; isolation is meaningless)
+    QCD estimate (computed downstream, NOT by this module): N_A ~= N_B*N_C/N_D.
 
     Expected config keys
     --------------------
@@ -30,12 +44,17 @@ class SelectedObjectsProducer(Module):
         eta_max: float
         jetId:   int
     bTagThreshold: float
+    abcdRegion:
+      isoTightMax:  float  # SelMuon_pfRelIso04_all <= this => "tight" (A/C)
+      metBranch:    str    # e.g. "MET_pt"
+      metThreshold: float  # metBranch >= this => "high MET" (A/B)
     branchNames:
       muon:           str   # prefix, e.g. "SelMuon"
       leadingbJet:    str   # e.g. "leadingbJet"
       subleadingbJet: str
       leadingJet:     str   # leading *light* jet among top-4
       subleadingJet:  str
+      abcdRegion:     str   # e.g. "ABCD"
     """
 
     _MUON_FLOAT_FIELDS = ["pt", "eta", "phi", "mass", "pfRelIso04_all"]
@@ -62,6 +81,11 @@ class SelectedObjectsProducer(Module):
         self._jet_jetId   = int(self.jetCut['jetId'])
         self._is_mc       = bool(config.get('is_mc', True))
 
+        abcd_cfg          = config['abcdRegion']
+        self.isoTightMax  = float(abcd_cfg['isoTightMax'])
+        self.metBranch    = abcd_cfg['metBranch']
+        self.metThreshold = float(abcd_cfg['metThreshold'])
+
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         self.out = wrappedOutputTree
         muon_prefix = self.bNames["muon"]
@@ -86,10 +110,18 @@ class SelectedObjectsProducer(Module):
         self.out.branch("sel_nJet", "I")
         self.out.branch("sel_nbjet", "I")
 
+        abcd_prefix = self.bNames["abcdRegion"]
+        self.out.branch(f"{abcd_prefix}_isTightIso", "O")
+        self.out.branch(f"{abcd_prefix}_isHighMET",  "O")
+        self.out.branch(f"{abcd_prefix}_region",     "I")
+
     def analyze(self, event):
-        self._fill_muon(event)
-        self._fill_jets(event)
-        self._fill_jet_counts(event)
+        sel_muon = self._fill_muon(event)
+        jets = Collection(event, "Jet")
+        sel_jets = [j for j in jets if self._passes_jet_cuts(j)]
+        self._fill_jets(sel_jets)
+        self._fill_jet_counts(sel_jets)
+        self._fill_abcd_region(event, sel_muon)
         return True
 
     # ------------------------------------------------------------------
@@ -124,10 +156,30 @@ class SelectedObjectsProducer(Module):
             self.out.fillBranch(f"{prefix}_charge",         0)
             self.out.fillBranch(f"{prefix}_tightId",        False)
 
-    def _fill_jets(self, event):
-        jets     = Collection(event, "Jet")
-        sel_jets = [j for j in jets if self._passes_jet_cuts(j)]
+        return sel_muon
 
+    def _fill_abcd_region(self, event, sel_muon):
+        # See the class docstring for the full region-code convention. Tags
+        # only -- never rejects an event.
+        prefix = self.bNames["abcdRegion"]
+        met = getattr(event, self.metBranch)
+        is_high_met = met >= self.metThreshold
+        self.out.fillBranch(f"{prefix}_isHighMET", is_high_met)
+
+        if sel_muon is not None:
+            is_tight_iso = sel_muon.pfRelIso04_all <= self.isoTightMax
+            if is_tight_iso:
+                region = 0 if is_high_met else 2
+            else:
+                region = 1 if is_high_met else 3
+        else:
+            is_tight_iso = False
+            region = -1
+
+        self.out.fillBranch(f"{prefix}_isTightIso", is_tight_iso)
+        self.out.fillBranch(f"{prefix}_region",     region)
+
+    def _fill_jets(self, sel_jets):
         # Sort all selected jets by pT descending, then greedily pick the first
         # two b-tagged jets as leading/subleading b-jets.  Strip those out and
         # take the next two highest-pT jets as the light-jet pair.  This avoids
@@ -198,16 +250,11 @@ class SelectedObjectsProducer(Module):
             and (jet.pt > 50 or jet.puId > 0)
         )
 
-    def _fill_jet_counts(self, event):
-        """Count all selected jets and b-tagged jets."""
-        jets = Collection(event, "Jet")
-        
-        # Count all jets passing selection
-        sel_nJet = sum(1 for j in jets if self._passes_jet_cuts(j))
-        
-        # Count all jets passing both selection and b-tag criteria
-        sel_nbjet = sum(1 for j in jets if self._passes_jet_cuts(j) and j.btagDeepFlavB > self.bTagThreshold)
-        
+    def _fill_jet_counts(self, sel_jets):
+        """Count selected jets and b-tagged jets (sel_jets already passed _passes_jet_cuts)."""
+        sel_nJet = len(sel_jets)
+        sel_nbjet = sum(1 for j in sel_jets if j.btagDeepFlavB > self.bTagThreshold)
+
         self.out.fillBranch("sel_nJet", sel_nJet)
         self.out.fillBranch("sel_nbjet", sel_nbjet)
 

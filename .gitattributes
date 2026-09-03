@@ -1,2 +1,0 @@
-SFs/**/*.json filter=lfs diff=lfs merge=lfs -text
-SFs/**/*.gz filter=lfs diff=lfs merge=lfs -text

@@ -128,7 +128,6 @@ def process_file(data):
             modules=modules,
             noOut=False,
             justcount=False,
-            compression="ZLIB:9",
         )
         post_processor.run()
         logging.info(f"Finished processing {file} in {key} of {DataMC}")

@@ -1,15 +1,41 @@
 STORAGE:
-  cms2:      "/mnt/disk2/mukund/DataFiles"
+  cms2:     "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
-  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+  lxplus:    "/eos/user/m/mshelake/DataFiles"
+
+REPO_ROOT:
+  cms2: "/home/mukund/Projects/PhysicsTools/NanoAODTools"
+  lxplus: "/eos/user/m/mshelake/PhysicsTools/NanoAODTools"
+  localhost: "/home/irfan/mukund/Projects/PhysicsTools/NanoAODTools"
+
 LFN_Base : "/store/user/mshelake/DataFiles"
+# ---------------------------------------------------------------------------
+# Golden JSON URLs per era (run_all.py --downloadGoldenJSONs). Same CMS-published
+# files 003-ObjectSelectionI uses -- content only depends on era, not on any
+# particular 003-ObjectSelectionI run, so this chapter downloads them directly
+# rather than fetching a copy from 003-ObjectSelectionI's own output.
+golden_json_urls:
+  "UL2016preVFP": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions16/13TeV/Legacy_2016/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
+  "UL2016postVFP": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions16/13TeV/Legacy_2016/Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt"
+  "UL2017": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"
+  "UL2018": "https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"
+# ---------------------------------------------------------------------------
+# Where to fetch correctionlib SF files from (run_all.py --fetchSFFiles), keyed
+# the same way as STORAGE -- a substring of socket.gethostname(). Only lxplus is
+# confirmed to have this CVMFS mount; add other machines here once verified.
+SFSource:
+  lxplus: "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG"
+# Fallback for any machine not listed in SFSource above (no local CVMFS mount): relay
+# the fetch through this host over SSH instead (reusing SFSource.lxplus's path as it
+# exists there). Runs interactively -- expect a password/2FA prompt on first use.
+SFSourceSSHRelay: "lxplus.cern.ch"
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
 # ---------------------------------------------------------------------------
 ModuleList:
-  MC:   [lheWeightSign, muonID, muonHLT, bTagging]
+  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging, jetPUID]
   Data: []
 
 # ---------------------------------------------------------------------------
@@ -37,12 +63,54 @@ Modules:
       branchNames:
         sf: "lheWeightSign"
 
+  # ---------- PUWeight -------------------------------------------------------
+  # Pileup reweighting from Pileup_nTrueInt + the LUM POG's puWeights.json.gz.
+  # See PUWeight.py's docstring: correction names below are a best-guess
+  # standard jsonpog-integration convention, NOT yet verified against the real
+  # file (no /cvmfs access when this was written) -- confirm with
+  # correctionlib.CorrectionSet.from_file(path).keys() once fetched, and fix
+  # here if different. Also needs a 002-Samples reprocessing run before
+  # Pileup_nTrueInt actually reaches this module on any skim.
+  puWeight:
+    UL2016preVFP:
+      PUSFFile: "inputs/SFs/UL2016preVFP_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions16_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2016postVFP:
+      PUSFFile: "inputs/SFs/UL2016postVFP_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions16_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2017:
+      PUSFFile: "inputs/SFs/UL2017_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions17_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2018:
+      PUSFFile: "inputs/SFs/UL2018_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions18_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+
   # ---------- MuonIDWeight -------------------------------------------------
   # Correctionlib-based tight muon ID scale factor.
   # Evaluated on the leading muon passing kinematic cuts.
   muonID:
     UL2016preVFP:
-      IDSFFile: "SFs/UL2016preVFP_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2016preVFP_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -52,7 +120,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2016postVFP:
-      IDSFFile: "SFs/UL2016postVFP_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2016postVFP_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -62,7 +130,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2017:
-      IDSFFile: "SFs/UL2017_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2017_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -72,7 +140,7 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
     UL2018:
-      IDSFFile: "SFs/UL2018_mu_ID.json"
+      IDSFFile: "inputs/SFs/UL2018_mu_ID.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_TightID_DEN_TrackerMuons"
@@ -82,12 +150,74 @@ Modules:
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
 
+  # ---------- MuonIsoWeight -------------------------------------------------
+  # Muon isolation-selection-efficiency scale factor. This analysis's ABCD
+  # method (see 003-ObjectSelectionI's SelectedObjectsProducer) tags every
+  # selected muon as "tight iso" (pfRelIso04_all < 0.06, regions A/C) or
+  # "loose iso" (>= 0.06, regions B/D). MuonIsoWeightProducer picks its
+  # source per event from ABCD_isTightIso:
+  #   tight iso -> TightIsoSFFile, a dedicated 0.06-WP TnP ROOT file (not
+  #                correctionlib) obtained outside the standard POG set,
+  #                since the POG JSON only measures the standard 0.15 WP.
+  #   loose iso -> StandardSFFile/correctionLib.weightName below (the same
+  #                mu_ID.json NUM_TightRelIso_DEN_TightIDandIPCut key
+  #                muonID could reach), used as the best available proxy.
+  muonIso:
+    UL2016preVFP:
+      StandardSFFile: "inputs/SFs/UL2016preVFP_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2016preVFP_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2016postVFP:
+      StandardSFFile: "inputs/SFs/UL2016postVFP_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2016postVFP_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2017:
+      StandardSFFile: "inputs/SFs/UL2017_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2017_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2018:
+      StandardSFFile: "inputs/SFs/UL2018_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2018_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+
   # ---------- MuonHLTWeight ------------------------------------------------
   # Correctionlib-based HLT isolation scale factor.
   # Evaluated on the leading muon passing kinematic cuts.
   muonHLT:
     UL2016preVFP:
-      HLTSFFile: "SFs/UL2016preVFP_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2016preVFP_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -96,7 +226,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2016postVFP:
-      HLTSFFile: "SFs/UL2016postVFP_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2016postVFP_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_or_IsoTkMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -105,7 +235,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2017:
-      HLTSFFile: "SFs/UL2017_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2017_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu27_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -114,7 +244,7 @@ Modules:
         sfstat: "muonHLTWeightStat"
         sfsyst: "muonHLTWeightSyst"
     UL2018:
-      HLTSFFile: "SFs/UL2018_mu_HLT.json"
+      HLTSFFile: "inputs/SFs/UL2018_mu_HLT.json"
       selMuonBranch: "SelMuon"
       correctionLib:
         weightName: "NUM_IsoMu24_DEN_CutBasedIdTight_and_PFIsoTight"
@@ -126,33 +256,33 @@ Modules:
   # ---------- jetPUIdWeight ------------------------------------------------
   # Per-jet PU ID scale factor for jets with 12.5 < pT <= 50 GeV.
   # efficiencyFolder: base folder; ROOT files expected at <folder>/<era>/<channel>.root
-  #   Generate with: python scripts/computeJetPUIDEfficiency.py --outputDir SFs/JetPUID/Efficiency
+  #   Generate with: run_all.py --computeJetPUIDEfficiency (writes to inputs/SFs/JetPUID/Efficiency)
   # jetPUIdFile:    correctionlib file providing PUJetID_eff correction.
   jetPUID:
     UL2016preVFP:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2016preVFP_jet_jmar.json.gz"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
+      jetPUIdFile:    "inputs/SFs/UL2016preVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2016postVFP:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2016postVFP_jet_jmar.json.gz"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
+      jetPUIdFile:    "inputs/SFs/UL2016postVFP_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2017:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2017_jet_jmar.json.gz"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
+      jetPUIdFile:    "inputs/SFs/UL2017_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
         sfdown: "jetPUIdWeightDown"
     UL2018:
-      efficiencyFolder: "SFs/JetPUID/Efficiency"
-      jetPUIdFile:    "SFs/UL2018_jet_jmar.json.gz"
+      efficiencyFolder: "inputs/SFs/JetPUID/Efficiency"
+      jetPUIdFile:    "inputs/SFs/UL2018_jet_jmar.json.gz"
       branchNames:
         sf:     "jetPUIdWeight"
         sfup:   "jetPUIdWeightUp"
@@ -165,8 +295,8 @@ Modules:
   bTagging:
     UL2016preVFP:
       era:             "UL2016preVFP"
-      bTagSFFile:      "SFs/UL2016preVFP_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      bTagSFFile:      "inputs/SFs/UL2016preVFP_jet_Btagging.json"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2598
       branchNames:
         sf:     "bTagWeight"
@@ -174,8 +304,8 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2016postVFP:
       era:             "UL2016postVFP"
-      bTagSFFile:      "SFs/UL2016postVFP_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      bTagSFFile:      "inputs/SFs/UL2016postVFP_jet_Btagging.json"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2489
       branchNames:
         sf:     "bTagWeight"
@@ -183,8 +313,8 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2017:
       era:             "UL2017"
-      bTagSFFile:      "SFs/UL2017_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      bTagSFFile:      "inputs/SFs/UL2017_jet_Btagging.json"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.3040
       branchNames:
         sf:     "bTagWeight"
@@ -192,13 +322,32 @@ Modules:
         sfdown: "bTagWeightDown"
     UL2018:
       era:             "UL2018"
-      bTagSFFile:      "SFs/UL2018_jet_Btagging.json"
-      efficiencyFolder: "SFs/Efficiency"
+      bTagSFFile:      "inputs/SFs/UL2018_jet_Btagging.json"
+      efficiencyFolder: "inputs/SFs/Efficiency"
       bTagThreshold:   0.2783
       branchNames:
         sf:     "bTagWeight"
         sfup:   "bTagWeightUp"
         sfdown: "bTagWeightDown"
+
+  # ---------- abcdScaleFactor ------------------------------------------------
+  # Not a NanoAODTools Module (no ModuleList entry, nothing runs per-event) --
+  # just the branch-name lookup scripts/computeABCDScaleFactor.py needs to read
+  # the muon kinematics and ABCD region tag that 003-ObjectSelectionI's
+  # SelectedObjectsProducer already wrote onto every selectionII skim (passed
+  # straight through unchanged by this chapter's own modules). Era-independent
+  # -- these prefixes don't change per era, unlike Modules.selectedObjects[era]
+  # in 003-ObjectSelectionI, which this mirrors.
+  #
+  # The transfer factor R = N_C/N_D itself is computed by --computeABCDScaleFactor
+  # (after the SF modules above have produced selectionII skims), written to
+  # outputs/{tag}/{hash}/{era}/abcdScaleFactor_{era}.root. There is no
+  # per-event module/branch for it here -- 003-ObjectSelectionIII looks it up
+  # live, per event, only when building region-B histograms.
+  abcdScaleFactor:
+    branchNames:
+      muon:       "SelMuon"
+      abcdRegion: "ABCD"
 
 weightLookUp:
   lheWeightSign:
@@ -207,6 +356,29 @@ weightLookUp:
     hi: 1.25
     binNumbers: 25
     label: "LHE weight sign"
+
+  # ---------- Pileup weights ------------------------------------------------
+  # Not verified against real output yet -- PUWeight.py hasn't run on data
+  # with Pileup_nTrueInt present. Ranges are the standard expected shape for
+  # this kind of correction, not measured.
+  puWeight:
+    name: "puWeight"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (central)"
+  puWeightUp:
+    name: "puWeightUp"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (up)"
+  puWeightDown:
+    name: "puWeightDown"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (down)"
 
   # ---------- Muon ID weights ----------------------------------------------
   # Data: min=0.966, max=0.993, mean=0.989, std=0.005
@@ -251,9 +423,38 @@ weightLookUp:
     binNumbers: 10
     label: "Muon HLT SF syst uncertainty"
 
+  # ---------- Muon isolation weights ----------------------------------------
+  # muonIsoWeightStat/Syst: absolute uncertainties, not SFs (same convention
+  # as muonHLTWeightStat/Syst above) -- for tight-iso (<0.06) events these
+  # come from the 0.06-WP ROOT file's bin errors, for loose-iso (>=0.06)
+  # events from mu_ID.json's own stat/syst scale_factors nodes.
+  muonIsoWeight:
+    name: "muonIsoWeight"
+    lo: 0.90
+    hi: 1.10
+    binNumbers: 40
+    label: "Muon Iso SF (central)"
+  muonIsoWeightStat:
+    name: "muonIsoWeightStat"
+    lo: 0.0
+    hi: 0.01
+    binNumbers: 30
+    label: "Muon Iso SF stat uncertainty"
+  muonIsoWeightSyst:
+    name: "muonIsoWeightSyst"
+    lo: 0.0
+    hi: 0.02
+    binNumbers: 30
+    label: "Muon Iso SF syst uncertainty"
+
   # ---------- Jet PU ID weights --------------------------------------------
-  # WARNING: values observed in data are O(1e9) with negatives -- likely a bug
-  # in the jetPUID module. Ranges below are placeholders for expected SF values.
+  # NOT in weightList.MC (see that block's comment) -- Method 1a is
+  # inherently unstable at this WP's ~90-99% efficiency; even with a [0.1,3.0]
+  # event-level clip the branch's mean sits at ~0.45 on real UL2016preVFP MC,
+  # not the ~1 these ranges assume. Branch is still written (useful for
+  # offline study of the instability itself), just not multiplied into any
+  # nominal weight. Ranges below are the ORIGINAL "if this worked" placeholder
+  # -- do not read a well-behaved plot out of this diagnostic as validation.
   jetPUIdWeight:
     name: "jetPUIdWeight"
     lo: 0.5
@@ -294,6 +495,23 @@ weightLookUp:
     binNumbers: 20
     label: "b-tagging SF (down)"
 
+# ---------------------------------------------------------------------------
+# MC weight branches multiplied together for computeABCDScaleFactor.py's
+# background subtraction (read from here, not hardcoded, so it can't drift
+# out of sync with what actually gets computed). Mirrors
+# 003-ObjectSelectionIII's own weightList.MC -- keep the two in sync by hand,
+# same as every other cross-chapter constant in this repo (DataLumiInfo,
+# NgenandXsec, golden_json_urls, ...): each chapter's config.yaml stays
+# self-contained rather than reaching into another chapter's file.
+weightList:
+  # jetPUIdWeight deliberately excluded -- see the matching comment in
+  # 003-ObjectSelectionIII/config.yaml's weightList for why (Method 1a is
+  # inherently unstable at this WP's ~90-99% efficiency; clipping just trades
+  # a visible blowup for a quiet ~0.45-mean bias, confirmed on real
+  # UL2016preVFP MC). puWeight is included but confirmed NOT present on that
+  # same sample -- currently a no-op here via the warn-and-skip fallback below.
+  MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
+
 DataLumiInfo:
   UL2016preVFP:
     Lumi:    19521.2
@@ -319,7 +537,7 @@ NgenandXsec:
           Ngen: 149916849
           Xsec: -1.0
         Run2016H_mu:
-          Ngen: 149916849
+          Ngen: 174035164
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -330,7 +548,7 @@ NgenandXsec:
           Ngen: 18121000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPdown:
-          Ngen: 18066000
+          Ngen: 18305000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPup:
           Ngen: 18066000
@@ -346,7 +564,7 @@ NgenandXsec:
           Ngen: 61029000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 57909000
+          Ngen: 19427000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 57909000
@@ -368,7 +586,7 @@ NgenandXsec:
           Ngen: 12591000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 12042000
+          Ngen: 12632000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -384,7 +602,7 @@ NgenandXsec:
           Ngen: 25025000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 23728000
+          Ngen: 24527000
           Xsec: 134.2
     MC_mu:
       Diboson:
@@ -398,14 +616,14 @@ NgenandXsec:
           Ngen: 13526954
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 15928000
           Xsec: 0.974
         ZZTo2Q2L:
           Ngen: 13740600
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 82448544
+          Ngen: 82448537
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
@@ -473,17 +691,14 @@ NgenandXsec:
           Ngen: 159756701
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 167292982
+          Ngen: 167715035
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 26790000
+          Ngen: 85825681
           Xsec: 3276.0
   UL2016preVFP:
     Data_mu:
       SingleMuon:
-        Run2016B_ver1_mu:
-          Ngen: 2789243
-          Xsec: -1.0
         Run2016B_ver2_mu:
           Ngen: 158145722
           Xsec: -1.0
@@ -497,7 +712,7 @@ NgenandXsec:
           Ngen: 90984718
           Xsec: -1.0
         Run2016F_mu:
-          Ngen: 90984718
+          Ngen: 57465359
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -508,7 +723,7 @@ NgenandXsec:
           Ngen: 15518000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPdown:
-          Ngen: 10381000
+          Ngen: 21583000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCPup:
           Ngen: 10381000
@@ -524,7 +739,7 @@ NgenandXsec:
           Ngen: 56166000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 46263000
+          Ngen: 55514300
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 46263000
@@ -546,7 +761,7 @@ NgenandXsec:
           Ngen: 10715000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 10942000
+          Ngen: 11059000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -562,32 +777,32 @@ NgenandXsec:
           Ngen: 21927000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 21590000
+          Ngen: 22933000
           Xsec: 134.2
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 3006596
+          Ngen: 3018000
           Xsec: 11.09
         WWTolnulnu:
           Ngen: 4932000
           Xsec: 10.48
         WZTo2Q2L:
-          Ngen: 9780392
+          Ngen: 15678816
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 16862000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 10406942
+          Ngen: 16060738
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 95170552
+          Ngen: 95170542
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 37202073
+          Ngen: 37505000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -628,33 +843,33 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 131106831
+          Ngen: 132178000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 3592772
+          Ngen: 5518000
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 29205915
+          Ngen: 31024000
           Xsec: 80.0
         Tchannel:
-          Ngen: 52437432
+          Ngen: 55961000
           Xsec: 134.2
         tw_antitop:
-          Ngen: 3176335
+          Ngen: 3176485
           Xsec: 39.65
         tw_top:
-          Ngen: 3294485
+          Ngen: 3294673
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 121208493
+          Ngen: 151109845
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 84198168
+          Ngen: 173468850
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 27463756
+          Ngen: 87929021
           Xsec: 3276.0
   UL2017:
     Data_mu:
@@ -742,27 +957,27 @@ NgenandXsec:
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 7071358
+          Ngen: 7098000
           Xsec: 11.09
         WWTolnulnu:
-          Ngen: 2000000
+          Ngen: 4760000
           Xsec: 10.79
         WZTo2Q2L:
-          Ngen: 18136497
+          Ngen: 29091996
           Xsec: 5.595
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 40839000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 19134840
+          Ngen: 29521496
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 131552392
+          Ngen: 195529774
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 105860011
+          Ngen: 106724000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -803,33 +1018,33 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 343257745
+          Ngen: 346052000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 8866570
+          Ngen: 13620000
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 65701149
+          Ngen: 69793000
           Xsec: 80.0
         Tchannel:
-          Ngen: 121728258
+          Ngen: 129903000
           Xsec: 134.2
         tw_antitop:
-          Ngen: 8433562
+          Ngen: 8433998
           Xsec: 39.65
         tw_top:
-          Ngen: 8506765
+          Ngen: 8507203
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 135263983
+          Ngen: 46000306
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 85950236
+          Ngen: 177102579
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 29987306
+          Ngen: 96032711
           Xsec: 3276.0
   UL2018:
     Data_mu:
@@ -844,7 +1059,7 @@ NgenandXsec:
           Ngen: 109986009
           Xsec: -1.0
         Run2018D_mu:
-          Ngen: 109986009
+          Ngen: 513909894
           Xsec: -1.0
     MC_alt:
       FullyLeptonic:
@@ -855,7 +1070,7 @@ NgenandXsec:
           Ngen: 59620000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCP5down:
-          Ngen: 57064000
+          Ngen: 59853000
           Xsec: 88.5
         ttbar_FullyLeptonic_TuneCP5up:
           Ngen: 57064000
@@ -871,7 +1086,7 @@ NgenandXsec:
           Ngen: 199323000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5down:
-          Ngen: 199394000
+          Ngen: 189888000
           Xsec: 366.3
         ttbar_SemiLeptonic_TuneCP5up:
           Ngen: 199394000
@@ -893,7 +1108,7 @@ NgenandXsec:
           Ngen: 36424000
           Xsec: 80.0
         Tbarchannel_erdON:
-          Ngen: 36144000
+          Ngen: 37552000
           Xsec: 80.0
       Tchannel:
         Tchannel_Gluonmove:
@@ -909,7 +1124,7 @@ NgenandXsec:
           Ngen: 75582000
           Xsec: 134.2
         Tchannel_erdON:
-          Ngen: 74992000
+          Ngen: 74920000
           Xsec: 134.2
         Tchannel_hdampup:
           Ngen: 59030000
@@ -917,27 +1132,27 @@ NgenandXsec:
     MC_mu:
       Diboson:
         WWTo2L2Nu:
-          Ngen: 9962019
+          Ngen: 9994000
           Xsec: 11.09
         WWTolnulnu:
           Ngen: 4946000
           Xsec: 2.206
         WZTo2Q2L:
-          Ngen: 17952068
+          Ngen: 28576996
           Xsec: 6.565
         ZZTo2L2Nu:
-          Ngen: 16826232
+          Ngen: 56886000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 19082659
+          Ngen: 29357938
           Xsec: 3.676
       DrellYan:
         DYJetsToLL:
-          Ngen: 129037134
+          Ngen: 195510810
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
-          Ngen: 143830836
+          Ngen: 145020000
           Xsec: 88.5
       QCD:
         QCD_Pt-1000_MuEnriched:
@@ -978,17 +1193,17 @@ NgenandXsec:
           Xsec: 90131
       SemiLeptonic:
         ttbar_SemiLeptonic:
-          Ngen: 472977862
+          Ngen: 476408000
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 12444591
+          Ngen: 19365999
           Xsec: 2.215836
         Tbarchannel:
-          Ngen: 89985007
+          Ngen: 95627000
           Xsec: 80.0
         Tchannel:
-          Ngen: 166637158
+          Ngen: 178336000
           Xsec: 134.2
         tw_antitop:
           Ngen: 10949620
@@ -998,11 +1213,11 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 137259710
+          Ngen: 172138190
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 87594835
+          Ngen: 183483106
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 29028341
+          Ngen: 94925903
           Xsec: 3276.0

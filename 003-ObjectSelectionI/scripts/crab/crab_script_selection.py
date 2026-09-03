@@ -32,6 +32,9 @@ import os
 import sys
 import yaml
 import PSet
+import ROOT
+ROOT.gROOT.SetBatch(True)
+ROOT.PyConfig.IgnoreCommandLineOptions = True
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
 from SelectedObjects import SelectedObjectsProducer
 
@@ -89,9 +92,41 @@ if is_data:
     else:
         print(f"[WARNING] Data job but golden JSON '{golden_json_name}' not found in sandbox.")
 
+
+def _passes_cut_precheck(filepath, cut_string):
+    """Mirrors scripts/runSelection.py's process_file() pre-check.
+
+    An empty TEntryList (GetN()==0) makes PostProcessor's eventLoop() skip
+    beginFile() on modules entirely; CopyTree() then segfaults in
+    FullOutput.write() walking branch buffers that were never initialised.
+    Detect cheaply before spawning PostProcessor instead of crashing the job.
+    """
+    try:
+        _cf = ROOT.TFile.Open(filepath, "READ")
+        if not _cf or _cf.IsZombie():
+            return True  # let PostProcessor raise its own clear file-open error
+        _ct = _cf.Get("Events")
+        _n = int(_ct.GetEntries(cut_string)) if (_ct is not None) else 0
+        # Release _ct BEFORE Close(): TFile::Close() frees the TTree C++ object.
+        _ct = None
+        _cf.Close()
+        del _cf
+        return _n > 0
+    except Exception as _e:
+        print(f"[WARNING] Cut pre-check failed for {filepath}: {_e}; proceeding anyway.")
+        return True
+
+
+files_to_process = [f for f in files if _passes_cut_precheck(f, cut_string)]
+if not files_to_process:
+    print(f"0 events pass cut string in all {len(files)} input file(s); "
+          "skipping PostProcessor (no output produced) to avoid ROOT segfault.")
+    print("DONE crab_script_selection.py")
+    sys.exit(0)
+
 p = PostProcessor(
     ".",
-    files,
+    files_to_process,
     cut=cut_string,
     branchsel=None,
     provenance=True,

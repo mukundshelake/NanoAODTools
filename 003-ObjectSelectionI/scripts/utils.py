@@ -6,6 +6,7 @@ Utility functions for managing configs, provenance, and outputs.
 import hashlib
 import json
 import os
+import re
 import socket
 import subprocess
 import yaml
@@ -95,31 +96,6 @@ def create_output_directory(base_dir, config_path, inputs_folder):
         shutil.copytree(inputs_folder, output_dir / 'inputs', dirs_exist_ok=True)
     
     return output_dir, config_hash, is_new_run
-
-
-def fetch_and_snapshot(source_path, inputs_folder, output_dir, filename):
-    """
-    Copy a file fetched from a previous chapter into both the local inputs/
-    folder and this run's hash-versioned outputs/inputs/ snapshot.
-
-    create_output_directory() only snapshots inputs_folder -> output_dir/inputs
-    as it exists at the start of a run_all.py invocation, which is before any
-    --fetchFromPreviousChapter step runs within that same invocation. Without
-    this explicit dual-write, the file just fetched in this invocation would be
-    missing from that invocation's own outputs/inputs/ snapshot (it would only
-    show up in the snapshot on a later, separate invocation).
-
-    Returns:
-        tuple: (local_path, output_path)
-    """
-    import shutil
-    local_path = Path(inputs_folder) / filename
-    output_path = Path(output_dir) / 'inputs' / filename
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source_path, local_path)
-    shutil.copy2(source_path, output_path)
-    return local_path, output_path
 
 
 def update_run_history(history_file, config_hash, metadata=None):
@@ -277,6 +253,68 @@ def lfn_path_for_local_file(local_path, storage_base, lfn_base):
             f"STORAGE resolving to the EOS mount of LFN_Base."
         )
     return lfn_base + local_path[len(storage_base):]
+
+
+def validate_selection_cuts_consistency(config, era):
+    """
+    Cross-check SelectionCuts[era]'s cut-string thresholds against the
+    structured Modules.selectedObjects[era].kinematics config.
+
+    Both encode the same muon/jet kinematic cuts independently -- the cut
+    string is applied cheaply by PostProcessor before the event loop, the
+    kinematics dict drives SelectedObjectsProducer's own object ID -- and
+    nothing else keeps them in sync. Auto-deriving one from the other isn't
+    done here: the cut string is opaque TTreeFormula syntax passed straight
+    to ROOT, and a subtle auto-generation bug could silently change the
+    actual selection. This is a read-only check instead: it raises a clear
+    error on drift without touching either representation.
+
+    Raises:
+        ValueError: if any threshold has drifted between the two.
+    """
+    cuts = config['SelectionCuts'][era]
+    mod_cfg_raw = config['Modules']['selectedObjects']
+    mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
+    kin = mod_cfg['kinematics']
+
+    def _extract(pattern, s):
+        m = re.search(pattern, s)
+        if not m:
+            raise ValueError(f"[{era}] pattern {pattern!r} not found in cut string: {s!r}")
+        return float(m.group(1))
+
+    muon_cut = cuts.get('muonCut', '')
+    jet_cut  = cuts.get('jetCut', '')
+    bjet_cut = cuts.get('bjetCut', '')
+
+    checks = [
+        ("Muon pt low",             _extract(r"Muon_pt\s*>\s*([\d.]+)", muon_cut),
+                                     kin['Muon']['lohi']['pt']['low']),
+        ("Muon |eta| high",         _extract(r"abs\(Muon_eta\)\s*<\s*([\d.]+)", muon_cut),
+                                     kin['Muon']['lohi']['eta']['high']),
+        ("Muon pfRelIso04_all high", _extract(r"Muon_pfRelIso04_all\s*<=\s*([\d.]+)", muon_cut),
+                                     kin['Muon']['lohi']['pfRelIso04_all']['high']),
+        ("Jet pt_min",              _extract(r"Jet_pt\s*>\s*([\d.]+)", jet_cut),
+                                     kin['Jet']['pt_min']),
+        ("Jet eta_max",             _extract(r"abs\(Jet_eta\)\s*<\s*([\d.]+)", jet_cut),
+                                     kin['Jet']['eta_max']),
+        ("Jet jetId",               _extract(r"Jet_jetId\s*==\s*(\d+)", jet_cut),
+                                     kin['Jet']['jetId']),
+        ("bTagThreshold",           _extract(r"Jet_btagDeepFlavB\s*>\s*([\d.]+)", bjet_cut),
+                                     mod_cfg['bTagThreshold']),
+    ]
+
+    mismatches = [
+        f"  {label}: SelectionCuts={cut_val}, Modules.selectedObjects={struct_val}"
+        for label, cut_val, struct_val in checks
+        if cut_val != float(struct_val)
+    ]
+    if mismatches:
+        raise ValueError(
+            f"SelectionCuts[{era}] and Modules.selectedObjects[{era}] have drifted apart "
+            f"in config.yaml -- these are hand-duplicated and must be kept in sync:\n"
+            + "\n".join(mismatches)
+        )
 
 
 def validate_output_status(outputs_dir, current_config_hash):

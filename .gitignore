@@ -14,7 +14,6 @@ site/
 # Machine-specific configuration
 .env
 .env.*
-!.env.template
 
 # Local conda environments
 envs/
@@ -23,7 +22,6 @@ envs/
 src/
 lib/
 tmp/
-python/
 
 # IDE and editor
 .vscode/
@@ -50,6 +48,8 @@ SEGFAULT_FIX_GUIDE.md
 **/outputs/*
 *.log
 **/run_all_*.sh
+**/run_pipeline_*.sh
+**/run_selection_*.sh
 **/*.parquet
 **/inputs/*
 **/Inputs/*
