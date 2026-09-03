@@ -9,9 +9,9 @@ going through PostProcessor for parity with the local path).
 
 This script is sent to the grid worker node as an inputFile and executed by
 crab_selectionII.sh. The module .py files (LHEWeightSign.py, MuonIDWeight.py,
-MuonHLTWeight.py, bTaggingWeight.py) are shipped alongside it (flat, no
-modules/ subpackage) since they aren't part of the installed NanoAODTools
-package.
+MuonIsoWeight.py, MuonHLTWeight.py, bTaggingWeight.py) are shipped alongside
+it (flat, no modules/ subpackage) since they aren't part of the installed
+NanoAODTools package.
 
 NOTE on input file resolution: same as crab_script_selection.py in
 003-ObjectSelectionI -- the /store/... LFN CRAB assigns us is translated
@@ -60,8 +60,10 @@ import PSet
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
 from LHEWeightSign import LHEWeightSignProducer
 from MuonIDWeight import MuonIDWeightProducer
+from MuonIsoWeight import MuonIsoWeightProducer
 from MuonHLTWeight import MuonHLTWeightProducer
 from bTaggingWeight import bTaggingWeightProducer
+from PUWeight import PUWeightProducer
 
 print("Running crab_script_selectionII.py")
 
@@ -127,7 +129,7 @@ for mod_name in module_names:
 
 # Recreate the inputs/SFs/ layout the shared module code expects, from the flat-shipped files.
 for mod_name, mod_cfg in module_configs:
-    for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
+    for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile", "StandardSFFile", "TightIsoSFFile", "PUSFFile"):
         if file_key in mod_cfg:
             expected_path = mod_cfg[file_key]  # e.g. "inputs/SFs/UL2018_mu_ID.json"
             flat_name = os.path.basename(expected_path)
@@ -188,10 +190,14 @@ for mod_name, mod_cfg in module_configs:
         modules.append(LHEWeightSignProducer(mod_cfg))
     elif mod_name == "muonID":
         modules.append(MuonIDWeightProducer(mod_cfg))
+    elif mod_name == "muonIso":
+        modules.append(MuonIsoWeightProducer(mod_cfg))
     elif mod_name == "muonHLT":
         modules.append(MuonHLTWeightProducer(mod_cfg))
     elif mod_name == "bTagging":
         modules.append(bTaggingWeightProducer(mod_cfg, dataset_key))
+    elif mod_name == "puWeight":
+        modules.append(PUWeightProducer(mod_cfg))
     else:
         raise RuntimeError(f"Unknown module: {mod_name}")
 

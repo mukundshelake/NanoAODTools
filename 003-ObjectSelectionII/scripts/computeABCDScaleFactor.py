@@ -23,8 +23,8 @@ Per (pt, |eta|) bin:
     N_bkg_X    = Lumi*Xsec/Ngen-weighted sum of every MC_mu group *except*
                  --qcdGroup (the known, non-QCD backgrounds), for region X --
                  each event additionally weighted by every branch in
-                 _MC_SF_BRANCHES below that's present on the skim
-                 (muonIDWeight, muonHLTWeight, bTagWeight,
+                 config.yaml's weightList.MC that's present on the skim
+                 (muonIDWeight, muonHLTWeight, muonIsoWeight, bTagWeight,
                  L1PreFiringWeight_Nom, lheWeightSign)
     N_qcd_X    = max(N_data_X - N_bkg_X, 0)   (floored at 0 -- a negative
                  data-driven QCD count is unphysical; floors get reported)
@@ -61,15 +61,6 @@ ETA_EDGES = [0.0, 1.2, 2.4]
 
 _REGION_CODES = {"B": 1, "C": 2, "D": 3}
 
-# This chapter's MC weight branches (config.yaml's weightList.MC in
-# 003-ObjectSelectionIII, mirrored here) -- multiplied in on top of
-# Lumi*Xsec/Ngen so this background subtraction uses exactly the same
-# per-event weight as the rest of the analysis. Each is included only if
-# actually present on the dataset (mirrors 003-ObjectSelectionIII's
-# buildSelectionHists.py, which skips a missing weightList entry with a
-# warning rather than failing).
-_MC_SF_BRANCHES = ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
-
 
 def _make_model(name):
     pt_arr  = array.array('d', PT_EDGES)
@@ -77,12 +68,12 @@ def _make_model(name):
     return ROOT.RDF.TH2DModel(name, "", len(PT_EDGES) - 1, pt_arr, len(ETA_EDGES) - 1, eta_arr)
 
 
-def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, unique_tag):
+def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, unique_tag, mc_sf_branches):
     """2D (pt, |eta|) histograms of the muon-selection branches for each of
     B/C/D, for one dataset. `flat_weight` is the per-dataset scalar (1.0 for
     data, Lumi*Xsec/Ngen for MC); for MC it's additionally multiplied by every
-    branch in _MC_SF_BRANCHES that's present on this dataset -- see module
-    docstring.
+    branch in `mc_sf_branches` (config.yaml's weightList.MC) that's present
+    on this dataset -- see module docstring.
     """
     rdf = ROOT.RDataFrame("Events", filepaths)
     available = {str(c) for c in rdf.GetColumnNames()}
@@ -93,7 +84,7 @@ def region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, i
 
     weight_terms = [str(flat_weight)]
     if is_mc:
-        for branch in _MC_SF_BRANCHES:
+        for branch in mc_sf_branches:
             if branch in available:
                 weight_terms.append(branch)
             else:
@@ -123,7 +114,7 @@ def sum_hists(hist_list):
     return total
 
 
-def combine_group(files_by_dataset, muon_prefix, abcd_prefix, ngen_xsec, lumi, is_mc):
+def combine_group(files_by_dataset, muon_prefix, abcd_prefix, ngen_xsec, lumi, is_mc, mc_sf_branches):
     """Combines every dataset in a group into per-region summed 2D histograms.
     ngen_xsec is None for Data (weight fixed at 1.0 per event, no MC scaling).
     """
@@ -145,7 +136,7 @@ def combine_group(files_by_dataset, muon_prefix, abcd_prefix, ngen_xsec, lumi, i
                 continue
             flat_weight = lumi * xsec / ngen
 
-        hists = region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, f"{dataset}_{i}")
+        hists = region_hists_for_dataset(filepaths, muon_prefix, abcd_prefix, flat_weight, is_mc, f"{dataset}_{i}", mc_sf_branches)
         if hists is None:
             print(f"    [WARN] Required branches not found for dataset '{dataset}'; skipping.")
             continue
@@ -198,6 +189,11 @@ def main():
         sys.exit(1)
     muon_prefix, abcd_prefix = branch_names["muon"], branch_names["abcdRegion"]
 
+    mc_sf_branches = config.get("weightList", {}).get("MC")
+    if not mc_sf_branches:
+        print("ERROR: config.yaml has no weightList.MC.", file=sys.stderr)
+        sys.exit(1)
+
     lumi = config["DataLumiInfo"][args.era]["Lumi"]
     ngen_xsec_era = config["NgenandXsec"].get(args.era, {}).get(args.mcDataMC, {})
 
@@ -214,7 +210,7 @@ def main():
     print(f"\n=== {args.era}: Data ({args.dataDataMC}/{args.dataGroup}) ===")
     data_hists = combine_group(
         dataset_data[args.dataDataMC][args.dataGroup], muon_prefix, abcd_prefix,
-        ngen_xsec=None, lumi=lumi, is_mc=False)
+        ngen_xsec=None, lumi=lumi, is_mc=False, mc_sf_branches=mc_sf_branches)
 
     bkg_groups = [g for g in dataset_data[args.mcDataMC] if g != args.qcdGroup]
     print(f"\n=== {args.era}: Background MC ({args.mcDataMC}, groups={bkg_groups}) ===")
@@ -224,7 +220,7 @@ def main():
         ngen_xsec_group = ngen_xsec_era.get(group, {})
         bkg_per_group[group] = combine_group(
             dataset_data[args.mcDataMC][group], muon_prefix, abcd_prefix,
-            ngen_xsec=ngen_xsec_group, lumi=lumi, is_mc=True)
+            ngen_xsec=ngen_xsec_group, lumi=lumi, is_mc=True, mc_sf_branches=mc_sf_branches)
     bkg_hists = {label: sum_hists([bkg_per_group[g][label] for g in bkg_groups])
                  for label in _REGION_CODES}
 

@@ -55,8 +55,10 @@ MODULES_DIR = CHAPTER_DIR / "scripts" / "modules"
 MODULE_FILES = {
     "lheWeightSign": MODULES_DIR / "LHEWeightSign.py",
     "muonID":        MODULES_DIR / "MuonIDWeight.py",
+    "muonIso":       MODULES_DIR / "MuonIsoWeight.py",
     "muonHLT":       MODULES_DIR / "MuonHLTWeight.py",
     "bTagging":      MODULES_DIR / "bTaggingWeight.py",
+    "puWeight":      MODULES_DIR / "PUWeight.py",
 }
 
 # ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn,
         input_files.append(str(MODULE_FILES[mod_name]))
         mod_cfg_raw = config["Modules"].get(mod_name, {})
         mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
-        for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile"):
+        for file_key in ("IDSFFile", "HLTSFFile", "bTagSFFile", "StandardSFFile", "TightIsoSFFile", "PUSFFile"):
             if file_key in mod_cfg:
                 # Chapter-relative ("inputs/SFs/...", fetched by run_all.py --fetchSFFiles).
                 input_files.append(str(CHAPTER_DIR / mod_cfg[file_key]))

@@ -717,7 +717,7 @@ NgenandXsec:
 
 histDetails:
   lepPt:
-    bins: 50
+    bins: 20
     range: [0, 200]
     name: "pt"
     label: "Leading Muon p_{T} [GeV]"
@@ -774,12 +774,32 @@ histDetails:
     ylimits: [0.5, 100000000]
 
 weightList:
-  # jetPUIdWeight deliberately excluded: JetPUIDWeight.py's per-jet "failing" weight
-  # formula (1 - sf*eff)/(1-eff) blows up (seen up to ~1.3e5 on real UL2016preVFP MC)
-  # when a low-statistics efficiency-map bin lands close to eff=1 without being caught
-  # by that module's abs(1-eff)<1e-8 guard. Re-add only once that's fixed (e.g. clipped
-  # to a sane range) -- until then this silently corrupts every weighted histogram.
-  MC: ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
+  # jetPUIdWeight: STILL deliberately excluded, but for a different reason than
+  # before. The original O(1e9)/negative blowup was a (eta, pt) vs (pt, eta)
+  # axis-order swap in the efficiency-map lookup -- that bug is fixed in
+  # JetPUIDWeight.py, and per-jet/per-event clips were added on top of the fix.
+  # But testing on real UL2016preVFP MC (ttbar_FullyLeptonic) showed the
+  # instability isn't a low-statistics artifact: the efficiency map has huge
+  # per-bin statistics (1e5-5e5 entries) and genuinely measures ~90-99% Loose-WP
+  # pass efficiency almost everywhere -- exactly the regime where Method 1a's
+  # (1-sf*eff)/(1-eff) formula is inherently unstable (same instability the
+  # b-tagging POG's own Method 1a docs warn about, just usually avoided there
+  # because b-tag WPs are far less efficient). With the [0.1,3.0] event-level
+  # clip in place the weight no longer explodes, but its mean drops to ~0.45
+  # (vs. the expected ~1) because the clip saturates on a large fraction of
+  # events rather than catching rare outliers -- a quietly-biased weight, which
+  # is worse than an honestly-excluded one. Needs Method 2 (shape) reweighting,
+  # not a clip, before it belongs in the nominal product. jetPUIdWeight is
+  # still written to skims (useful for offline study) -- just not multiplied in.
+  #
+  # puWeight: checked directly against a real UL2016preVFP ttbar skim -- NOT
+  # actually present on that dataset, despite the assumption it would be a
+  # standard central-NanoAOD branch. Left in the list anyway since
+  # buildSelectionHists.py/computeABCDScaleFactor.py already warn-and-skip a
+  # missing weight branch rather than crash -- but this means puWeight is
+  # currently a no-op here, not really "applied". Worth checking across more
+  # datasets/eras before trusting it's ever actually present.
+  MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
   Data: ["L1PreFiringWeight_Nom"]
 
 # ---------------------------------------------------------------------------
@@ -792,23 +812,23 @@ plotSettings:
     QCD:
       label: "QCD"
       color: 921      # kGray+1
-      order: 1
+      order: 2
     DrellYan:
       label: "DrellYan"
       color: 3        # kGreen
-      order: 2
+      order: 3
     WJets:
       label: "WJets"
       color: 5        # kYellow
-      order: 3
+      order: 4
     SingleTop:
       label: "SingleTop"
       color: 800      # kOrange
-      order: 4
+      order: 5
     Diboson:
       label: "Diboson"
       color: 2        # kRed
-      order: 5
+      order: 1
     FullyLeptonic:
       label: "t#bar{t} FullyLeptonic"
       color: 6        # kMagenta

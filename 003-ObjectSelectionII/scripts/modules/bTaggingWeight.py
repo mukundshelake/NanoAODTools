@@ -6,6 +6,22 @@ import os
 import awkward as ak
 from coffea.lookup_tools import extractor
 class bTaggingWeightProducer(Module):
+    # Per-jet clip on the "failing" weight (1-sf*eff)/(1-eff) -- Method 1a is
+    # inherently unstable when eff is high (1/(1-eff) amplifies any SF-vs-1
+    # deviation) or the efficiency-map bin is sparse. Confirmed directly on
+    # real UL2016preVFP ttbar MC: a well-measured (34845-entry) bin with
+    # eff=0.971 for a ~142 GeV b-jet, combined with SF_up=1.049, already gives
+    # a negative per-jet weight (-0.67) with nothing bounding it before this
+    # clip existed (bTagWeightUp's observed min was -1.055 pre-fix, from an
+    # event with more than one such jet compounding multiplicatively). Unlike
+    # JetPUIDWeight.py's Loose-WP efficiency (pervasively 90-99%+, needing
+    # both a per-jet AND an event-level clip to avoid a systemically biased
+    # mean), b-tagging's Medium-WP efficiency isn't uniformly that high, so a
+    # per-jet clip alone is expected to be enough here -- verify against a
+    # larger sample if bTagWeight's mean drifts far from 1 despite this.
+    _PER_JET_CLIP_LO = 0.0
+    _PER_JET_CLIP_HI = 5.0
+
     @staticmethod
     def _resolve_efficiency_file(effi_folder, era, channel):
         base_dir = os.path.join(effi_folder, era)
@@ -60,12 +76,20 @@ class bTaggingWeightProducer(Module):
         self.bNames = config['branchNames']
         self.bTagThreshold = config['bTagThreshold']
 
-    @staticmethod
-    def _safe_fail_weight(sf, eff):
+        self._n_clipped = 0
+        self._n_evaluations = 0
+
+    def _safe_fail_weight(self, sf, eff):
+        """(1 - sf*eff) / (1 - eff), guarded against (1-eff) ~ 0 and clipped
+        to [_PER_JET_CLIP_LO, _PER_JET_CLIP_HI] -- see class docstring."""
         den = 1.0 - eff
         if abs(den) < 1e-8:
             return 1.0
-        return (1.0 - sf * eff) / den
+        w = (1.0 - sf * eff) / den
+        clipped = max(self._PER_JET_CLIP_LO, min(w, self._PER_JET_CLIP_HI))
+        if clipped != w:
+            self._n_clipped += 1
+        return clipped
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         """Initialize output branches before event loop starts"""
@@ -108,6 +132,7 @@ class bTaggingWeightProducer(Module):
                     effPass = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_BM'](jet.pt, abs(jet.eta))
                     effTotal = self.b_eff_evaluator['Efficiency/FlavourB_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
+                    self._n_evaluations += 3
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)
                     weightDown = self._safe_fail_weight(SFDown, eff)
@@ -121,6 +146,7 @@ class bTaggingWeightProducer(Module):
                     effPass = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_BM'](jet.pt, abs(jet.eta))
                     effTotal = self.b_eff_evaluator['Efficiency/FlavourC_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
+                    self._n_evaluations += 3
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)
                     weightDown = self._safe_fail_weight(SFDown, eff)
@@ -134,6 +160,7 @@ class bTaggingWeightProducer(Module):
                     effPass = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_BM'](jet.pt, abs(jet.eta))
                     effTotal = self.b_eff_evaluator['Efficiency/FlavourL_Wp_pass_No'](jet.pt, abs(jet.eta))
                     eff = (effPass / effTotal) if effTotal > 0 else 0.0
+                    self._n_evaluations += 3
                     weight = self._safe_fail_weight(SF, eff)
                     weightUp = self._safe_fail_weight(SFUp, eff)
                     weightDown = self._safe_fail_weight(SFDown, eff)
@@ -146,6 +173,13 @@ class bTaggingWeightProducer(Module):
         self.out.fillBranch(self.bNames["sfdown"], bTagWeightDown)
 
         return True  # Keep event
+
+    def endJob(self):
+        if self._n_evaluations:
+            rate = self._n_clipped / self._n_evaluations
+            print(f"[bTaggingWeightProducer] era={self.era} channel={self.channel}: clipped "
+                  f"{self._n_clipped}/{self._n_evaluations} failing-jet weight evaluations "
+                  f"({rate:.4%}) to [{self._PER_JET_CLIP_LO}, {self._PER_JET_CLIP_HI}].")
 
 def bTaggingWeightModule(config, channel):
     return bTaggingWeightProducer(config, channel)

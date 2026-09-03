@@ -35,7 +35,7 @@ SFSourceSSHRelay: "lxplus.cern.ch"
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
 # ---------------------------------------------------------------------------
 ModuleList:
-  MC:   [lheWeightSign, muonID, muonHLT, bTagging, jetPUID]
+  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging, jetPUID]
   Data: []
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,48 @@ Modules:
     UL2018:
       branchNames:
         sf: "lheWeightSign"
+
+  # ---------- PUWeight -------------------------------------------------------
+  # Pileup reweighting from Pileup_nTrueInt + the LUM POG's puWeights.json.gz.
+  # See PUWeight.py's docstring: correction names below are a best-guess
+  # standard jsonpog-integration convention, NOT yet verified against the real
+  # file (no /cvmfs access when this was written) -- confirm with
+  # correctionlib.CorrectionSet.from_file(path).keys() once fetched, and fix
+  # here if different. Also needs a 002-Samples reprocessing run before
+  # Pileup_nTrueInt actually reaches this module on any skim.
+  puWeight:
+    UL2016preVFP:
+      PUSFFile: "inputs/SFs/UL2016preVFP_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions16_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2016postVFP:
+      PUSFFile: "inputs/SFs/UL2016postVFP_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions16_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2017:
+      PUSFFile: "inputs/SFs/UL2017_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions17_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
+    UL2018:
+      PUSFFile: "inputs/SFs/UL2018_pu_Weights.json"
+      correctionLib:
+        weightName: "Collisions18_UltraLegacy_goldenJSON"
+      branchNames:
+        sf:     "puWeight"
+        sfup:   "puWeightUp"
+        sfdown: "puWeightDown"
 
   # ---------- MuonIDWeight -------------------------------------------------
   # Correctionlib-based tight muon ID scale factor.
@@ -107,6 +149,68 @@ Modules:
         sf:     "muonIDWeight"
         sfup:   "muonIDWeightUp"
         sfdown: "muonIDWeightDown"
+
+  # ---------- MuonIsoWeight -------------------------------------------------
+  # Muon isolation-selection-efficiency scale factor. This analysis's ABCD
+  # method (see 003-ObjectSelectionI's SelectedObjectsProducer) tags every
+  # selected muon as "tight iso" (pfRelIso04_all < 0.06, regions A/C) or
+  # "loose iso" (>= 0.06, regions B/D). MuonIsoWeightProducer picks its
+  # source per event from ABCD_isTightIso:
+  #   tight iso -> TightIsoSFFile, a dedicated 0.06-WP TnP ROOT file (not
+  #                correctionlib) obtained outside the standard POG set,
+  #                since the POG JSON only measures the standard 0.15 WP.
+  #   loose iso -> StandardSFFile/correctionLib.weightName below (the same
+  #                mu_ID.json NUM_TightRelIso_DEN_TightIDandIPCut key
+  #                muonID could reach), used as the best available proxy.
+  muonIso:
+    UL2016preVFP:
+      StandardSFFile: "inputs/SFs/UL2016preVFP_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2016preVFP_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2016postVFP:
+      StandardSFFile: "inputs/SFs/UL2016postVFP_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2016postVFP_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2017:
+      StandardSFFile: "inputs/SFs/UL2017_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2017_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
+    UL2018:
+      StandardSFFile: "inputs/SFs/UL2018_mu_ID.json"
+      TightIsoSFFile: "inputs/SFs/UL2018_mu_Iso_0p06.root"
+      selMuonBranch: "SelMuon"
+      abcdTightIsoBranch: "ABCD_isTightIso"
+      correctionLib:
+        weightName:   "NUM_TightRelIso_DEN_TightIDandIPCut"
+        rootHistName: "NUM_VeryTightRelIso_DEN_TightIDandIPCut_abseta_pt"
+      branchNames:
+        sf:     "muonIsoWeight"
+        sfstat: "muonIsoWeightStat"
+        sfsyst: "muonIsoWeightSyst"
 
   # ---------- MuonHLTWeight ------------------------------------------------
   # Correctionlib-based HLT isolation scale factor.
@@ -253,6 +357,29 @@ weightLookUp:
     binNumbers: 25
     label: "LHE weight sign"
 
+  # ---------- Pileup weights ------------------------------------------------
+  # Not verified against real output yet -- PUWeight.py hasn't run on data
+  # with Pileup_nTrueInt present. Ranges are the standard expected shape for
+  # this kind of correction, not measured.
+  puWeight:
+    name: "puWeight"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (central)"
+  puWeightUp:
+    name: "puWeightUp"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (up)"
+  puWeightDown:
+    name: "puWeightDown"
+    lo: 0.0
+    hi: 3.0
+    binNumbers: 30
+    label: "Pileup SF (down)"
+
   # ---------- Muon ID weights ----------------------------------------------
   # Data: min=0.966, max=0.993, mean=0.989, std=0.005
   muonIDWeight:
@@ -296,9 +423,38 @@ weightLookUp:
     binNumbers: 10
     label: "Muon HLT SF syst uncertainty"
 
+  # ---------- Muon isolation weights ----------------------------------------
+  # muonIsoWeightStat/Syst: absolute uncertainties, not SFs (same convention
+  # as muonHLTWeightStat/Syst above) -- for tight-iso (<0.06) events these
+  # come from the 0.06-WP ROOT file's bin errors, for loose-iso (>=0.06)
+  # events from mu_ID.json's own stat/syst scale_factors nodes.
+  muonIsoWeight:
+    name: "muonIsoWeight"
+    lo: 0.90
+    hi: 1.10
+    binNumbers: 40
+    label: "Muon Iso SF (central)"
+  muonIsoWeightStat:
+    name: "muonIsoWeightStat"
+    lo: 0.0
+    hi: 0.01
+    binNumbers: 30
+    label: "Muon Iso SF stat uncertainty"
+  muonIsoWeightSyst:
+    name: "muonIsoWeightSyst"
+    lo: 0.0
+    hi: 0.02
+    binNumbers: 30
+    label: "Muon Iso SF syst uncertainty"
+
   # ---------- Jet PU ID weights --------------------------------------------
-  # WARNING: values observed in data are O(1e9) with negatives -- likely a bug
-  # in the jetPUID module. Ranges below are placeholders for expected SF values.
+  # NOT in weightList.MC (see that block's comment) -- Method 1a is
+  # inherently unstable at this WP's ~90-99% efficiency; even with a [0.1,3.0]
+  # event-level clip the branch's mean sits at ~0.45 on real UL2016preVFP MC,
+  # not the ~1 these ranges assume. Branch is still written (useful for
+  # offline study of the instability itself), just not multiplied into any
+  # nominal weight. Ranges below are the ORIGINAL "if this worked" placeholder
+  # -- do not read a well-behaved plot out of this diagnostic as validation.
   jetPUIdWeight:
     name: "jetPUIdWeight"
     lo: 0.5
@@ -338,6 +494,23 @@ weightLookUp:
     hi: 2.0
     binNumbers: 20
     label: "b-tagging SF (down)"
+
+# ---------------------------------------------------------------------------
+# MC weight branches multiplied together for computeABCDScaleFactor.py's
+# background subtraction (read from here, not hardcoded, so it can't drift
+# out of sync with what actually gets computed). Mirrors
+# 003-ObjectSelectionIII's own weightList.MC -- keep the two in sync by hand,
+# same as every other cross-chapter constant in this repo (DataLumiInfo,
+# NgenandXsec, golden_json_urls, ...): each chapter's config.yaml stays
+# self-contained rather than reaching into another chapter's file.
+weightList:
+  # jetPUIdWeight deliberately excluded -- see the matching comment in
+  # 003-ObjectSelectionIII/config.yaml's weightList for why (Method 1a is
+  # inherently unstable at this WP's ~90-99% efficiency; clipping just trades
+  # a visible blowup for a quiet ~0.45-mean bias, confirmed on real
+  # UL2016preVFP MC). puWeight is included but confirmed NOT present on that
+  # same sample -- currently a no-op here via the warn-and-skip fallback below.
+  MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
 
 DataLumiInfo:
   UL2016preVFP:
