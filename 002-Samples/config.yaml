@@ -352,6 +352,18 @@ branch_selection:
     - Jet_jetId
     - Jet_puId
     - Jet_genJetIdx
+    # GenJet_*: Jet_genJetIdx above is an index into this collection -- kept
+    # without it, that index points at nothing on the skim. Needed for JER
+    # smearing / systematic variations (not implemented yet, but this is the
+    # ingredient that would otherwise force a second 002-Samples reprocessing
+    # to add later).
+    - GenJet_pt
+    - GenJet_eta
+    - GenJet_phi
+    - GenJet_mass
+    # fixedGridRhoFastjetAll: pileup rho, standard input to JEC/JER formulas
+    # and the stochastic-smearing JER fallback when no GenJet match exists.
+    - fixedGridRhoFastjetAll
     - L1PreFiringWeight_Nom
     - L1PreFiringWeight_Up
     - L1PreFiringWeight_Dn
@@ -360,6 +372,11 @@ branch_selection:
     - RawMET_pt
     - RawMET_phi
     - "Flag*"
+    # PV_npvs/PV_npvsGood: standard input to the MET xy-shift (pileup/PV-position
+    # modulation) correction -- not implemented yet, same rationale as GenJet_*
+    # above (cheap to keep now, expensive -- a full reprocessing -- to add later).
+    - PV_npvs
+    - PV_npvsGood
     - "GenPart*"
     - Generator_x1
     - Generator_x2
