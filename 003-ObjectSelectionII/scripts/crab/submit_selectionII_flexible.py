@@ -38,6 +38,7 @@ Options
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -242,13 +243,25 @@ def main():
         )
         sys.exit(1)
 
+    # Explicit --proxy skips CRAB's per-submit myproxy re-delegation (crab submit
+    # --help: "Use the given proxy. Skip Grid proxy creation and myproxy
+    # delegation."). Without this, every single crabCommand("submit", ...) call --
+    # even with an already-valid myproxy credential -- tries to re-delegate via
+    # `myproxy-init`, which reads the grid cert private key and prompts for its
+    # passphrase on a real terminal; that hangs/fails outright when this script
+    # runs non-interactively (background/subprocess), which is how run_all.py's
+    # --submitSelectionJobs always invokes it. The existing myproxy delegation
+    # (created once, interactively, valid for weeks) is untouched either way --
+    # this only skips redundantly refreshing it on every submission.
+    proxy_path = os.environ.get('X509_USER_PROXY') or f'/tmp/x509up_u{os.getuid()}'
+
     submitted, failed = 0, 0
     for DataMC, group, key, lfn_files, is_data in job_params:
         label = f"{DataMC}/{group}/{key}"
         try:
             cfg = make_crab_config(args.era, DataMC, group, key, lfn_files, is_data,
                                     output_lfn, args.golden_json, config, args.work_area)
-            crabCommand("submit", config=cfg)
+            crabCommand("submit", config=cfg, proxy=proxy_path)
             print(f"  Submitted: {label}")
             submitted += 1
         except Exception as e:
