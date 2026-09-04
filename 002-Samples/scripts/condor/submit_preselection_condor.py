@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -175,10 +176,21 @@ def main():
     # reached" (confirmed via a live test job). `x509userproxy` has HTCondor transfer the
     # proxy to the job and set X509_USER_PROXY there; this is unrelated to eossubmit's EOS
     # path restrictions -- it's the standard CERN grid-job proxy mechanism.
-    proxy_path = os.environ.get('X509_USER_PROXY') or f'/tmp/x509up_u{os.getuid()}'
-    if not Path(proxy_path).is_file():
-        print(f"ERROR: no grid proxy found at {proxy_path}. Run voms-proxy-init --voms cms first.", file=sys.stderr)
+    #
+    # BUT: the proxy's default location (/tmp/x509up_u<uid>) is local to the lxplus *login*
+    # node, and the eossubmit schedd's "access point" (a separate node, e.g. bigbird103) has
+    # no access to it -- confirmed live: the job held immediately with "Transfer input files
+    # failure ... reading from file /tmp/x509up_u<uid>: No such file or directory". Same class
+    # of bug as local /tmp not being visible to the schedd for job files in general (see
+    # README.md) -- copy the proxy onto EOS (under work_area) and point x509userproxy there.
+    src_proxy_path = os.environ.get('X509_USER_PROXY') or f'/tmp/x509up_u{os.getuid()}'
+    if not Path(src_proxy_path).is_file():
+        print(f"ERROR: no grid proxy found at {src_proxy_path}. Run voms-proxy-init --voms cms first.", file=sys.stderr)
         sys.exit(1)
+    work_area.mkdir(parents=True, exist_ok=True)
+    proxy_path = work_area / "user_proxy"
+    shutil.copy2(src_proxy_path, proxy_path)
+    os.chmod(proxy_path, 0o600)
 
     submit_txt = f"""universe = vanilla
 executable = {WRAPPER_SH}

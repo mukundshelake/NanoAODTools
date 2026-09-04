@@ -45,6 +45,25 @@ equivalent of those two steps. Just run `--submitCondorJobs`, wait for
   `output =`/`error =` **can** vary per-job (confirmed live with a
   queue-from-file `$(job_id)` variable across 3 jobs — each got its own
   distinct `.out`/`.err` with no collisions).
+- The same login-node-vs-access-point split bites `x509userproxy` too, not
+  just job files: pointing it at the default proxy location
+  (`/tmp/x509up_u<uid>`) makes every job hold immediately with `Transfer
+  input files failure ... reading from file /tmp/x509up_u<uid>: No such
+  file or directory` (confirmed live) — the eossubmit schedd's access point
+  is a separate node (e.g. `bigbird103`) with no view of the login node's
+  `/tmp`. `submit_preselection_condor.py` copies the proxy onto EOS under
+  `--work-area` before submitting and points `x509userproxy` there instead.
+
+## Grid proxy (xrootd auth)
+
+Input files are read via the xrootd global redirector
+(`root://cms-xrd-global.cern.ch/`), which requires grid auth against the
+site that actually holds each file. Without a proxy, `TFile::Open` loops
+through redirects and fails with `[FATAL] Redirect limit has been reached`
+(confirmed live). `submit_preselection_condor.py` sets `x509userproxy` in
+the submit file so HTCondor forwards the proxy to the job and sets
+`X509_USER_PROXY` there — see the eossubmit-constraints section above for
+the local-`/tmp` gotcha this runs into.
 
 ## CMSSW environment on the worker
 
