@@ -61,9 +61,10 @@ Modules:
     UL2016preVFP:
       bTagThreshold: 0.2598
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -86,9 +87,10 @@ Modules:
     UL2016postVFP:
       bTagThreshold: 0.2489
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -111,9 +113,10 @@ Modules:
     UL2017:
       bTagThreshold: 0.3040
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -136,9 +139,10 @@ Modules:
     UL2018:
       bTagThreshold: 0.2783
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -880,8 +884,8 @@ ABCDVariables:
     range: [0.0, 0.5]
     label: "SelMuon PF Rel. Isolation (#DeltaR=0.4)"
     variable: "SelMuon_pfRelIso04_all"
-  met:
+  mTW:
     bins: 50
     range: [0.0, 200.0]
-    label: "MET p_{T} [GeV]"
-    variable: "MET_pt"
+    label: "m_{T}(W) [GeV]"
+    variable: "ABCD_mTW"

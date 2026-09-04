@@ -48,7 +48,7 @@ The single source of truth for the entire chapter. Key sections:
 | `Modules.selectedObjects` | Per-era kinematic thresholds and output branch name prefixes for the object-selection module |
 | `DataLumiInfo` | Integrated luminosity (pb⁻¹) and uncertainty per era, for downstream normalisation |
 | `NgenandXsec` | Number of generated events and cross-section (pb) for every MC dataset in every era, also for downstream normalisation |
-| `ABCDVariables` | Variable/binning definitions for `--plotABCDVariables` (muon isolation, MET) |
+| `ABCDVariables` | Variable/binning definitions for `--plotABCDVariables` (muon isolation, mTW) |
 
 ### 3. Preselection ROOT files on disk
 
@@ -78,7 +78,7 @@ For each era a combined cut string is assembled from `SelectionCuts` in `config.
 
 The muon isolation upper bound (0.2) is deliberately looser than the "tight" muon
 definition used everywhere else (0.06, matching CMS convention and this module's own
-`abcdRegion.isoTightMax` -- see below): 0.2 is the isolation ceiling 002-Samples' own
+`abcdRegion.isoLowMax` -- see below): 0.2 is the isolation ceiling 002-Samples' own
 preselection stage already enforces, so it's the widest bound that admits any events at
 all. Loosening the event-level cut only this far (rather than removing the isolation
 requirement) lets *anti-isolated* events -- needed as an ABCD sideband -- survive into the
@@ -100,14 +100,36 @@ Implemented in `scripts/modules/SelectedObjects.py`. For each event that passes 
 
 4. **Branch writing** — writes flat scalar branches for each identified object. If an object is absent (e.g. fewer than 2 b-jets found), its `_pt` branch is set to the sentinel value `−1.0` and all other fields to zero / −1.
 
-5. **ABCD region tagging** — tags each event with its region in the muon-isolation × MET plane, for a CMS-standard QCD-multijet background estimate. This step only *tags*; it never rejects an event. It reuses the exact muon object selected in step 1 rather than re-deriving it or reading it from another module: NanoAODTools builds each `Event` strictly from the *input* tree (see `postprocessing/framework/eventloop.py` -- `Event(inputTree, entry)`), so a separate module further down `ModuleList` could not read a branch this module writes via `self.out.fillBranch()` -- that branch only exists on the output tree buffer. Region definitions (config keys under `abcdRegion`, era-independent values currently: `isoTightMax: 0.06`, `metBranch: "MET_pt"`, `metThreshold: 30.0`):
+5. **ABCD region tagging** — tags each event with its region in the muon-isolation × W transverse mass (mTW) plane, for a CMS-standard QCD-multijet background estimate. This step only *tags*; it never rejects an event. It reuses the exact muon object selected in step 1 rather than re-deriving it or reading it from another module: NanoAODTools builds each `Event` strictly from the *input* tree (see `postprocessing/framework/eventloop.py` -- `Event(inputTree, entry)`), so a separate module further down `ModuleList` could not read a branch this module writes via `self.out.fillBranch()` -- that branch only exists on the output tree buffer.
 
-   | Region | Isolation | MET | Role |
+   `mTW = sqrt(2 * pT(mu) * MET_pt * (1 - cos(dphi(mu, MET))))`, computed from the
+   selected muon plus the standard NanoAOD `MET_pt`/`MET_phi` branches (not
+   configurable -- there's no need to swap MET flavors here). Chosen over raw MET_pt
+   because a genuine `W->mu·nu` decay gives mTW a well-understood, sharply-edged
+   shape that's far less susceptible to the low-MET resolution tail raw MET has --
+   that tail was previously causing real ttbar semi-leptonic MC to over-predict the
+   tight-isolation/low-MET/high-muon-pT corner of the old MET-based scheme, badly
+   enough to zero out the data-driven QCD estimate there entirely.
+
+   Each axis is classified against **two independent thresholds**, not one (config
+   keys under `abcdRegion`, era-independent values currently: `isoLowMax: 0.06`,
+   `isoHighMin: 0.06`, `mTWLowMax: 30.0`, `mTWHighMin: 30.0`):
+
+   | Region | Isolation | mTW | Role |
    |---|---|---|---|
-   | A | tight (≤ `isoTightMax`) | high (≥ `metThreshold`) | signal region |
-   | B | loose | high | |
-   | C | tight | low | |
+   | A | tight (≤ `isoLowMax`) | high (≥ `mTWHighMin`) | signal region |
+   | B | loose (≥ `isoHighMin`) | high | |
+   | C | tight | low (< `mTWLowMax`) | |
    | D | loose | low | QCD-enriched template region |
+
+   With each pair equal (today's default), every event with a selected muon falls
+   unambiguously into exactly one of A/B/C/D -- identical in effect to a single
+   shared threshold per axis. The two are kept independent so either pair can later
+   be pulled apart (e.g. raising `isoHighMin` above `isoLowMax`) to open a gap
+   without any further code change: an event whose isolation or mTW then falls
+   strictly between its pair's two values is tagged **undefined** (`region = -1`,
+   the same code already used when no muon was selected) rather than forced into a
+   bucket by an implicit tie-break.
 
    The actual QCD yield estimate (`N_A ≈ N_B·N_C/N_D`, computed from Data with non-QCD MC subtracted from B/C/D) is **not** computed by this chapter -- this stage only produces the per-event tag needed for it.
 
@@ -131,11 +153,13 @@ Each skim retains **all** original NanoAOD branches plus the following new flat 
 | `subleadingbJet` | Second b-tagged jet | same fields |
 | `leadingJet` | Highest-pT light jet | same fields |
 | `subleadingJet` | Second light jet | same fields |
-| `ABCD` | Event's ABCD-plane region tag (not an object -- see "ABCD region tagging" above) | `_isTightIso`, `_isHighMET` (O); `_region` (I: 0=A, 1=B, 2=C, 3=D, -1=undefined) |
+| `ABCD` | Event's ABCD-plane region tag (not an object -- see "ABCD region tagging" above) | `_isTightIso`, `_isHighMTW` (O); `_mTW` (F); `_region` (I: 0=A, 1=B, 2=C, 3=D, -1=undefined) |
 
 Sentinel value for a missing object: `*_pt = -1.0`, all other fields = 0 / −1. `ABCD_region = -1`
-(undefined) when no muon was selected, since isolation is meaningless without one;
-`ABCD_isHighMET` is still always meaningful (MET doesn't depend on the muon).
+when no muon was selected (isolation and mTW are both meaningless without one -- unlike the old
+MET-based scheme, mTW itself now depends on the muon's pT/φ, so `ABCD_mTW`/`ABCD_isHighMTW` are
+only meaningful together with a selected muon, not independently) or when either axis falls in a
+gap between its low/high thresholds (see above).
 
 ### Provenance files (under `outputs/`)
 
@@ -159,21 +183,21 @@ After the skim files are written, `--generateDatasetJSON` scans the output stora
 
 ### Output verification (optional)
 
-`--verifyOutput` runs `scripts/verifyOutput.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`). Unlike 002-Samples' `verifyOutput.py`, which checks every branch against a curated `branch_selection.keep` allowlist, this stage's skims keep *all* original NanoAOD branches untouched -- there's no drop list to check against. Instead this script is scoped to exactly the branches `SelectedObjectsProducer` creates: it confirms every expected `SelMuon_*`/`leading[b]Jet_*`/`subleading[b]Jet_*`/`sel_nJet`/`sel_nbjet`/`ABCD_*` branch is present (era- and Data/MC-aware, via `config.yaml`'s `Modules.selectedObjects.branchNames`), computes min/max/mean/stddev for those branches only, and checks cross-branch invariants that must always hold given the module's deterministic algorithm -- object-selection invariants (e.g. `sel_nbjet <= sel_nJet`, and each `leading/subleading` slot is filled if and only if the object count says it should be) and ABCD-tagging invariants (e.g. `ABCD_region` is only ever one of `{-1,0,1,2,3}`, `ABCD_isTightIso`/`ABCD_isHighMET` match a direct recomputation from `SelMuon_pfRelIso04_all`/`MET_pt` against `abcdRegion.isoTightMax`/`metThreshold`, and `ABCD_region`'s code matches those two flags) -- any violation there is a real bug, not noise. It also reports each object's sentinel (`*_pt == -1`) rate and the per-dataset A/B/C/D region split as diagnostics, since `SelectionCuts` already guarantees enough muons/jets/b-jets before this module runs, so a healthy skim should show ~0% sentinel rate. Writes a JSON report per era.
+`--verifyOutput` runs `scripts/verifyOutput.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`). Unlike 002-Samples' `verifyOutput.py`, which checks every branch against a curated `branch_selection.keep` allowlist, this stage's skims keep *all* original NanoAOD branches untouched -- there's no drop list to check against. Instead this script is scoped to exactly the branches `SelectedObjectsProducer` creates: it confirms every expected `SelMuon_*`/`leading[b]Jet_*`/`subleading[b]Jet_*`/`sel_nJet`/`sel_nbjet`/`ABCD_*` branch is present (era- and Data/MC-aware, via `config.yaml`'s `Modules.selectedObjects.branchNames`), computes min/max/mean/stddev for those branches only, and checks cross-branch invariants that must always hold given the module's deterministic algorithm -- object-selection invariants (e.g. `sel_nbjet <= sel_nJet`, and each `leading/subleading` slot is filled if and only if the object count says it should be) and ABCD-tagging invariants (e.g. `ABCD_region` is only ever one of `{-1,0,1,2,3}`, `ABCD_isTightIso`/`ABCD_isHighMTW` match a direct recomputation from `SelMuon_pfRelIso04_all`/`ABCD_mTW` against `abcdRegion`'s four thresholds (`isoLowMax`/`isoHighMin`/`mTWLowMax`/`mTWHighMin`), and `ABCD_region`'s code matches those two flags -- or is `-1` if either flag is itself ambiguous, i.e. iso or mTW fell in a gap between its low/high pair) -- any violation there is a real bug, not noise. It also reports each object's sentinel (`*_pt == -1`) rate and the per-dataset A/B/C/D region split as diagnostics, since `SelectionCuts` already guarantees enough muons/jets/b-jets before this module runs, so a healthy skim should show ~0% sentinel rate. Writes a JSON report per era.
 
 ### ABCD-plane variable distributions (exploratory)
 
-`--plotABCDVariables` runs `scripts/plotABCDVariables.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`), as a first look at candidate ABCD-method discriminating variables (muon isolation, MET) ahead of picking any region-boundary values -- see `config.yaml`'s `ABCDVariables` block for the variable/binning definitions. For each era it overlays normalized (unit-area) shape distributions across `--abcdGroups` (default: `SemiLeptonic` and `QCD` under `--abcdDataMC`, default `MC_mu`). Since 003-ObjectSelectionII's SF weights don't exist yet at this stage (and these skims have no `genWeight` branch), each dataset is combined into its group total using only `sign(LHEWeight_originalXWGTUP) * Lumi*Xsec/Ngen` -- the same sign convention as 003-ObjectSelectionII's `LHEWeightSignProducer`, and the same per-dataset `Lumi*Xsec/Ngen` scalar-weight convention 003-ObjectSelectionIII's `--aggregrateGroupHists` uses when merging a group's datasets (e.g. QCD's several pT-binned samples) into one. This is a shape-comparison tool only, not an ABCD yield estimate. Writes `{var}_{era}.png`/`.pdf` and a `abcdVariables_{era}.root` (raw weighted + normalized histograms) per era to `outputs/{tag}/{hash}/{era}/abcdPlots/`.
+`--plotABCDVariables` runs `scripts/plotABCDVariables.py` on `selectionI_{tag}_{era}_datasets.json` (from `--generateDatasetJSON`), as a first look at candidate ABCD-method discriminating variables (muon isolation, mTW) ahead of picking any region-boundary values -- see `config.yaml`'s `ABCDVariables` block for the variable/binning definitions. For each era it overlays normalized (unit-area) shape distributions across `--abcdGroups` (default: `SemiLeptonic` and `QCD` under `--abcdDataMC`, default `MC_mu`). Since 003-ObjectSelectionII's SF weights don't exist yet at this stage (and these skims have no `genWeight` branch), each dataset is combined into its group total using only `sign(LHEWeight_originalXWGTUP) * Lumi*Xsec/Ngen` -- the same sign convention as 003-ObjectSelectionII's `LHEWeightSignProducer`, and the same per-dataset `Lumi*Xsec/Ngen` scalar-weight convention 003-ObjectSelectionIII's `--aggregrateGroupHists` uses when merging a group's datasets (e.g. QCD's several pT-binned samples) into one. This is a shape-comparison tool only, not an ABCD yield estimate. Writes `{var}_{era}.png`/`.pdf` and a `abcdVariables_{era}.root` (raw weighted + normalized histograms) per era to `outputs/{tag}/{hash}/{era}/abcdPlots/`.
 
-Note: with the current `SelectionCuts` (`Muon_pfRelIso04_all <= 0.06`), the muon-isolation shape is only visible up to that cut -- the anti-isolated tail needed for the eventual ABCD sideband regions isn't in these skims yet. The MET shape, by contrast, is unconstrained by any existing cut and is fully visible now.
+Note: with the current `SelectionCuts` (`Muon_pfRelIso04_all <= 0.06`), the muon-isolation shape is only visible up to that cut -- the anti-isolated tail needed for the eventual ABCD sideband regions isn't in these skims yet. The mTW shape, by contrast, is unconstrained by any existing cut and is fully visible now.
 
 ### ABCD closure test (exploratory)
 
 `--abcdClosureTest` runs `scripts/abcdClosureTest.py` on `selectionI_{tag}_{era}_datasets.json`
-(from `--generateDatasetJSON`): the standard sanity check for whether muon isolation and MET
+(from `--generateDatasetJSON`): the standard sanity check for whether muon isolation and mTW
 are independent enough, within a target process, for the ABCD method to be valid. Sums the
 `ABCD_region` branch `SelectedObjectsProducer` already wrote (no re-derivation from
-`SelMuon_pfRelIso04_all`/`MET_pt` needed) across `--groups` under `--dataMC` (default: `QCD`
+`SelMuon_pfRelIso04_all`/`ABCD_mTW` needed) across `--groups` under `--dataMC` (default: `QCD`
 under `MC_mu` -- the actual ABCD estimate target) and checks `N_A ≈ N_B·N_C/N_D`; a large
 deviation means the two variables are correlated within that process and the estimate would
 be biased. Datasets within a group are combined with the same `Lumi*Xsec/Ngen`-weighted,
