@@ -1,4 +1,4 @@
-# Configuration for 004B-BDT: BDT Variable Computation
+# Configuration for 004B-BDTVariables: BDT Variable Computation
 # This stage computes 17 BDT variables from reconstructed events.
 # Input: ROOT files from 004A-Reconstruction
 # Output: ROOT files with added BDT variable branches

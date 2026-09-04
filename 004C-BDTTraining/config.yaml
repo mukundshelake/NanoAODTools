@@ -1,6 +1,6 @@
 # Configuration for 004C-BDTTraining: BDT training-input extraction.
 #
-# This stage reads the BDTVariables ROOT files produced by 004B-BDT and
+# This stage reads the BDTVariables ROOT files produced by 004B-BDTVariables and
 # extracts the BDT feature branches plus the `y` training target into
 # parquet files, one per dataset (split into numbered parts if a dataset
 # would otherwise produce an overlarge file).
@@ -15,14 +15,14 @@ STORAGE:
   lxplus:    "/eos/user/m/mshelake/DataFiles/"
 
 # Eras to iterate over. Matches the BDTVariables_{tag}_{era}_datasets.json
-# filenames fetched from 004B-BDT.
+# filenames fetched from 004B-BDTVariables.
 Eras:
   - UL2016preVFP
   - UL2016postVFP
   - UL2017
   - UL2018
 
-# Branches computed by BDTvariableModule (004B-BDT scripts/modules/BDTvariableModule.py)
+# Branches computed by BDTvariableModule (004B-BDTVariables scripts/modules/BDTvariableModule.py)
 # that make up the BDT feature set, in the order they should appear as parquet columns.
 BDTVariables:
   - JetHT

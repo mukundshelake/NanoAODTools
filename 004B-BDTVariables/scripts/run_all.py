@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Master script to generate all outputs for 004B-BDT.
+Master script to generate all outputs for 004B-BDTVariables.
 
 This script orchestrates the BDT variable computation workflow:
 1. Fetches reconstruction dataset JSONs from 004A outputs (optional)
@@ -14,7 +14,7 @@ Usage:
 Options:
     --force: Regenerate outputs even if output files already exist
     --tag:   Create a named tag for this run (e.g., "earlyApril")
-    --fetchFromPreviousChapter: Fetch reconstruction JSONs from 004A-Reconstruction outputs
+    --generateReconstructionDatasetJSON: Scan 004A-Reconstruction outputs on disk and build reconstruction dataset JSONs
     --generateProcessListJSON: Generate process list for runBDTVariables.py
     --writeBashScript: Create a bash script instead of running directly
     --generateDatasetJSON: Create dataset JSON from BDT outputs
@@ -22,6 +22,7 @@ Options:
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 import subprocess
@@ -57,7 +58,7 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate all outputs for 004B-BDT')
+    parser = argparse.ArgumentParser(description='Generate all outputs for 004B-BDTVariables')
     parser.add_argument('-t', '--tag', type=str,
                        help='Create named tag for this run (e.g., earlyApril)', default='Dump')
     parser.add_argument('--force', action='store_true',
@@ -65,12 +66,20 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch reconstruction_{tag}_{era}_datasets.json from 004A-Reconstruction outputs '
-                            'into inputs/ (and this run\'s outputs/inputs/ snapshot). Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 004A-Reconstruction run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generateReconstructionDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/reconstruction/{reconstructionTag}/{reconstructionHash}/{era} on disk '
+                            '(the 004A-Reconstruction output) and build inputs/reconstruction_{era}_datasets.json '
+                            'via scripts/generateDatasetJSON.py -- the same health-checked scan '
+                            '004A-Reconstruction itself uses, run fresh each time so the recorded file paths '
+                            'always reflect where the files actually are right now (also copied into this run\'s '
+                            'outputs/{tag}/{hash}/inputs/ snapshot). Requires --reconstructionTag and '
+                            '--reconstructionHash.')
+    parser.add_argument('--reconstructionTag', type=str, default=None,
+                       help='[0] Tag of the 004A-Reconstruction run to scan (e.g. "earlyApril"). '
+                            'Required by --generateReconstructionDatasetJSON.')
+    parser.add_argument('--reconstructionHash', type=str, default=None,
+                       help='[0] Config hash of the 004A-Reconstruction run to scan. '
+                            'Required by --generateReconstructionDatasetJSON.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runBDTVariables.py by reading per-era '
                             'reconstruction dataset JSONs from the inputs folder')
@@ -107,8 +116,9 @@ def main():
 
     print("Arguments:")
     print(f"  --tag: {args.tag}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generateReconstructionDatasetJSON: {args.generateReconstructionDatasetJSON}")
+    print(f"  --reconstructionTag: {args.reconstructionTag}")
+    print(f"  --reconstructionHash: {args.reconstructionHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --submitBDTJobs: {args.submitBDTJobs}")
@@ -156,25 +166,50 @@ def main():
         print(f"Config hash: {config_hash}")
         return 0
 
-    # Fetch reconstruction dataset JSON into inputs/
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 004A-Reconstruction's reconstruction ROOT files on disk and build
+    # inputs/reconstruction_{era}_datasets.json fresh via generateDatasetJSON.py --
+    # replaces the old --fetchFromPreviousChapter, which just copied a JSON that
+    # 004A-Reconstruction had generated at some earlier point and could go stale (its
+    # recorded paths pointing at files that had since moved or become unreachable from
+    # this machine, with nothing to catch the drift). Same pattern as
+    # 003-ObjectSelectionII's --generateSelectionIDatasetJSON and
+    # 003-ObjectSelectionIII's --generateSelectionIIDatasetJSON.
+    if args.generateReconstructionDatasetJSON:
+        if not args.reconstructionTag or not args.reconstructionHash:
+            print("Error: --generateReconstructionDatasetJSON requires --reconstructionTag and --reconstructionHash.")
             return 1
-        print(f"\nFetching inputs from 004A-Reconstruction (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '004A-Reconstruction' / 'outputs' / args.tag / args.previousHash
+        print(f"\nGenerating reconstruction dataset JSON from disk (tag: {args.reconstructionTag}, "
+              f"hash: {args.reconstructionHash})...")
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            return 1
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            filename = f'reconstruction_{args.tag}_{era}_datasets.json'
-            source_path = previous_chapter_outputs / era / filename
-            if not source_path.exists():
-                print(f"    Error: Source file not found: {source_path}. Skipping.")
-                continue
-            local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-            print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 004A-Reconstruction.")
+            output_json_name = f"reconstruction_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "reconstruction", args.reconstructionTag,
+                                           args.reconstructionHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory,
+            ]
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            # Also copy into this run's own outputs/{tag}/{hash}/inputs/ snapshot --
+            # create_output_directory() only snapshotted inputs/ as it existed at the
+            # start of this invocation, before this step ran.
+            output_path = output_dir / 'inputs' / output_json_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / output_json_name, output_path)
+            print(f"    Generated {inputs_folder / output_json_name} and copied to {output_path}")
+        print("Finished generating reconstruction dataset JSON files.")
 
     # --generateProcessListJSON
     if args.generateProcessListJSON:
@@ -188,7 +223,7 @@ def main():
 
             reconstruction_dataset_json = (
                 output_dir / 'inputs' /
-                f'reconstruction_{args.tag}_{era}_datasets.json'
+                f'reconstruction_{era}_datasets.json'
             )
 
             if not reconstruction_dataset_json.exists():
@@ -319,9 +354,9 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'reconstruction_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'reconstruction_{era}_datasets.json'
             if not dataset_json_path.exists():
-                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --generateReconstructionDatasetJSON --reconstructionTag <tag> --reconstructionHash <hash> first.")
                 continue
             with open(dataset_json_path) as jf:
                 era_dataset_json = json.load(jf)
@@ -392,7 +427,7 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'reconstruction_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'reconstruction_{era}_datasets.json'
             if not dataset_json_path.exists():
                 print(f"  Warning: reconstruction dataset JSON not found for era {era}: {dataset_json_path}. Skipping.")
                 continue

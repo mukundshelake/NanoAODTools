@@ -1,6 +1,6 @@
 # 004C-BDTTraining — Parquet Extraction & BDT Training
 
-Takes the `BDTVariables` ROOT files from 004B-BDT, extracts the BDT feature
+Takes the `BDTVariables` ROOT files from 004B-BDTVariables, extracts the BDT feature
 branches plus the `y` training target into parquet files (one, or more if a
 dataset is too bulky, per dataset), and then trains an XGBoost classifier per
 era that distinguishes qqbar-initiated (`y==1`) from gg-initiated (`y==2`)
@@ -15,8 +15,10 @@ not inside `cmsenv`.
 
 ## Inputs
 
-- `BDTVariables_{tag}_{era}_datasets.json` from 004B-BDT, fetched into
-  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
+- `BDTVariables_{era}_datasets.json`: built fresh from the 004B-BDTVariables output on
+  disk via `--generateBDTVariablesDatasetJSON --BDTVariablesTag <tag>
+  --BDTVariablesHash <hash>` (into `inputs/`, and this run's
+  `outputs/{tag}/{hash}/inputs/` snapshot).
 
 ## What it does
 
@@ -38,7 +40,7 @@ Columns pulled out:
   `SelectedObjectsProducer` and carried through untouched (every stage in
   this pipeline runs with `branchsel=None`).
 - `TargetBranch` (`y`): the truth-level hard-scattering classification
-  filled by `BDTvariableModule` in 004B-BDT (`1`=qqbar, `2`=gg, `3`=qg,
+  filled by `BDTvariableModule` in 004B-BDTVariables (`1`=qqbar, `2`=gg, `3`=qg,
   `4`=qq' diff. flavour, `5`=qq same flavour, `0`=undefined/data).
 
 So a dataset that fits in one accumulated chunk gets a single `_part0.parquet`,
@@ -92,7 +94,7 @@ trained qqbar-vs-*everything-else* rather than strictly qqbar-vs-gg.
 ## Running it
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateBDTVariablesDatasetJSON --BDTVariablesTag <tag> --BDTVariablesHash <hash>
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript
 scripts/run_all_{tag}.sh

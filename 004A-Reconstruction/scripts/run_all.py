@@ -13,6 +13,7 @@ Options:
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 import subprocess
@@ -96,12 +97,20 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch selectionII_{tag}_{era}_datasets.json from 003-ObjectSelectionII outputs '
-                            'into inputs/ (and this run\'s outputs/inputs/ snapshot). Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 003-ObjectSelectionII run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generateSelectionIIDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/selectionII/{selectionIITag}/{selectionIIHash}/{era} on disk '
+                            '(the 003-ObjectSelectionII output) and build inputs/selectionII_{era}_datasets.json '
+                            'via scripts/generateDatasetJSON.py -- the same health-checked scan '
+                            '003-ObjectSelectionII itself uses, run fresh each time so the recorded file paths '
+                            'always reflect where the files actually are right now (also copied into this run\'s '
+                            'outputs/{tag}/{hash}/inputs/ snapshot). Requires --selectionIITag and '
+                            '--selectionIIHash.')
+    parser.add_argument('--selectionIITag', type=str, default=None,
+                       help='[0] Tag of the 003-ObjectSelectionII run to scan (e.g. "midAugust"). '
+                            'Required by --generateSelectionIIDatasetJSON.')
+    parser.add_argument('--selectionIIHash', type=str, default=None,
+                       help='[0] Config hash of the 003-ObjectSelectionII run to scan. '
+                            'Required by --generateSelectionIIDatasetJSON.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runReco.py by reading per-era '
                             'selectionII dataset JSONs from the inputs folder')
@@ -136,8 +145,9 @@ def main():
 
     print("Arguments:")
     print(f"  --tag: {args.tag}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generateSelectionIIDatasetJSON: {args.generateSelectionIIDatasetJSON}")
+    print(f"  --selectionIITag: {args.selectionIITag}")
+    print(f"  --selectionIIHash: {args.selectionIIHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --submitReconstructionJobs: {args.submitReconstructionJobs}")
@@ -183,25 +193,50 @@ def main():
         print(f"Config hash: {config_hash}")
         return 0
 
-    # Fetch selection-II dataset JSON into inputs/
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 003-ObjectSelectionII's selectionII ROOT files on disk and build
+    # inputs/selectionII_{era}_datasets.json fresh via generateDatasetJSON.py --
+    # replaces the old --fetchFromPreviousChapter, which just copied a JSON that
+    # 003-ObjectSelectionII had generated at some earlier point and could go stale (its
+    # recorded paths pointing at files that had since moved or become unreachable from
+    # this machine, with nothing to catch the drift). Same pattern as
+    # 003-ObjectSelectionII's --generateSelectionIDatasetJSON and
+    # 003-ObjectSelectionIII's --generateSelectionIIDatasetJSON.
+    if args.generateSelectionIIDatasetJSON:
+        if not args.selectionIITag or not args.selectionIIHash:
+            print("Error: --generateSelectionIIDatasetJSON requires --selectionIITag and --selectionIIHash.")
             return 1
-        print(f"\nFetching inputs from 003-ObjectSelectionII (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '003-ObjectSelectionII' / 'outputs' / args.tag / args.previousHash
+        print(f"\nGenerating selectionII dataset JSON from disk (tag: {args.selectionIITag}, "
+              f"hash: {args.selectionIIHash})...")
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            return 1
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            filename = f'selectionII_{args.tag}_{era}_datasets.json'
-            source_path = previous_chapter_outputs / era / filename
-            if not source_path.exists():
-                print(f"    Error: Source file not found: {source_path}. Skipping.")
-                continue
-            local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-            print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 003-ObjectSelectionII.")
+            output_json_name = f"selectionII_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "selectionII", args.selectionIITag,
+                                           args.selectionIIHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory,
+            ]
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            # Also copy into this run's own outputs/{tag}/{hash}/inputs/ snapshot --
+            # create_output_directory() only snapshotted inputs/ as it existed at the
+            # start of this invocation, before this step ran.
+            output_path = output_dir / 'inputs' / output_json_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / output_json_name, output_path)
+            print(f"    Generated {inputs_folder / output_json_name} and copied to {output_path}")
+        print("Finished generating selectionII dataset JSON files.")
 
     # --generateProcessListJSON
     if args.generateProcessListJSON:
@@ -215,7 +250,7 @@ def main():
 
             selectionII_dataset_json = (
                 output_dir / 'inputs' /
-                f'selectionII_{args.tag}_{era}_datasets.json'
+                f'selectionII_{era}_datasets.json'
             )
 
             if not selectionII_dataset_json.exists():
@@ -367,9 +402,9 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'selectionII_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'selectionII_{era}_datasets.json'
             if not dataset_json_path.exists():
-                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --fetchFromPreviousChapter first.")
+                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --generateSelectionIIDatasetJSON --selectionIITag <tag> --selectionIIHash <hash> first.")
                 continue
             with open(dataset_json_path) as jf:
                 era_dataset_json = json.load(jf)
@@ -440,7 +475,7 @@ def main():
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
-            dataset_json_path = output_dir / 'inputs' / f'selectionII_{args.tag}_{era}_datasets.json'
+            dataset_json_path = output_dir / 'inputs' / f'selectionII_{era}_datasets.json'
             if not dataset_json_path.exists():
                 print(f"  Warning: selectionII dataset JSON not found for era {era}: {dataset_json_path}. Skipping.")
                 continue
