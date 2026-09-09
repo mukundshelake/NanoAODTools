@@ -412,3 +412,96 @@ branch_selection:
     - PSWeight
     - LHEScaleWeight
     - LHEPdfWeight
+    # Electron_*: previously entirely absent from the skim. Added to support an
+    # additional-lepton veto (event contains a loose electron beyond the signal
+    # muon) -- needed to reject ttbar-dileptonic and Z/diboson contamination in
+    # the semileptonic selection. deltaEtaSC is for the ECAL barrel/endcap gap
+    # cut; convVeto/dxy/dz for non-prompt/conversion rejection. All names/types
+    # verified live against a real Data (Run2016F SingleMuon) and MC (UL2016preVFP
+    # Tchannel) file in this campaign.
+    - nElectron
+    - Electron_pt
+    - Electron_eta
+    - Electron_phi
+    - Electron_mass
+    - Electron_charge
+    - Electron_deltaEtaSC
+    - Electron_mvaFall17V2Iso_WP90
+    - Electron_pfRelIso03_all
+    - Electron_convVeto
+    - Electron_dxy
+    - Electron_dz
+    # Muon_*: additions for the same veto (a rigorous loose-muon veto definition,
+    # matching the electron side) plus genPartIdx/genPartFlav for MC truth-matched
+    # efficiency and non-prompt-lepton studies.
+    - Muon_dxy
+    - Muon_dz
+    - Muon_sip3d
+    - Muon_genPartIdx
+    - Muon_genPartFlav
+    - Muon_jetIdx
+    - Muon_miniPFRelIso_all
+    # Jet_*: quark-gluon likelihood and c-tagging discriminants are candidate
+    # features for the jet-assignment BDT (004A-Reconstruction/004B-BDT) --
+    # distinguishing the two light jets from W->qq' against b-jets and ISR/FSR
+    # gluon jets. Energy-fraction/constituent variables are common BDT inputs
+    # and useful jet-ID cross-checks beyond the baseline Jet_jetId flag.
+    # electronIdx/muonIdx complete the lepton-jet cross-cleaning pair (Muon_jetIdx
+    # above is the lepton-side half).
+    - Jet_qgl
+    - Jet_btagDeepFlavCvL
+    - Jet_btagDeepFlavCvB
+    - Jet_muEF
+    - Jet_chEmEF
+    - Jet_neEmEF
+    - Jet_chHEF
+    - Jet_neHEF
+    - Jet_nConstituents
+    - Jet_electronIdx1
+    - Jet_electronIdx2
+    - Jet_muonIdx1
+    - Jet_muonIdx2
+    # MET_significance/cov*: MET covariance matrix, standard input to
+    # likelihood/kinematic-fit neutrino-pz reconstruction (004A-Reconstruction).
+    # PuppiMET: pileup-robust MET alternative to PF MET, kept alongside it so the
+    # choice can be made/compared at analysis time rather than re-skimming for it.
+    - MET_significance
+    - MET_covXX
+    - MET_covXY
+    - MET_covYY
+    - PuppiMET_pt
+    - PuppiMET_phi
+    # LHEPart_* (MC only): parton-level truth four-vectors, needed if
+    # 005-Unfolding targets parton-level (rather than particle-level) ttbar
+    # kinematics -- GenPart* alone is reco-shower-level, not LHE-level.
+    - nLHEPart
+    - LHEPart_pt
+    - LHEPart_eta
+    - LHEPart_phi
+    - LHEPart_mass
+    - LHEPart_incomingpz
+    - LHEPart_pdgId
+    - LHEPart_status
+    - LHEPart_spin
+    # GenJet_hadronFlavour/partonFlavour (MC only): truth jet flavor, for
+    # b/c-tag SF truth-flavor binning and jet-assignment BDT truth labels.
+    # nGenJet: closes a pre-existing gap -- GenJet_pt/eta/phi/mass above were
+    # kept as explicit branch names (not a wildcard) without their companion
+    # count branch.
+    - GenJet_hadronFlavour
+    - GenJet_partonFlavour
+    - nGenJet
+    # TrigObj_*: explicit offline-lepton-to-HLT-object matching, for trigger
+    # efficiency SF prescriptions that require object-level matching rather than
+    # just the event-level HLT_IsoMu24 flag already covered by "HLT*" above.
+    - nTrigObj
+    - TrigObj_pt
+    - TrigObj_eta
+    - TrigObj_phi
+    - TrigObj_l1pt
+    - TrigObj_l1pt_2
+    - TrigObj_l2pt
+    - TrigObj_id
+    - TrigObj_l1iso
+    - TrigObj_l1charge
+    - TrigObj_filterBits
