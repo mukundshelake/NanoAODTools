@@ -192,11 +192,21 @@ def main():
     shutil.copy2(src_proxy_path, proxy_path)
     os.chmod(proxy_path, 0o600)
 
+    # transfer_output_files = "" is load-bearing: with should_transfer_files=YES and no
+    # explicit list, HTCondor's default is to auto-transfer *every new file* found in the
+    # job's scratch sandbox back to wherever `condor_submit` was invoked from (there's no
+    # initialdir here, and no reason to want one) -- condor_preselection.sh already copies
+    # its *_Skim.root output to $OUT_DIR itself via `cp`, so that same file was ALSO getting
+    # auto-transferred a second time into whatever directory this script's condor_submit call
+    # happened to run from (in practice: 002-Samples/, since that's the run_all.py cwd),
+    # silently doubling storage for every completed job. Confirmed live: 2714 stray files,
+    # 234G, sitting in 002-Samples/ from the first production run before this was caught.
     submit_txt = f"""universe = vanilla
 executable = {WRAPPER_SH}
 arguments = "$(job_id) $(era) {CONFIG_YAML} $(files_json) $(golden_json) $(is_data) $(out_dir) {WORKER_PY}"
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
+transfer_output_files = ""
 x509userproxy = {proxy_path}
 output = {logs_dir}/$(job_id).out
 error = {logs_dir}/$(job_id).err
