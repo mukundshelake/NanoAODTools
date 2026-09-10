@@ -33,9 +33,15 @@ SFSourceSSHRelay: "lxplus.cern.ch"
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
 # All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
-# ---------------------------------------------------------------------------
+#
+# jetPUID deliberately dropped (not just left out of weightList): its Method 1a
+# failing-jet weight formula is inherently unstable given real jet-PU-ID
+# efficiencies of ~90-99%, saturating the [0.1,3.0] clip on ~70-75% of events
+# (mean jetPUIdWeight ~0.44 vs the expected ~1 -- see 003-ObjectSelectionIII/
+# config.yaml's weightList comment). Needs Method 2 (shape) reweighting before
+# it's worth computing at all; re-add to ModuleList once that's implemented.
 ModuleList:
-  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging, jetPUID]
+  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging]
   Data: []
 
 # ---------------------------------------------------------------------------
