@@ -39,6 +39,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import GridSearchCV, train_test_split
+from scipy.stats import ks_2samp
 from xgboost import XGBClassifier
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -244,6 +245,95 @@ def save_scores(df_test, y_test, y_pred_proba, y_pred, target_branch, out_path):
     logging.info(f"Scores saved to {out_path}")
 
 
+def compute_correlations(df, features, output_dir, label_col="y_binary"):
+    """Pearson correlation matrix among the BDT input features, computed
+    separately per class.
+
+    Correlations between event-shape/Fox-Wolfram-moment variables often
+    differ between qqbar and gg events (that's part of why they're
+    discriminating in the first place), and a single combined-class matrix
+    can hide that structure or manufacture spurious correlation purely from
+    the class-conditional mean shift between the two labels. Computed on the
+    balanced (pre-imputation) sample so the numbers reflect actual event
+    values, not imputed fill-ins.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+    class_names = {0: "gg (class 0)", 1: "qqbar (class 1)"}
+    corr_by_class = {}
+    for cls, ax in zip([0, 1], axes):
+        corr = df.loc[df[label_col] == cls, features].corr()
+        corr_by_class[cls] = corr
+        corr.to_csv(output_dir / f"correlation_class{cls}.csv")
+        im = ax.imshow(corr.values, vmin=-1, vmax=1, cmap="coolwarm")
+        ax.set_xticks(range(len(features)))
+        ax.set_xticklabels(features, rotation=90, fontsize=7)
+        ax.set_yticks(range(len(features)))
+        ax.set_yticklabels(features, fontsize=7)
+        ax.set_title(f"Feature correlation -- {class_names[cls]}", fontweight="bold")
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig(output_dir / "correlation_matrix.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    logging.info(f"Correlation matrices saved to {output_dir}/correlation_class{{0,1}}.csv "
+                 f"and {output_dir}/correlation_matrix.png")
+    return corr_by_class
+
+
+def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title, suffix=""):
+    """Classic train-vs-test overtraining check.
+
+    Overlays the classifier's score distribution on train vs test data,
+    separately per class, and runs a two-sample Kolmogorov-Smirnov test
+    between them. A small train/test difference is expected from
+    statistical noise alone; a small KS p-value signals the model has
+    memorized train-set-specific structure rather than learned a
+    generalizable decision boundary -- the standard overtraining tell in a
+    BDT study (cf. TMVA's "Overtraining check" plot).
+    """
+    train_scores = bdt.predict_proba(X_train)[:, 1]
+    test_scores = bdt.predict_proba(X_test)[:, 1]
+    y_train_arr = np.asarray(y_train)
+    y_test_arr = np.asarray(y_test)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    bins = np.linspace(0, 1, 41)
+    centers = 0.5 * (bins[1:] + bins[:-1])
+    colors = {0: "tab:blue", 1: "tab:red"}
+    class_names = {0: "gg (class 0)", 1: "qqbar (class 1)"}
+    ks_results = {}
+    for cls in [0, 1]:
+        tr = train_scores[y_train_arr == cls]
+        te = test_scores[y_test_arr == cls]
+        ax.hist(tr, bins=bins, histtype="stepfilled", alpha=0.3, density=True,
+                color=colors[cls], label=f"{class_names[cls]} (train)")
+        te_hist, _ = np.histogram(te, bins=bins, density=True)
+        ax.errorbar(centers, te_hist, fmt="o", color=colors[cls], markersize=4,
+                    label=f"{class_names[cls]} (test)")
+
+        stat, pval = ks_2samp(tr, te)
+        verdict = "overtraining suspected" if pval < 0.01 else "no significant overtraining"
+        ks_results[f"class_{cls}"] = {
+            "ks_statistic": float(stat), "p_value": float(pval),
+            "n_train": int(len(tr)), "n_test": int(len(te)), "verdict": verdict,
+        }
+        logging.info(f"  KS test {class_names[cls]}: statistic={stat:.4f}, p-value={pval:.4g} "
+                     f"(n_train={len(tr)}, n_test={len(te)}) -- {verdict}")
+
+    ax.set_xlabel("BDT score"); ax.set_ylabel("Normalized entries")
+    ax.set_title(title, fontweight="bold")
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    plot_path = output_dir / f"overtraining_check{suffix}.png"
+    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    json_path = output_dir / f"overtraining_check{suffix}.json"
+    with open(json_path, "w") as f:
+        json.dump(ks_results, f, indent=4)
+    logging.info(f"Overtraining check saved to {json_path} and {plot_path}")
+    return ks_results
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train the qqbar-vs-gg XGBoost classifier for one era.")
     parser.add_argument("--datasetJSON", required=True, help="Path to Parquet_{tag}_{era}_datasets.json")
@@ -286,6 +376,11 @@ def main():
     df = derive_binary_label(df, target_branch, cfg["Labels"])
     df, balancing_mode = balance_classes(df, cfg["ClassBalancing"]["method"], cfg["ClassBalancing"]["random_state"])
 
+    logging.info("\n" + "=" * 60)
+    logging.info("FEATURE CORRELATION STUDY")
+    logging.info("=" * 60)
+    compute_correlations(df, features, output_dir)
+
     split_cfg = cfg["Split"]
     df_train, df_test = train_test_split(
         df, test_size=split_cfg["test_size"], random_state=split_cfg["random_state"],
@@ -327,6 +422,12 @@ def main():
     )
     bdt = grid_search.best_estimator_
     y_pred, y_pred_proba, accuracy, auc_score, cm = evaluate(bdt, X_test, y_test)
+
+    logging.info("\n" + "=" * 60)
+    logging.info("OVERTRAINING CHECK (full model)")
+    logging.info("=" * 60)
+    check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir,
+                        f"Overtraining check -- {args.era} (full model)")
 
     logging.info("\n" + "=" * 60)
     logging.info("FEATURE IMPORTANCE ANALYSIS")
@@ -399,6 +500,12 @@ def main():
         )
         bdt_reduced = grid_search_reduced.best_estimator_
         y_pred_r, y_pred_proba_r, accuracy_r, auc_r, cm_r = evaluate(bdt_reduced, X_test_reduced, y_test)
+
+        logging.info("\n" + "=" * 60)
+        logging.info("OVERTRAINING CHECK (reduced model)")
+        logging.info("=" * 60)
+        check_overtraining(bdt_reduced, X_train_reduced, y_train, X_test_reduced, y_test, output_dir,
+                            f"Overtraining check -- {args.era} (reduced model)", suffix="_reduced")
 
         auc_diff = auc_r - auc_score
         threshold = cfg["FeatureSelection"]["performance_drop_threshold"]
