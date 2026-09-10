@@ -17,28 +17,54 @@ golden_json_urls:
 # ---------------------------------------------------------------------------
 # Event-level selection cuts passed directly to PostProcessor (cut= argument).
 # All cuts are joined with &&. The list-generation script combines these.
+#
+# electronVetoCut / extraMuonVetoCut: additional-lepton veto, to suppress
+# ttbar_FullyLeptonic (and other dileptonic) contamination of this single-muon
+# semileptonic selection -- muonCut only counts *tight* muons, so it never
+# rejects an event just because it also has a second, non-tight lepton.
+# extraMuonVetoCut re-counts muons under a looser WP (pt>15, looseId,
+# pfRelIso04_all<0.25) and requires that count to still be 1 -- since the tight
+# signal muon always also passes this looser WP, `== 1` means "no additional
+# muon beyond the signal one". electronVetoCut rejects any event with a loose
+# electron at all (standard CMS veto-electron recipe: pt/eta_SC acceptance +
+# barrel-endcap gap exclusion, MVA Iso WP90, conversion veto, impact
+# parameter). Era-independent thresholds (same rationale as abcdRegion below).
+#
+# electronVetoCut needs Electron_* branches that only exist in the
+# `earlySeptember` preselection production onward -- do not run this cut
+# string against older preselection inputs that lack them (TTreeFormula will
+# fail on the missing branch). extraMuonVetoCut only needs Muon_looseId/
+# pfRelIso04_all, already present in every existing production.
 # ---------------------------------------------------------------------------
 SelectionCuts:
   UL2016preVFP:
     muonCut:  "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "(HLT_IsoMu24 || HLT_IsoTkMu24)"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2016postVFP:
     muonCut:  "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "(HLT_IsoMu24 || HLT_IsoTkMu24)"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2017:
     muonCut:  "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.3040 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "HLT_IsoMu27"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2018:
     muonCut:  "Sum$(Muon_pt > 27 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2783 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "HLT_IsoMu24"

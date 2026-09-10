@@ -43,7 +43,7 @@ The single source of truth for the entire chapter. Key sections:
 | `STORAGE` | Dict mapping a machine-identifying key to the root path on disk for that machine, e.g. `{cms2: "/mnt/disk2/mukund/DataFiles", lxplus: "/eos/user/m/mshelake/DataFiles/"}`. Resolved at runtime by `utils.resolve_storage_path()`, which matches the key as a substring of `socket.gethostname()` (not an exact match) |
 | `LFN_Base` | `/store/...` base path CRAB writes selectionI output under, on EOS. Only used by `--submitSelectionJobs` |
 | `golden_json_urls` | Golden JSON URL per era, used by `--downloadGoldenJSONs` |
-| `SelectionCuts` | Era-dependent event-level cut strings passed directly to `PostProcessor(cut=...)`. Includes muon, jet, b-jet, HLT, and MET flag requirements |
+| `SelectionCuts` | Era-dependent event-level cut strings passed directly to `PostProcessor(cut=...)`. Includes muon, extra-muon/electron veto, jet, b-jet, HLT, and MET flag requirements |
 | `ModuleList` | Which analysis modules run on MC vs Data (`selectedObjects` for both) |
 | `Modules.selectedObjects` | Per-era kinematic thresholds and output branch name prefixes for the object-selection module |
 | `DataLumiInfo` | Integrated luminosity (pb⁻¹) and uncertainty per era, for downstream normalisation |
@@ -66,15 +66,34 @@ explicitly in `inputs/preselection_{era}_datasets.json`.
 
 ### Event-level selection
 
-For each era a combined cut string is assembled from `SelectionCuts` in `config.yaml` and passed to NanoAOD's `PostProcessor`. All four conditions must be satisfied simultaneously:
+For each era a combined cut string is assembled from `SelectionCuts` in `config.yaml` and passed to NanoAOD's `PostProcessor`. All conditions below must be satisfied simultaneously:
 
 | Cut | UL2016preVFP | UL2017 | UL2018 |
 |---|---|---|---|
 | **Muon** | exactly 1 tight muon, pT > 26 GeV, \|η\| < 2.4, PFRelIso04 ≤ 0.2 | pT > 29 GeV | pT > 27 GeV |
+| **Extra-muon veto** | no *additional* muon with pT > 15 GeV, \|η\| < 2.4, looseId, PFRelIso04 < 0.25 | same | same |
+| **Electron veto** | no electron with pT > 15 GeV, \|η_SC\| < 2.5 (excluding 1.4442–1.566 gap), MVA Iso WP90, conversion veto, \|dxy\| < 0.1, \|dz\| < 0.2 | same | same |
 | **Jets** | ≥ 4 jets with pT > 25 GeV, \|η\| < 2.4, jetId == 6, PU-ID pass | same | same |
 | **b-jets** | ≥ 2 DeepFlavour b-tagged jets (WP: 0.2598 / 0.2489 / 0.3040 / 0.2783 per era) | | |
 | **HLT** | `HLT_IsoMu24 \|\| HLT_IsoTkMu24` | `HLT_IsoMu27` | `HLT_IsoMu24` |
 | **MET flags** | standard CMS 2016–2018 noise filters (`Flag_goodVertices`, halo, HBHE, ECAL, BadPFMuon, eeBadSc) | same | same |
+
+The extra-muon veto and electron veto together reject dileptonic contamination
+(chiefly `ttbar_FullyLeptonic`) in this single-muon semileptonic selection:
+`muonCut` only counts *tight* muons, so on its own it never rejects an event
+for also containing a second, non-tight lepton. `extraMuonVetoCut` re-counts
+muons under a looser WP and requires that count to still equal 1 (the tight
+signal muon always also passes the looser WP, so `== 1` means "no additional
+muon"); `electronVetoCut` rejects any event with a loose electron at all,
+using the standard CMS veto-electron recipe. Both are era-independent
+thresholds, same rationale as `abcdRegion` below.
+
+**`electronVetoCut` needs `Electron_*` branches that only exist starting with
+the `earlySeptember` preselection production** — running it against an older
+preselection dataset (that never kept `Electron_*`) will fail, since
+`PostProcessor`'s cut string references a branch that isn't in the input
+tree. `extraMuonVetoCut` has no such dependency (`Muon_looseId`/
+`pfRelIso04_all` are already in every existing production's kept branches).
 
 The muon isolation upper bound (0.2) is deliberately looser than the "tight" muon
 definition used everywhere else (0.06, matching CMS convention and this module's own
