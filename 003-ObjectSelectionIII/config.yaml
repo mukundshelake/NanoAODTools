@@ -792,15 +792,21 @@ weightList:
   # not a clip, before it belongs in the nominal product. jetPUIdWeight is
   # still written to skims (useful for offline study) -- just not multiplied in.
   #
-  # puWeight: checked directly against a real UL2016preVFP ttbar skim -- NOT
-  # actually present on that dataset, despite the assumption it would be a
-  # standard central-NanoAOD branch. Left in the list anyway since
-  # buildSelectionHists.py/computeABCDScaleFactor.py already warn-and-skip a
-  # missing weight branch rather than crash -- but this means puWeight is
-  # currently a no-op here, not really "applied". Worth checking across more
-  # datasets/eras before trusting it's ever actually present.
+  # puWeight: re-verified directly on a real UL2016preVFP skim (earlySep tag,
+  # MC_mu/SemiLeptonic/ttbar_SemiLeptonic) -- present and sane (mean 1.005,
+  # range 0.24-1.91). The earlier "not actually present" note above was stale:
+  # it assumed puWeight would be a standard central-NanoAOD branch, but it's
+  # actually written by this pipeline's own PUWeight module (003-II, via
+  # correctionlib against Collisions16_UltraLegacy_goldenJSON) -- that module
+  # just hadn't been wired into ModuleList yet when the note was written (see
+  # commit fe8a332). It's genuinely applied here, not a no-op.
   MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
-  Data: ["L1PreFiringWeight_Nom"]
+  # L1PreFiringWeight_Nom corrects simulation for a trigger-inefficiency effect
+  # that isn't modeled in MC generation -- real Data already contains this
+  # effect intrinsically, so it must never be reweighted by it. buildSelectionHists.py
+  # would happily apply any branch found in this list (see its weightList lookup),
+  # so this list must stay empty rather than omitted.
+  Data: []
 
 # ---------------------------------------------------------------------------
 # Plot settings for rootHists.py Data/MC comparison plots.
