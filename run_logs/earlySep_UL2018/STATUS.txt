@@ -1,0 +1,4 @@
+STARTED 2026-09-07 18:45:09
+REPORT_PDF=/home/mukund/Projects/PhysicsTools/NanoAODTools/003-ObjectSelectionIII/outputs/earlySep/52637ffebecd/earlySep_52637ffebecd_report.pdf
+RESULT=SUCCESS
+FINISHED 2026-09-08 07:05:23
