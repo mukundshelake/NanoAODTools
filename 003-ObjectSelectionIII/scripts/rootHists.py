@@ -6,14 +6,17 @@ Usage:
     python scripts/rootHists.py \\
         --tag earlyApril \\
         --hash 0e454e8b0284 \\
-        --outputDir /path/to/plots \\
+        --outputDir /path/to/outputs/earlyApril/0e454e8b0284 \\
         [--configFile ../config.yaml] \\
-        [--filter UL2018 [UL2017/MC_mu/SingleTop ...]]
+        [--filter UL2018 [UL2017/MC_mu/SingleTop ...]] \\
+        [--sample]
 
-Outputs per era (inside --outputDir/{era}/):
-  - {histName}.png
-  - {histName}.pdf
-  - rootHists.root  (all TH1F objects)
+Outputs per era (inside --outputDir/{era}/plots/), named
+{tag}_{hash}_{era}_{sample|full}_{histName}.{ext}:
+  - {file_stub}_{histName}.png
+  - {file_stub}_{histName}.pdf
+  - {file_stub}_{histName}.C
+  - {file_stub}_rootHists.root  (all TH1F objects)
 """
 
 import argparse
@@ -80,16 +83,17 @@ def bh_to_th1(bh_hist, name: str, title: str) -> TH1F:
 
 
 def get_aggregated_coffea_path(output_dir: Path, tag: str, era: str,
-                               data_mc: str, group: str, region_label: str = "A") -> Path:
-    return output_dir / era / data_mc / group / f"{tag}_{era}_{data_mc}_{group}_region{region_label}_selectionHists.coffea"
+                               data_mc: str, group: str, region_label: str = "A",
+                               sample_suffix: str = "") -> Path:
+    return output_dir / era / data_mc / group / f"{tag}_{era}{sample_suffix}_{data_mc}_{group}_region{region_label}_selectionHists.coffea"
 
 
-def get_qcd_template_path(output_dir: Path, tag: str, era: str) -> Path:
+def get_qcd_template_path(output_dir: Path, tag: str, era: str, sample_suffix: str = "") -> Path:
     """Data-driven QCD template (run_all.py --buildQCDTemplate): region-B Data minus
     non-QCD MC, already reweighted by the ABCD transfer factor -- see that step's
     docstring in run_all.py. Replaces the QCD group's entry in the stack.
     """
-    return output_dir / era / f"{tag}_{era}_QCDTemplate_selectionHists.coffea"
+    return output_dir / era / f"{tag}_{era}{sample_suffix}_QCDTemplate_selectionHists.coffea"
 
 
 def make_mc_total(mc_hists: list) -> TH1F:
@@ -276,17 +280,21 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     hist_details = config['histDetails']
     lumi = config['DataLumiInfo'][era]['Lumi']
 
-    era_out = output_dir / era
+    sample_suffix = '_sample' if args.sample else ''
+    file_stub = f"{tag}_{args.hash}_{era}_{'sample' if args.sample else 'full'}"
+
+    era_out = output_dir / era / 'plots'
     era_out.mkdir(parents=True, exist_ok=True)
 
-    root_file = TFile(str(era_out / "rootHists.root"), "RECREATE")
+    root_file = TFile(str(era_out / f"{file_stub}_rootHists.root"), "RECREATE")
 
     canvas = TCanvas("c1", "c1", 800, 800)
     style_canvas()
 
     # Load data coffea
     data_key = f"{era}_Data_mu_SingleMuon"
-    data_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "Data_mu", "SingleMuon")
+    data_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "Data_mu", "SingleMuon",
+                                                   sample_suffix=sample_suffix)
     if not data_coffea_path.exists():
         print(f"  [WARN] Data coffea not found for {era}: {data_coffea_path}. Skipping era.")
         root_file.Close()
@@ -299,7 +307,8 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     for group in mc_groups_config:
         if not matches_filter(args.filter, era, 'MC_mu', group):
             continue
-        mc_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "MC_mu", group)
+        mc_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "MC_mu", group,
+                                                      sample_suffix=sample_suffix)
         if not mc_coffea_path.exists():
             print(f"  [WARN] MC coffea not found: {mc_coffea_path}. Skipping group {group}.")
             continue
@@ -312,7 +321,7 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     # script usable before that step has been run, rather than hard-failing.
     qcd_group = getattr(args, 'qcdGroup', 'QCD')
     if qcd_group in mc_coffea:
-        qcd_template_path = get_qcd_template_path(args.input_base, tag, era)
+        qcd_template_path = get_qcd_template_path(args.input_base, tag, era, sample_suffix=sample_suffix)
         if qcd_template_path.exists():
             qcd_template = load(qcd_template_path)[f"{era}_QCDTemplate"]
             mc_coffea[qcd_group] = {f"{era}_MC_mu_{qcd_group}": qcd_template}
@@ -376,9 +385,9 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
                               hist_cfg, era, lumi)
 
         # Save images
-        canvas.SaveAs(str(era_out / f"{hist_name}.png"))
-        canvas.SaveAs(str(era_out / f"{hist_name}.pdf"))
-        canvas.SaveAs(str(era_out / f"{hist_name}.C"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.png"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.pdf"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.C"))
 
         # Write TH1F objects to ROOT file
         root_file.cd()
@@ -410,8 +419,9 @@ def main():
                         default=str(Path(__file__).parent.parent / 'config.yaml'),
                         help='Path to config.yaml (default: ../config.yaml relative to this script)')
     parser.add_argument('--outputDir', type=str, default=None,
-                        help='Directory where per-era plot folders will be created. '
-                             'Defaults to outputs/{tag}/{hash}/plots/ relative to the script.')
+                        help='outputs/{tag}/{hash}/ directory to read histograms from and write into. '
+                             'Plots for each era are written to <outputDir>/{era}/plots/. '
+                             'Defaults to outputs/{tag}/{hash}/ relative to the script.')
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                         help='Filter by era[/DataMC[/group]]. '
                              'Multiple filters are OR-ed. E.g.: --filter UL2018 UL2017/MC_mu/SingleTop')
@@ -420,6 +430,10 @@ def main():
                              '(run_all.py --buildQCDTemplate), if that template file exists for the era '
                              '(default: QCD). Falls back to plain QCD MC with a warning if the template '
                              "hasn't been built yet.")
+    parser.add_argument('--sample', action='store_true',
+                        help='Read the "_sample" (first-file-only, run_all.py --sample) histograms for '
+                             'this tag/hash instead of the full ones, and mark every plot filename '
+                             "'sample' instead of 'full' accordingly.")
     args = parser.parse_args()
 
     config = load_config(Path(args.configFile))
@@ -431,8 +445,7 @@ def main():
         print(f"Error: Input directory does not exist: {args.input_base}", file=sys.stderr)
         sys.exit(1)
 
-    output_dir = Path(args.outputDir) if args.outputDir else args.input_base / 'plots'
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.outputDir) if args.outputDir else args.input_base
 
     eras = list(config['NgenandXsec'].keys())
     for era in eras:

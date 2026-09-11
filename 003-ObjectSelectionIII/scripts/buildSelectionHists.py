@@ -1,5 +1,6 @@
 # This script takes the fileset and config file. Builds the Hist histograms using coffea and saves the output as .coffea file in the said output directory with the said name.
-# Usage: python buildSelectionHists.py --fileset <path to fileset> --config <path to config file> --outputDir <path to output directory> --outputName <name of output file>
+# Usage: python buildSelectionHists.py --fileSet <path to fileset> --configFile <path to config file> --outputDir <path to output directory> --outputFileName <name of output file> --regionFilter <0-3> [--abcdScaleFactorFile <path>] [--sample]
+# --sample: only process the first file of the dataset's fileset (quick-look mode; run_all.py handles giving the output file its own "_sample"-marked name so this never collides with a full run's output).
 
 import os
 import json
@@ -148,6 +149,9 @@ def main():
                              'computeABCDScaleFactor.py output). Required when --regionFilter 1 -- the ABCD '
                              'transfer factor R gets looked up from this file and folded into the region-B '
                              'weight, per event, by SelMuon pt/|eta|. Ignored for every other region.')
+    parser.add_argument('--sample', action='store_true',
+                        help='Quick-look mode: only process the first file of this dataset\'s fileset, '
+                             'instead of all of them.')
     args = parser.parse_args()
 
     if args.regionFilter == 1 and not args.abcdScaleFactorFile:
@@ -160,6 +164,12 @@ def main():
     # Load fileset
     with open(args.fileSet, 'r') as f:
         fileset = json.load(f)
+
+    if args.sample:
+        for dataset_key, dataset_entry in fileset.items():
+            first_file = dict(list(dataset_entry['files'].items())[:1])
+            dataset_entry['files'] = first_file
+        logger.info("--sample: truncated each dataset to its first file only.")
 
     # Create processor instance
     processor_instance = WeightLookupProcessor(config, args.regionFilter, args.abcdScaleFactorFile)
