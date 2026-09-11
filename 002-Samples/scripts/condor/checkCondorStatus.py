@@ -13,8 +13,17 @@ status here is a straightforward cross-check: for every job recorded in
 via condor_q (idle/running/held) vs missing entirely (never ran, or ran and
 failed to produce output with no trace left in the queue).
 
+Note this makes "missing" ambiguous with "already verified and deleted after
+transfer" -- if you've cleaned up a work area's output after confirming it
+landed safely elsewhere, every one of those jobs will show up as "missing"
+here too, since there's no local trace of them left to tell the two cases
+apart. --resubmitMissing refuses to act on a work area where a large
+fraction of jobs are missing at once (see the check in main()) for exactly
+this reason; pass --forceResubmitMissing if you're sure they genuinely never
+completed.
+
 Usage:
-    python3 checkCondorStatus.py -d <work_area> [--resubmitHeld] [--resubmitMissing]
+    python3 checkCondorStatus.py -d <work_area> [--resubmitHeld] [--resubmitMissing] [--forceResubmitMissing]
 """
 
 import argparse
@@ -80,6 +89,9 @@ def main():
                          help="condor_release all held jobs in this work area's clusters.")
     parser.add_argument("--resubmitMissing", action="store_true",
                          help="Re-submit jobs whose output is missing and not currently queued.")
+    parser.add_argument("--forceResubmitMissing", action="store_true",
+                         help="Bypass the large-batch safety check below and resubmit "
+                              "regardless of how many jobs are missing.")
     args = parser.parse_args()
 
     work_area = Path(args.work_area)
@@ -132,6 +144,33 @@ def main():
         subprocess.run(["condor_release"] + cluster_ids)
 
     if args.resubmitMissing and missing_jobs:
+        # Safety check: "missing" here means "no output file at the expected
+        # location" -- which is indistinguishable, from this script's point of
+        # view, between "job never ran / died without a trace" and "job
+        # completed fine, output was verified and transferred elsewhere, and
+        # the local copy was deliberately deleted." A large fraction of a
+        # work area going missing all at once is a strong signal of the
+        # latter, not a real wall-time-kill wave (those, observed in
+        # practice, top out around a few percent of a work area's jobs, not
+        # a majority of them). Concretely: this check exists because
+        # --resubmitMissing was once run right after a batch of verified,
+        # already-transferred output was cleaned up, and it silently queued
+        # ~3400 reprocessing jobs for data that already existed safely
+        # elsewhere -- caught and killed within seconds, but only because
+        # someone happened to be watching the queue right after submitting.
+        missing_fraction = len(missing_jobs) / total["total"] if total["total"] else 0
+        if not args.forceResubmitMissing and len(missing_jobs) > 25 and missing_fraction > 0.4:
+            affected_labels = sorted({j["out_dir"] for j in missing_jobs})
+            print(f"\nERROR: {len(missing_jobs)}/{total['total']} jobs "
+                  f"({missing_fraction:.0%}) are missing -- refusing to auto-resubmit.")
+            print("This usually means the output for these datasets was already "
+                  "verified and deleted (not that the jobs actually failed). "
+                  "Affected dataset(s):")
+            for label in affected_labels:
+                print(f"  {label}")
+            print("If these genuinely never completed, rerun with --forceResubmitMissing "
+                  "to proceed anyway.")
+            return
         print(f"\nResubmitting {len(missing_jobs)} missing job(s) via a fresh queue-from-file cluster...")
         if not submit_path.exists():
             print(f"ERROR: original submit file not found at {submit_path}, cannot resubmit.", file=sys.stderr)
