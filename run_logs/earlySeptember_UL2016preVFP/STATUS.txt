@@ -1,0 +1,4 @@
+STARTED 2026-09-11 01:20:40
+REPORT_PDF=/home/mukund/Projects/PhysicsTools/NanoAODTools/003-ObjectSelectionIII/outputs/earlySeptember/4956a7ff160f/earlySeptember_4956a7ff160f_report.pdf
+EXIT_CODE=0 at 2026-09-11 02:59:20 (line 1)
+RESULT=SUCCESS
