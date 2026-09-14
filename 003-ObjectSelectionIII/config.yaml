@@ -800,13 +800,45 @@ weightList:
   # correctionlib against Collisions16_UltraLegacy_goldenJSON) -- that module
   # just hadn't been wired into ModuleList yet when the note was written (see
   # commit fe8a332). It's genuinely applied here, not a no-op.
-  MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
+  # topPtWeight: TOP PAG data-NLO top-pT reweighting (see TopPtWeight.py,
+  # 003-II) -- weight=1.0 outside ttbar SemiLeptonic/FullyLeptonic by
+  # construction (no antitop partner in single-top, no top quark at all
+  # elsewhere), so safe to multiply in for every MC group uniformly.
+  MC: ["muonIDWeight", "muonHLTWeight", "muonIsoWeight", "bTagWeight", "puWeight", "L1PreFiringWeight_Nom", "lheWeightSign", "topPtWeight"]
   # L1PreFiringWeight_Nom corrects simulation for a trigger-inefficiency effect
   # that isn't modeled in MC generation -- real Data already contains this
   # effect intrinsically, so it must never be reweighted by it. buildSelectionHists.py
   # would happily apply any branch found in this list (see its weightList lookup),
   # so this list must stay empty rather than omitted.
   Data: []
+
+# ---------------------------------------------------------------------------
+# Weight-only systematic sources for buildSelectionHists.py --systematics
+# (opt-in). Each source's 'nominal' branch must be one of weightList.MC above
+# -- the variant is built by dividing that one factor back out of the nominal
+# product and multiplying in its Up/Down (or nominal+-sqrt(stat^2+syst^2))
+# value, everything else held nominal. Scope is deliberately weight-only:
+# these change an event's weight, never which events/objects get selected, so
+# a variant histogram can be built from the *same* skims with a different
+# weight column -- no reprocessing needed. JES/JER/Rochester/PDF are NOT
+# here: those change selection itself (a JES-up jet can cross the pT
+# threshold), so a real variant needs rerunning 003-I->III with the shifted
+# correction, not just a different weight branch at this step -- out of scope
+# for this first pass.
+#
+# type: updown   -- dedicated Up/Down branches already written by the SF module.
+# type: statsyst -- module writes separate stat/syst uncertainty branches
+#   (absolute deltas on the nominal SF, not alternate SF values -- standard
+#   MUO POG correctionlib convention for these NUM_.../DEN_... sets);
+#   combined here as nominal +- sqrt(stat^2 + syst^2).
+# ---------------------------------------------------------------------------
+weightSystematics:
+  bTag:        {type: "updown",   nominal: "bTagWeight",   up: "bTagWeightUp",   down: "bTagWeightDown"}
+  muonID:      {type: "updown",   nominal: "muonIDWeight", up: "muonIDWeightUp", down: "muonIDWeightDown"}
+  puWeight:    {type: "updown",   nominal: "puWeight",     up: "puWeightUp",     down: "puWeightDown"}
+  L1PreFiring: {type: "updown",   nominal: "L1PreFiringWeight_Nom", up: "L1PreFiringWeight_Up", down: "L1PreFiringWeight_Dn"}
+  muonHLT:     {type: "statsyst", nominal: "muonHLTWeight", stat: "muonHLTWeightStat", syst: "muonHLTWeightSyst"}
+  muonIso:     {type: "statsyst", nominal: "muonIsoWeight", stat: "muonIsoWeightStat", syst: "muonIsoWeightSyst"}
 
 # ---------------------------------------------------------------------------
 # Plot settings for rootHists.py Data/MC comparison plots.

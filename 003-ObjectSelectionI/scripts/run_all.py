@@ -74,6 +74,22 @@ def main():
                             'config.yaml\'s golden_json_urls, into inputs/ (and this run\'s outputs/{tag}/{hash}/'
                             'inputs/ snapshot). Independent of any particular 002-Samples run -- the golden JSON '
                             'only depends on era, not on a preselection tag/hash.')
+    parser.add_argument('--applyPreSelectionCorrections', action='store_true',
+                       help='[0b] Run PreSelectionCorrectionModuleList (jetVetoMap/muonRochester for both Data '
+                            'and MC -- hardware defect map / momentum-scale correction, not simulation-vs-data '
+                            'differences; jetJER, MC-only -- hybrid GenJet-match/stochastic JER smearing with '
+                            'Type-1 MET repropagation) as its own PostProcessor pass over the preselection '
+                            'files, BEFORE the main selection pass. Not ModuleList entries: SelectionCuts\' '
+                            'muonCut/extraMuonVetoCut/jetCut/bjetCut are evaluated against the input tree before '
+                            'any module in that same pass runs, so a per-object exclusion or resolution/scale '
+                            'correction decided only there would be too late to affect which events/objects get '
+                            'selected. Writes corrected skims to {STORAGE}/preSelectionCorrected/'
+                            '{tag}/{hash}/{era}/{DataMC}/{group}/{dataset}/ (Jet_pt/Jet_mass/Muon_pt/MET_pt/'
+                            'MET_phi overwritten in place, every other branch passed through), then scans that '
+                            'output into inputs/preSelectionCorrected_{era}_datasets.json -- '
+                            '--generateProcessListJSON prefers this over raw preselection files, for whichever '
+                            'DataMC branches it covers, once it exists (falls back to uncorrected files with a '
+                            'warning if this hasn\'t been run yet).')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for runSelection.py by reading the per-era '
                             'dataset JSONs produced by --generateDatasetJSON')
@@ -136,6 +152,7 @@ def main():
     print(f"  --preselectionTag: {args.preselectionTag}")
     print(f"  --preselectionHash: {args.preselectionHash}")
     print(f"  --downloadGoldenJSONs: {args.downloadGoldenJSONs}")
+    print(f"  --applyPreSelectionCorrections: {args.applyPreSelectionCorrections}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
@@ -268,6 +285,120 @@ def main():
             print(f"    {local_path} copied to {output_path}")
         print("Finished downloading golden JSON files.")
 
+    # Run PreSelectionCorrectionModuleList (jetVetoMap/muonRochester for both
+    # DataMC branches, jetJER MC-only) as its own PostProcessor pass over the
+    # preselection files, before the main selection pass -- see the flag's
+    # help text and JetJER.py's/JetVetoMap.py's/MuonRochester.py's docstrings
+    # for why these can't just be ModuleList entries.
+    if args.applyPreSelectionCorrections:
+        print("\nApplying pre-selection corrections (PreSelectionCorrectionModuleList) to preselection files...")
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nProcessing era: {era}")
+            preselection_dataset_json = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+            if not preselection_dataset_json.exists():
+                print(f"  Warning: Dataset JSON not found: {preselection_dataset_json}. "
+                      f"Run --generatePreselectionDatasetJSON first. Skipping era {era}.")
+                continue
+            with open(preselection_dataset_json) as f:
+                datasetJSON = json.load(f)
+
+            era_process_list = []
+            for DataMC in datasetJSON:
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                is_data = DataMC.lower().startswith("data")
+                modules_key = "Data" if is_data else "MC"
+                module_names = config.get("PreSelectionCorrectionModuleList", {}).get(modules_key, [])
+                if not module_names:
+                    continue  # nothing to correct for this DataMC branch
+                module_configs = []
+                for mod_name in module_names:
+                    mod_cfg_raw = config.get("Modules", {}).get(mod_name, {})
+                    mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
+                    if not mod_cfg:
+                        print(f"  Error: no Modules.{mod_name} config for era {era}. Skipping era.")
+                        module_configs = None
+                        break
+                    mod_cfg = dict(mod_cfg)
+                    # File paths in config.yaml are relative to this chapter's own directory.
+                    for key in ("jerFile", "vetoMapFile", "rochesterFile"):
+                        if key in mod_cfg:
+                            mod_cfg[key] = str(base_dir / mod_cfg[key])
+                    if mod_name == "muonRochester":
+                        mod_cfg["isData"] = is_data
+                    module_configs.append({"name": mod_name, "config": mod_cfg})
+                if module_configs is None:
+                    continue
+
+                for group in datasetJSON[DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    for dataset in datasetJSON[DataMC][group]:
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        outputDir = os.path.join(
+                            storageBase, "preSelectionCorrected", args.tag, config_hash, era, DataMC, group, dataset
+                        )
+                        isSample = True
+                        for filePath in datasetJSON[DataMC][group][dataset]:
+                            era_process_list.append({
+                                "era": era, "DataMC": DataMC, "group": group, "dataset": dataset,
+                                "outputDir": outputDir, "file": filePath,
+                                "cut_string": None, "goldenJSON": None, "branchsel": None,
+                                "modules": module_configs,
+                                "isSample": isSample,
+                            })
+                            isSample = False
+
+            process_list_path = output_dir / era / f"{args.tag}_{era}_preSelectionCorrProcessListJSON.json"
+            process_list_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(process_list_path, 'w') as f:
+                json.dump(era_process_list, f, indent=2)
+            print(f"  Era {era}: {len(era_process_list)} pre-selection-correction tasks -> {process_list_path}")
+
+            if not era_process_list:
+                continue
+
+            run_cmd = [
+                sys.executable, str(base_dir / 'scripts' / 'runSelection.py'),
+                '--processListJSON', str(process_list_path),
+                '--workers', str(args.workers),
+            ]
+            if args.force:
+                run_cmd.append('--force')
+            if args.sample:
+                run_cmd.append('--sample')
+            run_cmd += ['--filter', era]
+            print(f"  Running: {' '.join(run_cmd)}")
+            result = subprocess.run(run_cmd)
+            if result.returncode != 0:
+                print(f"  Error: pre-selection correction pass failed for era {era}.")
+                return 1
+
+            # Scan this era's preSelectionCorrected output on disk, same
+            # generateDatasetJSON.py health-checked scan used everywhere else
+            # in this pipeline, so --generateProcessListJSON can prefer it
+            # below (both DataMC branches).
+            psc_base_directory = os.path.join(storageBase, "preSelectionCorrected", args.tag, config_hash, era)
+            psc_output_name = f"preSelectionCorrected_{era}_datasets.json"
+            cmd = [
+                sys.executable, str(base_dir / 'scripts' / 'generateDatasetJSON.py'),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', psc_output_name,
+                '--baseDirectory', psc_base_directory,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"  Error running generateDatasetJSON.py for preSelectionCorrected/{era}:\n{result.stderr}")
+                return 1
+            output_path = output_dir / 'inputs' / psc_output_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / psc_output_name, output_path)
+            print(f"  Generated {inputs_folder / psc_output_name} and copied to {output_path}")
+        print("Finished applying pre-selection corrections.")
+
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
         print("\nGenerating process list JSON for runSelection.py...")
@@ -291,6 +422,29 @@ def main():
 
             with open(preselection_dataset_json) as f:
                 datasetJSON = json.load(f)
+
+            # Prefer pre-selection-corrected files (--applyPreSelectionCorrections:
+            # jetVetoMap/muonRochester for both DataMC branches, jetJER MC-only)
+            # over raw preselection ones, once they exist, for whichever DataMC
+            # branches that pass actually covered (per
+            # PreSelectionCorrectionModuleList).
+            preselcorrected_dataset_json = output_dir / 'inputs' / f'preSelectionCorrected_{era}_datasets.json'
+            if preselcorrected_dataset_json.exists():
+                with open(preselcorrected_dataset_json) as f:
+                    pscDatasetJSON = json.load(f)
+                for DataMC in list(datasetJSON.keys()):
+                    if DataMC in pscDatasetJSON:
+                        datasetJSON[DataMC] = pscDatasetJSON[DataMC]
+                        print(f"  Using pre-selection-corrected inputs for {DataMC} "
+                              f"(from {preselcorrected_dataset_json.name})")
+                    else:
+                        print(f"  Warning: no pre-selection-corrected inputs found for {DataMC} in "
+                              f"{preselcorrected_dataset_json.name}; falling back to raw preselection "
+                              f"files (uncorrected) for it.")
+            else:
+                print(f"  Note: {preselcorrected_dataset_json.name} not found; using raw "
+                      f"(uncorrected) preselection files for all DataMC branches. Run "
+                      f"--applyPreSelectionCorrections first to enable jetVetoMap/JER/muonRochester.")
 
             # Build combined cut string for this era
             era_cuts = config['SelectionCuts'][era]
@@ -344,6 +498,9 @@ def main():
                                 mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
                                 if mod_name == "selectedObjects":
                                     mod_cfg = dict(mod_cfg, is_mc=not is_data)
+                                elif mod_name == "metXYCorr":
+                                    mod_cfg = dict(mod_cfg, isData=is_data,
+                                                    metFile=str(base_dir / mod_cfg["metFile"]))
                                 module_configs.append({"name": mod_name, "config": mod_cfg})
 
 

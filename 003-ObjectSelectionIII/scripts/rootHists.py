@@ -105,6 +105,75 @@ def make_mc_total(mc_hists: list) -> TH1F:
     return total
 
 
+def build_variant_total(mc_coffea: dict, sorted_groups: list, era: str, hist_name: str, variant: str):
+    """Sum one weight-systematic variant's histogram across every MC group for
+    hist_name, falling back to that group's *nominal* histogram wherever the
+    variant is absent (missing entirely for a group that predates --systematics,
+    or the data-driven QCD template, which is built by buildQCDTemplate.py from
+    Data minus MC in region B -- a different pipeline that has no weight-variant
+    equivalent at all). Falling back to nominal there is the correct "no
+    variance from this source for this contribution" statement, not a
+    workaround -- silently dropping that group's yield from the variant total
+    would instead bias the deviation computed against it.
+
+    Returns None if no group had this variant at all (nothing to build).
+    """
+    total = None
+    any_found = False
+    for group in sorted_groups:
+        key = f"{era}_MC_mu_{group}"
+        syst_key = f"{era}_MC_mu_{group}_syst"
+        variant_bh = mc_coffea[group].get(syst_key, {}).get(hist_name, {}).get(variant)
+        if variant_bh is not None:
+            any_found = True
+            h = bh_to_th1(variant_bh, f"h_{hist_name}_{group}_{variant}", group)
+        else:
+            nominal_bh = mc_coffea[group].get(key, {}).get(hist_name)
+            if nominal_bh is None:
+                continue
+            h = bh_to_th1(nominal_bh, f"h_{hist_name}_{group}_{variant}_nomfallback", group)
+        if total is None:
+            total = h.Clone(f"mc_total_{hist_name}_{variant}")
+        else:
+            total.Add(h)
+    return total if any_found else None
+
+
+def compute_syst_band(mc_coffea: dict, sorted_groups: list, era: str, hist_name: str,
+                       h_mc_total: TH1F) -> list:
+    """Per-bin total weight-only systematic uncertainty: for each source with an
+    Up/Down pair present anywhere in mc_coffea, take the envelope
+    max(|up-nominal|, |down-nominal|) per bin, then combine sources in
+    quadrature (treated as independent). Returns a list of per-bin absolute
+    uncertainties (same length as h_mc_total's bins, 1-indexed access via
+    result[i-1]), or an all-zero list if no systematic variants are present
+    anywhere for this histogram (e.g. --systematics was never run).
+    """
+    nbins = h_mc_total.GetNbinsX()
+    # Discover source names from whichever group has the richest histsSyst set
+    # for this histogram (variant keys look like "bTagUp"/"bTagDown").
+    variants_seen = set()
+    for group in sorted_groups:
+        syst_key = f"{era}_MC_mu_{group}_syst"
+        variants_seen.update(mc_coffea[group].get(syst_key, {}).get(hist_name, {}).keys())
+    sources = sorted({v[:-2] for v in variants_seen if v.endswith("Up")} &
+                      {v[:-4] for v in variants_seen if v.endswith("Down")})
+
+    total_sq = [0.0] * nbins
+    for source in sources:
+        h_up = build_variant_total(mc_coffea, sorted_groups, era, hist_name, f"{source}Up")
+        h_down = build_variant_total(mc_coffea, sorted_groups, era, hist_name, f"{source}Down")
+        if h_up is None or h_down is None:
+            continue
+        for i in range(1, nbins + 1):
+            nom = h_mc_total.GetBinContent(i)
+            dev_up = h_up.GetBinContent(i) - nom
+            dev_down = h_down.GetBinContent(i) - nom
+            source_err = max(abs(dev_up), abs(dev_down))
+            total_sq[i - 1] += source_err ** 2
+    return [v ** 0.5 for v in total_sq]
+
+
 def style_canvas():
     gStyle.SetOptStat(0)
     gStyle.SetOptTitle(0)
@@ -119,7 +188,7 @@ def style_canvas():
 
 def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
               h_mc_total: TH1F, hist_cfg: dict, era: str, lumi: float,
-              channel: str = "#mu + jets"):
+              channel: str = "#mu + jets", mc_syst_err: list = None):
     """Draw Data/MC comparison with ratio panel on an existing TCanvas."""
     canvas.Clear()
     canvas.cd()
@@ -221,11 +290,18 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
     h_ratio.SetMarkerColor(ROOT.kBlack)
     h_ratio.SetLineColor(ROOT.kBlack)
 
-    # MC stat uncertainty band (centered at 1)
+    # Uncertainty band (centered at 1): MC stat, combined in quadrature with
+    # the weight-only systematic envelope (mc_syst_err, from
+    # config.yaml's weightSystematics via buildSelectionHists.py --systematics)
+    # when available -- falls back to stat-only (the original behavior) when
+    # mc_syst_err is None or all-zero, e.g. --systematics was never run for
+    # this hash, or this is a region-B call (no systematics support there yet).
     h_unc_band = h_mc_total.Clone("unc_band")
     for i in range(1, h_mc_total.GetNbinsX() + 1):
         mc_val = h_mc_total.GetBinContent(i)
-        mc_err = h_mc_total.GetBinError(i)
+        mc_stat_err = h_mc_total.GetBinError(i)
+        syst_err = mc_syst_err[i - 1] if mc_syst_err else 0.0
+        mc_err = (mc_stat_err ** 2 + syst_err ** 2) ** 0.5
         if mc_val > 0:
             h_unc_band.SetBinContent(i, 1.0)
             h_unc_band.SetBinError(i, mc_err / mc_val)
@@ -380,9 +456,14 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
         h_mc_total = make_mc_total(mc_hists)
         h_mc_total.SetDirectory(0)
 
+        # Weight-only systematic band (config.yaml's weightSystematics, built by
+        # buildSelectionHists.py --systematics) -- all-zero list if no group has
+        # any histsSyst for this histogram, which make_plot treats as stat-only.
+        mc_syst_err = compute_syst_band(mc_coffea, sorted_groups, era, hist_name, h_mc_total)
+
         # Draw
         kept_refs = make_plot(canvas, h_data, mc_stack, h_mc_total,
-                              hist_cfg, era, lumi)
+                              hist_cfg, era, lumi, mc_syst_err=mc_syst_err)
 
         # Save images
         canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.png"))

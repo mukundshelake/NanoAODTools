@@ -252,6 +252,8 @@ def resolve_storage_path(config):
 SF_FETCH_SPECS = [
     {"pog": "MUO", "source_filename": "muon_Z.json.gz",  "outputs": ["mu_ID.json", "mu_HLT.json"], "gunzip": True},
     {"pog": "JME", "source_filename": "jmar.json.gz",     "outputs": ["jet_jmar.json.gz"],           "gunzip": False},
+    {"pog": "JME", "source_filename": "jet_jerc.json.gz", "outputs": ["jet_Jerc.json.gz"],           "gunzip": False},
+    {"pog": "JME", "source_filename": "met.json.gz",      "outputs": ["met.json.gz"],                "gunzip": False},
     {"pog": "BTV", "source_filename": "btagging.json.gz", "outputs": ["jet_Btagging.json"],          "gunzip": True},
     {"pog": "LUM", "source_filename": "puWeights.json.gz", "outputs": ["pu_Weights.json"],            "gunzip": True},
 ]

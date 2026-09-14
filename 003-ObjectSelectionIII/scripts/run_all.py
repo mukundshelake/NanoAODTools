@@ -125,12 +125,21 @@ def main():
                             'step of a given run -- build, aggregate, QCD template, and makeplots.')
     parser.add_argument('--workers', type=int, default=15,
                        help='Number of parallel workers passed to runSelection.py (default: 15)')
+    parser.add_argument('--systematics', action='store_true',
+                       help='With --buildSelectionHists: also build weight-only systematic variant '
+                            'histograms (config.yaml\'s weightSystematics). --aggregrateGroupHists and '
+                            '--makeplots need no flag -- they pick up variants automatically from whatever '
+                            'the per-dataset files already contain. CAUTION: this does not change the output '
+                            'filename, so if a per-dataset histogram file already exists for this tag/hash '
+                            'from an earlier --buildSelectionHists run without --systematics, it will be '
+                            'silently reused as-is (no variants) unless you also pass --force.')
     args = parser.parse_args()
 
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
     print(f"  --sample: {args.sample}")
+    print(f"  --systematics: {args.systematics}")
     print(f"  --generateSelectionIIDatasetJSON: {args.generateSelectionIIDatasetJSON}")
     print(f"  --selectionIITag: {args.selectionIITag}")
     print(f"  --selectionIIHash: {args.selectionIIHash}")
@@ -347,6 +356,8 @@ def main():
                             command += ['--abcdScaleFactorFile', str(abcd_sf_file)]
                         if args.sample:
                             command.append('--sample')
+                        if args.systematics:
+                            command.append('--systematics')
                         subprocess.run(command, check=True)
                         print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
     # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
@@ -369,9 +380,11 @@ def main():
                     # Loop over the histDetails elements
                     groupHists = {}
                     groupHists[f'{era}_{DataMC}_{group}'] = {}
+                    groupSystHists = {}  # histInfo -> {variant: aggregated hist}, only for variants any dataset actually had
                     for histInfo in config['histDetails']:
                         # create empty hist histogram for incrementing later
                         hist_ = None
+                        hist_syst = {}
                         print(f"        Working on histogram {histInfo}")
                         for dataset in config['NgenandXsec'][era][DataMC][group]:
                             if not matches_filter(args.filter, era, DataMC, group, dataset):
@@ -395,8 +408,19 @@ def main():
                             else:
                                 hist_ += histData[key]['hists'][histInfo] * weight
                             print(f"            Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
+                            # Weight-only systematic variants (buildSelectionHists.py --systematics),
+                            # if this dataset's file has them -- same Lumi*Xsec/Ngen weighting as nominal.
+                            for variant, vhist in histData[key].get('histsSyst', {}).get(histInfo, {}).items():
+                                if variant not in hist_syst:
+                                    hist_syst[variant] = vhist * weight
+                                else:
+                                    hist_syst[variant] += vhist * weight
                         if hist_ is not None:
                             groupHists[f'{era}_{DataMC}_{group}'][histInfo] = hist_
+                        if hist_syst:
+                            groupSystHists[histInfo] = hist_syst
+                    if groupSystHists:
+                        groupHists[f'{era}_{DataMC}_{group}_syst'] = groupSystHists
                     # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}{sample_suffix}_{DataMC}_{group}_region{X}_selectionHists.coffea
                     output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}{sample_suffix}_{DataMC}_{group}_region{region_label}_selectionHists.coffea'
                     # check if output file already exists and --force is not set

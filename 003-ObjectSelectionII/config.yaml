@@ -41,7 +41,10 @@ SFSourceSSHRelay: "lxplus.cern.ch"
 # config.yaml's weightList comment). Needs Method 2 (shape) reweighting before
 # it's worth computing at all; re-add to ModuleList once that's implemented.
 ModuleList:
-  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging]
+  # topPtWeight is a no-op (weight=1.0) for every group except ttbar
+  # SemiLeptonic/FullyLeptonic -- see TopPtWeight.py's docstring for why it's
+  # safe to list universally rather than gating by group name here.
+  MC:   [lheWeightSign, puWeight, muonID, muonIso, muonHLT, bTagging, topPtWeight]
   Data: []
 
 # ---------------------------------------------------------------------------
@@ -52,6 +55,24 @@ ModuleList:
 # its constructor. Era-dependent fields are nested under the era key.
 # ---------------------------------------------------------------------------
 Modules:
+  # ---------- TopPtWeight ---------------------------------------------------
+  # TOP PAG data-NLO reweighting (a=0.0615, b=0.0005 baked into the module,
+  # data/POWHEG+Pythia8 -- matches this analysis's ttbar generator setup).
+  # Era-independent. See TopPtWeight.py's docstring for the full recipe and
+  # why this is safe to run on every MC group (no-op outside ttbar).
+  topPtWeight:
+    UL2016preVFP:
+      branchNames:
+        sf: "topPtWeight"
+    UL2016postVFP:
+      branchNames:
+        sf: "topPtWeight"
+    UL2017:
+      branchNames:
+        sf: "topPtWeight"
+    UL2018:
+      branchNames:
+        sf: "topPtWeight"
   # ---------- LHEWeightSign ------------------------------------------------
   # Reads LHEWeight_originalXWGTUP and stores its sign.
   # Era-independent.
