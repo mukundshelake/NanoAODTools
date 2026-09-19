@@ -40,11 +40,28 @@ equal-top-mass vs. pinned-172.5 constraint).
     reconstructed and combinatorial events.
   - `pgof_purity.png` — differential purity `s/(s+b)` per `Pgof` bin.
   - `pgof_efficiency.png` — cumulative signal efficiency and purity for a `Pgof > cut`
-    selection, for choosing a cut.
+    selection, for choosing a cut, plus efficiency against the physical ceiling.
 
-  "Correctly reconstructed" is truth-matched: both top candidates within
-  `--matchWindow` GeV (default 30) of their generator counterpart. `--pgofBins`
-  sets the binning across `Pgof` in [0,1].
+  "Correctly reconstructed" is truth-matched at parton level, in two steps. An event
+  is *reconstructible* when both b partons and both hadronic-W quarks are matched,
+  one-to-one and within `--partonDR` (default 0.4), by the four jets the fit is given
+  — `leading/subleadingbJet` in the b slots, `leading/subleadingJet` on the hadronic W.
+  That fraction is the **physical ceiling**: everything below it was lost to acceptance
+  or jet merging before the fit ran, so no re-ranking recovers it. Among reconstructible
+  events, the fit is *correct* when it made its one free choice — which b-jet goes
+  hadronic — the right way, read back by comparing the fitted `Top_had` direction against
+  the two `b + lj + slj` hypotheses.
+
+  Note what is deliberately *not* used: a window on `|m_t^reco - m_t^gen|`. The fit pins
+  m_t to the same 172.5 GeV the generator used, so a mass window partly selects on the
+  quantity it is meant to validate — a wrong assignment pulled back onto the nominal mass
+  passes it. The parton-level definition is also a strict subset of the reconstructible
+  events, so efficiency against the ceiling cannot exceed 1.
+
+  On UL2016postVFP the ceiling sits near 28%, of which the fit recovers about 76%. The
+  ceiling is low because the hadronic-W quarks are frequently *not* the two leading light
+  jets — the limitation tracked in `ISSUE_jet_assignment_purity.md`. `--pgofBins` sets the
+  binning across `Pgof` in [0,1].
 
 ## Running it
 
