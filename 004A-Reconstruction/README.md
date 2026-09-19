@@ -32,7 +32,19 @@ equal-top-mass vs. pinned-172.5 constraint).
 
 - Skim ROOT files: `{STORAGE}/reconstruction/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/*_Skim.root`
 - `reconstruction_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — input for 004B-BDTVariables.
-- `--makeDeltaPlots` — reconstructed-vs-generator top-mass residual plots (`deltaMassPlots.py`), MC only.
+- `--makeDeltaPlots` — diagnostic plots from `deltaMassPlots.py`, MC only (it needs the
+  generator tops, so only `ttbar_SemiLeptonic` datasets are read):
+  - `deltaMass_hadronic.png`, `deltaMass_leptonic.png` — the reconstructed-vs-generator
+    top-mass residuals.
+  - `pgof.png` — the fit goodness-of-fit probability `Pgof`, split into correctly
+    reconstructed and combinatorial events.
+  - `pgof_purity.png` — differential purity `s/(s+b)` per `Pgof` bin.
+  - `pgof_efficiency.png` — cumulative signal efficiency and purity for a `Pgof > cut`
+    selection, for choosing a cut.
+
+  "Correctly reconstructed" is truth-matched: both top candidates within
+  `--matchWindow` GeV (default 30) of their generator counterpart. `--pgofBins`
+  sets the binning across `Pgof` in [0,1].
 
 ## Running it
 
