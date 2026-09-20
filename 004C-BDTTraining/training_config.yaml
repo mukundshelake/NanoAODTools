@@ -133,11 +133,23 @@ RegularizationParams:
   min_child_weight: 1
   gamma: 0.0
 
+# subsample_rows: cap the rows the SEARCH sees. The winning parameters are
+# then refit on the entire train split, so the final model still uses every
+# event -- only the 108 x cv ranking fits are cheap. Which hyperparameters
+# rank best is stable far below full statistics; the final fit is what
+# actually benefits from them.
+#
+# This exists because ClassBalancing defaults to scale_pos_weight: the train
+# split is the whole sample (3.86M rows on UL2016preVFP), not a balanced
+# ~430k downsample, so without a cap this grid costs ~9x what its size was
+# chosen for. Set to null to search on the full train split.
 GridSearch:
   cv: 3
   scoring: roc_auc
   n_jobs: -1
   verbose: 2
+  subsample_rows: 500000
+  subsample_random_state: 42
 
 # Importance-based feature slimming: rank by built-in (gain) importance and
 # permutation importance on the held-out VALIDATION split, then retrain on

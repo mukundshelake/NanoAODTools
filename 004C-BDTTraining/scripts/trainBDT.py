@@ -171,10 +171,44 @@ def make_xgb(fixed_params, regularization_params, extra=None):
 
 
 def run_grid_search(X_train, y_train, fixed_params, regularization_params, param_grid, grid_cfg, extra_params=None):
+    """Search hyperparameters, then fit the winner on the full train split.
+
+    The search itself runs on at most GridSearch.subsample_rows rows, drawn
+    stratified from X_train, while the returned model is refit on every row.
+    Hyperparameter *ranking* is stable well below the full statistics --
+    which fold splits best does not change much between 500k and 3.9M rows --
+    but the final fit does benefit from all of them, so paying 108 x cv fits
+    at full size buys ranking precision nobody uses.
+
+    This matters because ClassBalancing defaults to scale_pos_weight rather
+    than downsampling: the train split is the whole sample (3.86M rows on
+    UL2016preVFP), not a balanced ~430k subsample, so the grid this config
+    ships was sized for roughly 9x less data than it now sees.
+
+    Returns (model_fitted_on_full_train, best_params, best_cv_score).
+    """
     base_bdt = make_xgb(fixed_params, regularization_params, extra_params)
     n_combos = int(np.prod([len(v) for v in param_grid.values()]))
     logging.info(f"Parameter grid: {param_grid}")
     logging.info(f"Total combinations to test: {n_combos} (x cv={grid_cfg['cv']} folds)")
+
+    search_rows = grid_cfg.get("subsample_rows")
+    subsampled = bool(search_rows) and len(X_train) > search_rows
+    if subsampled:
+        # Stratified, so the class ratio -- and therefore the meaning of the
+        # scale_pos_weight computed from the full train split -- is preserved.
+        X_search, _, y_search, _ = train_test_split(
+            X_train, y_train, train_size=int(search_rows),
+            stratify=y_train, random_state=grid_cfg.get("subsample_random_state", 42),
+        )
+        logging.info(f"Grid search on a stratified {len(X_search)}-row subsample "
+                     f"of the {len(X_train)}-row train split "
+                     f"(GridSearch.subsample_rows={search_rows}); "
+                     f"the selected model is then refit on all {len(X_train)} rows.")
+    else:
+        X_search, y_search = X_train, y_train
+        logging.info(f"Grid search on the full {len(X_train)}-row train split.")
+
     grid_search = GridSearchCV(
         estimator=base_bdt,
         param_grid=param_grid,
@@ -182,11 +216,23 @@ def run_grid_search(X_train, y_train, fixed_params, regularization_params, param
         scoring=grid_cfg["scoring"],
         n_jobs=grid_cfg["n_jobs"],
         verbose=grid_cfg["verbose"],
+        # Refitting on the subsample would only be thrown away below.
+        refit=not subsampled,
     )
-    grid_search.fit(X_train, y_train)
+    grid_search.fit(X_search, y_search)
     logging.info(f"Grid search completed! Best parameters: {grid_search.best_params_}")
     logging.info(f"Best cross-validation {grid_cfg['scoring']}: {grid_search.best_score_:.4f}")
-    return grid_search
+
+    if subsampled:
+        logging.info(f"Refitting best parameters on the full {len(X_train)}-row train split...")
+        best = make_xgb(fixed_params, regularization_params, extra_params)
+        best.set_params(**grid_search.best_params_)
+        best.fit(X_train, y_train)
+        logging.info("Refit complete.")
+    else:
+        best = grid_search.best_estimator_
+
+    return best, grid_search.best_params_, float(grid_search.best_score_)
 
 
 def evaluate(bdt, X_test, y_test):
@@ -454,11 +500,10 @@ def main():
     logging.info("\n" + "=" * 60)
     logging.info("GRID SEARCH (full feature set)")
     logging.info("=" * 60)
-    grid_search = run_grid_search(
+    bdt, best_grid_params, best_cv_score = run_grid_search(
         X_train, y_train, cfg["FixedParams"], cfg["RegularizationParams"],
         cfg["ParamGrid"], cfg["GridSearch"], extra_params,
     )
-    bdt = grid_search.best_estimator_
     y_pred, y_pred_proba, accuracy, auc_score, cm = evaluate(bdt, X_test, y_test)
 
     logging.info("\n" + "=" * 60)
@@ -483,8 +528,8 @@ def main():
         "n_val": len(df_val),
         "n_test": len(df_test),
         "class_balance": {"method": cfg["ClassBalancing"]["method"], **extra_params},
-        "best_parameters": grid_search.best_params_,
-        "best_cv_auc": float(grid_search.best_score_),
+        "best_parameters": best_grid_params,
+        "best_cv_auc": best_cv_score,
         "test_accuracy": float(accuracy),
         "test_auc": float(auc_score),
         "confusion_matrix": cm.tolist(),
@@ -533,11 +578,10 @@ def main():
             X_train_reduced[col] = X_train_reduced[col].round().astype(int)
             X_test_reduced[col] = X_test_reduced[col].round().astype(int)
 
-        grid_search_reduced = run_grid_search(
+        bdt_reduced, reduced_grid_params, reduced_cv_score = run_grid_search(
             X_train_reduced, y_train, cfg["FixedParams"], cfg["RegularizationParams"],
             cfg["ParamGrid"], cfg["GridSearch"], extra_params,
         )
-        bdt_reduced = grid_search_reduced.best_estimator_
         y_pred_r, y_pred_proba_r, accuracy_r, auc_r, cm_r = evaluate(bdt_reduced, X_test_reduced, y_test)
 
         logging.info("\n" + "=" * 60)
@@ -560,8 +604,8 @@ def main():
             "selected_features": selected_features,
             "removed_features": removed_features,
             "n_features": select_n,
-            "best_parameters": grid_search_reduced.best_params_,
-            "best_cv_auc": float(grid_search_reduced.best_score_),
+            "best_parameters": reduced_grid_params,
+            "best_cv_auc": reduced_cv_score,
             "test_accuracy": float(accuracy_r),
             "test_auc": float(auc_r),
             "full_model_test_auc": float(auc_score),
