@@ -351,17 +351,28 @@ def compute_correlations(df, features, output_dir, class_names, label_col="y_bin
     return corr_by_class
 
 
-def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title, class_names, suffix=""):
+def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title, class_names,
+                       thresholds=None, suffix=""):
     """Classic train-vs-test overtraining check.
 
     Overlays the classifier's score distribution on train vs test data,
     separately per class, and runs a two-sample Kolmogorov-Smirnov test
-    between them. A small train/test difference is expected from
-    statistical noise alone; a small KS p-value signals the model has
-    memorized train-set-specific structure rather than learned a
-    generalizable decision boundary -- the standard overtraining tell in a
-    BDT study (cf. TMVA's "Overtraining check" plot).
+    between them -- the standard overtraining tell in a BDT study (cf. TMVA's
+    "Overtraining check" plot).
+
+    The verdict needs BOTH a small p-value and a KS statistic large enough to
+    matter, because the p-value alone is close to useless at these sample
+    sizes. On the UL2016preVFP full run the signal class gave KS = 0.0071 at
+    p = 0.001: the statistic had fallen 27x from the 20k-event smoke test
+    (0.1934) -- i.e. overtraining had all but vanished -- yet the p-value
+    still cleared a bare p < 0.01 gate, purely because 214k train / 115k test
+    events resolve differences far too small to care about. Judging on
+    p alone would have printed "overtraining suspected" on every
+    full-statistics run from here on.
     """
+    thresholds = thresholds or {}
+    ks_threshold = thresholds.get("ks_statistic_threshold", 0.05)
+    p_threshold = thresholds.get("p_value_threshold", 0.01)
     train_scores = bdt.predict_proba(X_train)[:, 1]
     test_scores = bdt.predict_proba(X_test)[:, 1]
     y_train_arr = np.asarray(y_train)
@@ -382,9 +393,19 @@ def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title,
                     label=f"{class_names[cls]} (test)")
 
         stat, pval = ks_2samp(tr, te)
-        verdict = "overtraining suspected" if pval < 0.01 else "no significant overtraining"
+        significant = pval < p_threshold
+        material = stat >= ks_threshold
+        if significant and material:
+            verdict = "overtraining suspected"
+        elif significant:
+            verdict = (f"no significant overtraining (difference resolvable at this sample "
+                       f"size but negligible: KS {stat:.4f} < {ks_threshold})")
+        else:
+            verdict = "no significant overtraining"
         ks_results[f"class_{cls}"] = {
             "ks_statistic": float(stat), "p_value": float(pval),
+            "ks_statistic_threshold": float(ks_threshold),
+            "p_value_threshold": float(p_threshold),
             "n_train": int(len(tr)), "n_test": int(len(te)), "verdict": verdict,
         }
         logging.info(f"  KS test {class_names[cls]}: statistic={stat:.4f}, p-value={pval:.4g} "
@@ -510,7 +531,8 @@ def main():
     logging.info("OVERTRAINING CHECK (full model)")
     logging.info("=" * 60)
     check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir,
-                        f"Overtraining check -- {args.era} (full model)", class_names)
+                        f"Overtraining check -- {args.era} (full model)", class_names,
+                        thresholds=cfg.get("OvertrainingCheck"))
 
     logging.info("\n" + "=" * 60)
     logging.info("FEATURE IMPORTANCE ANALYSIS")
@@ -589,7 +611,7 @@ def main():
         logging.info("=" * 60)
         check_overtraining(bdt_reduced, X_train_reduced, y_train, X_test_reduced, y_test, output_dir,
                             f"Overtraining check -- {args.era} (reduced model)", class_names,
-                            suffix="_reduced")
+                            thresholds=cfg.get("OvertrainingCheck"), suffix="_reduced")
         save_roc_curve(y_test, y_pred_proba_r, auc_r, output_dir,
                        f"ROC curve -- {args.era} (reduced model)", suffix="_reduced")
 

@@ -151,6 +151,23 @@ GridSearch:
   subsample_rows: 500000
   subsample_random_state: 42
 
+# Train-vs-test overtraining check. A verdict of "overtraining suspected"
+# needs BOTH criteria: the Kolmogorov-Smirnov p-value below
+# p_value_threshold AND the KS statistic itself at or above
+# ks_statistic_threshold.
+#
+# The statistic gate is the one that matters here. KS p-values collapse
+# toward zero as samples grow, so on a full era (214k train / 115k test
+# signal events) a p-only test flags differences far too small to care
+# about: UL2016preVFP's signal class scored KS = 0.0071 at p = 0.001 --
+# the statistic had dropped 27x from the 20k-event smoke test's 0.1934,
+# meaning overtraining had essentially gone, yet a bare p < 0.01 gate still
+# printed "overtraining suspected". 0.05 is roughly where a shift between
+# two score distributions becomes visible by eye on the overlay plot.
+OvertrainingCheck:
+  ks_statistic_threshold: 0.05
+  p_value_threshold: 0.01
+
 # Importance-based feature slimming: rank by built-in (gain) importance and
 # permutation importance on the held-out VALIDATION split, then retrain on
 # the top-N features and compare AUC before/after on the test split, which
