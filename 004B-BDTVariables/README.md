@@ -31,7 +31,10 @@ full-tree pass):
 
 ## Outputs
 
-- ROOT files: `{STORAGE}/BDTVariables/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/*_BDTVars.root`
+- ROOT files: `{STORAGE}/BDTVariables/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/*_Skim.root`
+  (one per input file. `_Skim` is NanoAODTools' default postfix -- runBDTVariables.py
+  constructs its PostProcessor without one. Downstream chapters locate these through the
+  dataset JSON below, never by globbing the name.)
 - `BDTVariables_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — input for
   005-Unfolding / 006-Results / 007-Systematics.
 - `--buildBDTVariableHists` / `--aggregateBDTVariableHists` / `--makeBDTVariablePlots` —

@@ -216,7 +216,12 @@ if __name__ == "__main__":
             pre_skipped += 1
             continue
         if not args.force:
-            output_name = os.path.basename(data["file"]).replace(".root", "_BDTVars.root")
+            # "_Skim", not "_BDTVars": PostProcessor below is constructed
+            # without a postfix, so NanoAODTools falls back to its default and
+            # writes {basename}_Skim.root. Looking for _BDTVars.root here made
+            # this check never fire, which silently disabled restartability --
+            # every re-run reprocessed the whole era from scratch.
+            output_name = os.path.basename(data["file"]).replace(".root", "_Skim.root")
             output_path = os.path.join(data["outputDir"], output_name)
             if os.path.exists(output_path):
                 pre_skipped += 1

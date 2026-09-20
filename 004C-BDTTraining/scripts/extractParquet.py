@@ -76,7 +76,7 @@ def process_dataset(data):
     Args:
         data: Dictionary containing:
             - era, DataMC, group, dataset: identifying labels (for logging only)
-            - files: list of source *_BDTVars.root file paths
+            - files: list of source *_Skim.root file paths (004B output)
             - outputDir: where to write {dataset}_part{N}.parquet
             - columns: branch names to read (BDT features + target branch)
             - maxEvents: rows accumulated per output part file

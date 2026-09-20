@@ -24,7 +24,7 @@ not inside `cmsenv`.
 
 ### Extraction (`scripts/extractParquet.py`, run via `run_all.py`)
 
-For each dataset, reads each of its `*_BDTVars.root` files in full via
+For each dataset, reads each of its `*_Skim.root` files (004B output) in full via
 `uproot`, accumulating chunks across files (rather than resetting a chunk
 boundary at every file the way `uproot.iterate(..., step_size=...)` would —
 that would fragment a dataset made of many small files into one tiny part

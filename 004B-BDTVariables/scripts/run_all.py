@@ -266,7 +266,12 @@ def main():
 
                         isSample = True
                         for filePath in datasetJSON[DataMC][group][dataset]:
-                            bdt_name = os.path.basename(filePath).replace(".root", "_BDTVars.root")
+                            # "_Skim", not "_BDTVars": runBDTVariables.py builds
+                            # its PostProcessor without a postfix, so the files
+                            # that actually land are {basename}_Skim.root. This
+                            # check must match them or the process list keeps
+                            # re-listing work that is already done.
+                            bdt_name = os.path.basename(filePath).replace(".root", "_Skim.root")
                             bdt_path = os.path.join(outputDir, bdt_name)
                             if not args.force and os.path.exists(bdt_path):
                                 era_skipped += 1
