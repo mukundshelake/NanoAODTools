@@ -77,9 +77,11 @@ def process_dataset(data):
         data: Dictionary containing:
             - era, DataMC, group, dataset: identifying labels (for logging only)
             - files: list of source *_Skim.root file paths (004B output)
-            - outputDir: where to write {dataset}_part{N}.parquet
+            - outputDir: where to write {stem}_part{N}.parquet
             - columns: branch names to read (BDT features + target branch)
             - maxEvents: rows accumulated per output part file
+            - sample: when true the parts are named {dataset}_sample_part{N}
+              instead, so a sample pass and a full pass never share filenames
 
     Returns:
         Number of output part files written (0 if the dataset had no events),
@@ -93,6 +95,11 @@ def process_dataset(data):
     outputDir  = data["outputDir"]
     columns    = data["columns"]
     maxEvents  = data["maxEvents"]
+    # A sample pass reads only the dataset's first ROOT file, so its parts
+    # hold a fraction of the events a full pass would write. Naming them
+    # apart is what stops a later full pass from seeing "a part file exists"
+    # and skipping the dataset, leaving it permanently truncated.
+    stem       = f"{dataset}_sample" if data.get("sample") else dataset
 
     os.makedirs(outputDir, exist_ok=True)
 
@@ -105,7 +112,7 @@ def process_dataset(data):
         if pending_rows == 0:
             return
         chunk = ak.concatenate(pending) if len(pending) > 1 else pending[0]
-        out_path = os.path.join(outputDir, f"{dataset}_part{n_parts}.parquet")
+        out_path = os.path.join(outputDir, f"{stem}_part{n_parts}.parquet")
         ak.to_parquet(chunk, out_path)
         n_parts += 1
         pending = []
@@ -183,9 +190,16 @@ if __name__ == "__main__":
             pre_skipped += 1
             continue
         if args.sample:
-            data = dict(data, files=data["files"][:1])
+            data = dict(data, files=data["files"][:1], sample=True)
         if not args.force:
-            existing = glob.glob(os.path.join(data["outputDir"], f"{data['dataset']}_part*.parquet"))
+            # Mode-specific pattern: a full pass must not be satisfied by a
+            # sample pass's parts, and vice versa. glob's [!s] guard keeps the
+            # full-run pattern from also matching {dataset}_sample_part*.
+            stem = f"{data['dataset']}_sample" if args.sample else data["dataset"]
+            existing = glob.glob(os.path.join(data["outputDir"], f"{stem}_part*.parquet"))
+            if not args.sample:
+                existing = [e for e in existing
+                            if not os.path.basename(e).startswith(f"{data['dataset']}_sample_part")]
             if existing:
                 pre_skipped += 1
                 continue

@@ -39,7 +39,22 @@ def is_parquet_file_healthy(filepath: str) -> int:
     return num_rows
 
 
-def generate_dataset_json(base_dir, output_dir, output_name):
+SAMPLE_MARKER = "_sample_part"
+
+
+def wanted_variant(filename, variant):
+    """Does this parquet part belong in a `variant` ("full"/"sample") map?
+
+    extractParquet.py names a sample pass's parts {dataset}_sample_part*.
+    Both variants can coexist in one dataset directory, so a map has to pick
+    one: a full map that swept in the sample parts would list a subset of its
+    own events a second time, and training would see them twice.
+    """
+    is_sample = SAMPLE_MARKER in filename
+    return is_sample if variant == "sample" else not is_sample
+
+
+def generate_dataset_json(base_dir, output_dir, output_name, variant="full"):
     dataset_dict = {}
     totalEraFiles = 0
     rejected_totalEraFiles = 0
@@ -70,7 +85,7 @@ def generate_dataset_json(base_dir, output_dir, output_name):
                 rejected_totalDatasetFiles = 0
                 for dirpath, _, filenames in os.walk(datasetDir):
                     for file in filenames:
-                        if file.endswith('.parquet'):
+                        if file.endswith('.parquet') and wanted_variant(file, variant):
                             filePath = os.path.join(dirpath, file)
                             num_rows = is_parquet_file_healthy(filePath)
                             if num_rows >= 0:
@@ -104,8 +119,12 @@ if __name__ == "__main__":
     parser.add_argument("--outputDirectory", required=True, help="Output directory for JSON files")
     parser.add_argument("--outputFileName", required=True, help="Output file name for the JSON file")
     parser.add_argument("--baseDirectory", required=True, help="Base directory for the datasets")
+    parser.add_argument("--variant", choices=["full", "sample"], default="full",
+                        help="Which parquet parts to map: 'full' skips {dataset}_sample_part* "
+                             "files, 'sample' takes only those (default: full)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-    generate_dataset_json(args.baseDirectory, args.outputDirectory, args.outputFileName)
+    generate_dataset_json(args.baseDirectory, args.outputDirectory, args.outputFileName,
+                          variant=args.variant)

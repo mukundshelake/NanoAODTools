@@ -1,6 +1,6 @@
 # Configuration for the BDT training step of 004C-BDTTraining: trains an
 # XGBoost classifier per era to distinguish qqbar-initiated (y==1) from
-# gg-initiated (y==2) ttbar_SemiLeptonic production.
+# every other initial state (non-qqbar) in ttbar_SemiLeptonic production.
 #
 # Hashed independently of config.yaml (see utils.compute_config_hash) so that
 # tuning the grid search or feature-selection settings never forces parquet
@@ -51,27 +51,57 @@ IntegerFeatures:
 TargetBranch: y
 
 # Keep only events with y in these keys, then map to the given binary class.
-# 1 (qqbar) -> 0, 2 (gg) -> 1: preserves y's own ordering as the 0/1
-# ordering. Everything else (y in {0, 3, 4, 5}: undefined/data, qg, qq'
-# different flavour, qq same flavour) is dropped before any balancing --
-# this is a deliberate correction of the old (deleted) BDT.py script, which
-# incorrectly trained qqbar (y==1) vs NOT-qqbar (y!=1), lumping qg/qq'/qq
-# into the "background" class alongside gg.
+# The measurement wants qqbar-initiated vs everything-else, so qqbar is the
+# SIGNAL (class 1) and every other hard-scattering initial state is
+# background (class 0). With qqbar as the positive class the model's
+# predict_proba[:, 1] reads directly as P(qqbar), which is the quantity
+# downstream chapters want -- no 1-minus-score convention to remember.
+#
+# An earlier version of this file kept only y in {1, 2} and trained strictly
+# qqbar-vs-gg, dropping qg entirely. On UL2016preVFP that silently discarded
+# 1,727,978 of 6,884,570 ttbar_SemiLeptonic events (25.1%, all y==3) -- and
+# those events still exist at inference time, so the classifier was being
+# applied to a population it had never been shown. y==4/5 do not occur in
+# this sample (both exactly 0) but are mapped anyway so the scheme stays
+# correct if a future sample produces them.
+#
+# y==0 (undefined / Data) is deliberately absent: it is not a physics
+# category, and dropping it here is what keeps Data out of training.
 Labels:
-  1: 0
-  2: 1
+  1: 1   # qqbar          -> signal
+  2: 0   # gg             -> background
+  3: 0   # qg             -> background
+  4: 0   # qq' diff flav  -> background
+  5: 0   # qq  same flav  -> background
 
-# "downsample": randomly subsample the majority class to the minority class
-# size (matches the old script's behaviour).
 # "scale_pos_weight": keep all rows, weight the loss instead (XGBoost-native).
-# Computed from the TRAIN split only, after train_test_split, to avoid
-# leaking test-set class balance into a training-time hyperparameter.
+# Computed from the TRAIN split only, after the split, to avoid leaking the
+# held-out class balance into a training-time hyperparameter.
+# "downsample": randomly subsample the majority class to the minority class
+# size (what the old script did).
+#
+# Default is scale_pos_weight because downsampling is expensive here: qqbar
+# is ~5.6% of the sample, so balancing qqbar against all non-qqbar by
+# downsampling keeps only ~2/18 of the events and throws away over a million
+# real background events per era for nothing.
 ClassBalancing:
-  method: downsample
+  method: scale_pos_weight
   random_state: 42
 
+# Three-way split: train / validation / test.
+#   train      -- preprocessor fit, GridSearchCV (which cross-validates
+#                 internally on this split alone)
+#   validation -- permutation importance, and therefore feature selection
+#   test       -- final AUC, ROC, confusion matrix, overtraining check
+# val_size is a fraction of the post-test remainder, so the defaults below
+# give a 0.56 / 0.14 / 0.30 split of the full sample. Feature selection used
+# to rank features on the test set and then report the reduced model's AUC on
+# that same test set, which biased the full-vs-reduced comparison in the
+# reduced model's favour; the validation split exists to keep test untouched
+# until the final evaluation.
 Split:
   test_size: 0.3
+  val_size: 0.2
   random_state: 42
   stratify: true
 
@@ -110,9 +140,10 @@ GridSearch:
   verbose: 2
 
 # Importance-based feature slimming: rank by built-in (gain) importance and
-# permutation importance on held-out test data, then retrain on the top-N
-# features and compare AUC before/after. Set select_features to null (or
-# remove the key) to skip this step entirely.
+# permutation importance on the held-out VALIDATION split, then retrain on
+# the top-N features and compare AUC before/after on the test split, which
+# neither model's feature set was chosen with. Set select_features to null
+# (or remove the key) to skip this step entirely.
 FeatureSelection:
   select_features: 10
   permutation_importance:

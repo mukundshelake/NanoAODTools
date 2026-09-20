@@ -9,7 +9,7 @@ This script orchestrates the BDT parquet-extraction workflow:
 4. Generates dataset JSON from the parquet outputs (optional)
 
 ...and, separately, the BDT training workflow:
-5. Trains the qqbar-vs-gg XGBoost classifier per era from a pinned parquet
+5. Trains the qqbar-vs-non-qqbar XGBoost classifier per era from a pinned parquet
    extraction run's outputs (--trainBDT --parquetHash <hash>)
 
 Usage:
@@ -98,7 +98,7 @@ def main():
     parser.add_argument('--workers', type=int, default=8,
                        help='Number of parallel workers passed to extractParquet.py (default: 8)')
     parser.add_argument('--trainBDT', action='store_true',
-                       help='[4] Train the qqbar-vs-gg XGBoost classifier per era from the parquet '
+                       help='[4] Train the qqbar-vs-non-qqbar XGBoost classifier per era from the parquet '
                             'outputs of a (possibly different) extraction run. Requires --parquetHash.')
     parser.add_argument('--parquetHash', type=str, default=None,
                        help='[4] Config hash of the 004C-BDTTraining extraction run to train from '
@@ -253,9 +253,18 @@ def main():
                             storageBase, "BDTParquet", args.tag, config_hash, era, DataMC, group, dataset
                         )
 
-                        existing = (
-                            os.path.isdir(outputDir)
-                            and any(fn.endswith('.parquet') for fn in os.listdir(outputDir))
+                        # Mode-specific: a sample pass writes
+                        # {dataset}_sample_part*.parquet and covers only the
+                        # dataset's first ROOT file, so "some .parquet exists"
+                        # is not evidence that a FULL extraction was done --
+                        # treating it as such left the dataset silently
+                        # truncated with no way to notice.
+                        sample_prefix = f"{dataset}_sample_part"
+                        full_prefix   = f"{dataset}_part"
+                        wanted_prefix = sample_prefix if args.sample else full_prefix
+                        existing = os.path.isdir(outputDir) and any(
+                            fn.startswith(wanted_prefix) and fn.endswith('.parquet')
+                            for fn in os.listdir(outputDir)
                         )
                         if not args.force and existing:
                             era_skipped += 1
@@ -273,6 +282,7 @@ def main():
                             "columns":    columns,
                             "maxEvents":  max_events,
                             "isSample":   isSample,
+                            "sample":     bool(args.sample),
                         }
                         era_process_list.append(task)
                         isSample = False
@@ -326,13 +336,18 @@ def main():
                 continue
             outputDirectory = output_dir / era
             outputDirectory.mkdir(parents=True, exist_ok=True)
-            outputFileName  = f"Parquet_{args.tag}_{era}_datasets.json"
+            # Sample and full extractions get separate maps: they describe
+            # different file sets, and one silently overwriting the other is
+            # how a full run ends up training on a sample's worth of events.
+            suffix          = "_sample" if args.sample else ""
+            outputFileName  = f"Parquet_{args.tag}_{era}{suffix}_datasets.json"
             baseDirectory   = f'{storageBase}/BDTParquet/{args.tag}/{config_hash}/{era}'
             cmd = [
                 sys.executable, str(generate_dataset_json_script),
                 '--outputDirectory', str(outputDirectory),
                 '--outputFileName',  outputFileName,
                 '--baseDirectory',   baseDirectory,
+                '--variant',         'sample' if args.sample else 'full',
             ]
             print(f"Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True)
@@ -371,13 +386,17 @@ def main():
             if not matches_filter(args.filter, era):
                 continue
 
-            dataset_json_path = parquet_run_dir / era / f"Parquet_{args.tag}_{era}_datasets.json"
+            json_suffix = "_sample" if args.sample else ""
+            dataset_json_path = parquet_run_dir / era / f"Parquet_{args.tag}_{era}{json_suffix}_datasets.json"
             if not dataset_json_path.exists():
                 print(f"  Warning: {dataset_json_path} not found, skipping era {era}. "
                       f"(Has --generateDatasetJSON been run for --parquetHash {args.parquetHash}?)")
                 continue
 
-            bdt_out_dir = parquet_run_dir / era / 'bdt' / training_hash
+            # Sample training artifacts sit under their own directory so a
+            # smoke pass never leaves a best_params.json that makes the real
+            # run think training is already done.
+            bdt_out_dir = parquet_run_dir / era / 'bdt' / f"{training_hash}{json_suffix}"
             if bdt_out_dir.exists() and (bdt_out_dir / 'best_params.json').exists() and not args.force:
                 print(f"  Training output already exists for era {era}, skipping: {bdt_out_dir}")
                 continue

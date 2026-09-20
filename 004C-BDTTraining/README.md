@@ -3,8 +3,8 @@
 Takes the `BDTVariables` ROOT files from 004B-BDTVariables, extracts the BDT feature
 branches plus the `y` training target into parquet files (one, or more if a
 dataset is too bulky, per dataset), and then trains an XGBoost classifier per
-era that distinguishes qqbar-initiated (`y==1`) from gg-initiated (`y==2`)
-`ttbar_SemiLeptonic` production.
+era that distinguishes qqbar-initiated (`y==1`) `ttbar_SemiLeptonic` production
+from every other initial state (`y in {2,3,4,5}` -- gg, qg, qq', qq).
 
 Unlike 002/003-I/003-II/004A/004B, this stage is pure-python (`uproot` /
 `awkward` / `pyarrow`): it does not run the NanoAODTools `PostProcessor` and
@@ -57,10 +57,12 @@ of a *specific, pinned* extraction run (see `--parquetHash` below) — the
 are deliberately excluded from training.
 
 Steps, configured entirely by `training_config.yaml` (see that file for the
-full schema): keep only events with `y in {1, 2}` and map `1`(qqbar)`->0`,
-`2`(gg)`->1` (everything else — `y in {0,3,4,5}` — is dropped, *not* folded
-into a "background" class); balance the two classes (downsampling by
-default, or `scale_pos_weight` to keep all events); `train_test_split`;
+full schema): map `y` to a binary target — `1`(qqbar)`->1` (signal) and
+`2`/`3`/`4`/`5` (gg, qg, qq', qq) `->0` (background), so `predict_proba[:,1]`
+reads directly as P(qqbar). Only `y==0` (undefined/Data) is dropped, which is
+what keeps Data out of training; balance the classes (`scale_pos_weight` by
+default, keeping every event, or `downsample`); a three-way
+train/validation/test split;
 median/mean imputation (median for the two integer jet-count features);
 `GridSearchCV` over an XGBoost hyperparameter grid; a per-class feature
 correlation study (Pearson correlation matrix, computed separately for
@@ -70,11 +72,15 @@ distributions on train and test data, per class); built-in (gain) and
 permutation feature importance; and, if `FeatureSelection.select_features`
 is set, a retrain on just the top-N most important features (with its own
 overtraining check), with a full-vs-reduced AUC comparison. This mirrors
-the structure of an old,
-now-deleted ad-hoc training script (recoverable from git history at
-`git show f7fd8f5:004B-BDT/scripts/old_ignore/BDT.py`) which used
-`sklearn.GradientBoostingClassifier` and — a bug this rewrite fixes —
-trained qqbar-vs-*everything-else* rather than strictly qqbar-vs-gg.
+the structure of an old, now-deleted ad-hoc training script (recoverable from
+git history at `git show f7fd8f5:004B-BDT/scripts/old_ignore/BDT.py`), which
+used `sklearn.GradientBoostingClassifier`.
+
+An intermediate version of this chapter trained strictly qqbar-vs-gg, keeping
+only `y in {1,2}`. That was wrong for this measurement: it discarded every
+`qg` event — 1,727,978 of 6,884,570 (25.1%) on UL2016preVFP — while those
+events still exist at inference time, so the classifier was being applied to a
+population it had never seen. The target is qqbar vs everything else.
 
 ## Outputs
 
@@ -115,6 +121,23 @@ chapters, except `--sample` and `--force`/existing-output checks operate at
 dataset granularity here (one task = one dataset's full file list), not per
 file: `--sample` runs only the first dataset of each era, using only that
 dataset's first ROOT file.
+
+**Everything a `--sample` pass writes is named apart from the full pass**, so
+the two can never be confused for one another:
+
+| artifact | full run | sample run |
+|---|---|---|
+| parquet parts | `{dataset}_part{N}.parquet` | `{dataset}_sample_part{N}.parquet` |
+| dataset map | `Parquet_{tag}_{era}_datasets.json` | `Parquet_{tag}_{era}_sample_datasets.json` |
+| training artifacts | `bdt/{training_hash}/` | `bdt/{training_hash}_sample/` |
+
+This matters because the existing-output checks are per *dataset*, not per
+file: a sample pass writes one part file covering only the dataset's first
+ROOT file, and before this naming split a later full pass saw "a part file
+exists here" and skipped the dataset entirely — leaving it permanently
+holding a fraction of its events, with nothing to flag it. `generateDatasetJSON.py
+--variant full|sample` selects which of the two a map describes, so a full map
+never absorbs the sample's parts and double-counts those events.
 
 ### Training
 

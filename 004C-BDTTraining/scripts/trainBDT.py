@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-Worker script to train the qqbar-vs-gg XGBoost classifier for one era.
+Worker script to train the qqbar-vs-non-qqbar XGBoost classifier for one era.
 
 Reads the parquet outputs of a 004C-BDTTraining extraction run for a single
 dataset (per training_config.yaml's TrainingSample -- nominal
-ttbar_SemiLeptonic), keeps only events with y in {1, 2} (qqbar / gg hard
-scattering, dropping qg/qq'/qq-same-flavour/undefined), balances the two
-classes, grid-searches an XGBoost classifier, computes built-in and
-permutation feature importance, and optionally retrains on the top-N most
-important features. Mirrors the structure of the old (now-deleted, git
-history commit f7fd8f5) 004B-BDT/scripts/old_ignore/BDT.py, corrected to
-filter strictly to y in {1, 2} instead of qqbar-vs-everything-else, and
-swapped from sklearn's GradientBoostingClassifier to xgboost.XGBClassifier.
+ttbar_SemiLeptonic), maps the hard-scattering label y to a binary target via
+that config's Labels (qqbar = signal class 1, every other initial state =
+background class 0, y==0/Data dropped), balances the classes, grid-searches
+an XGBoost classifier on the train split, ranks features by permutation
+importance on a held-out validation split, and optionally retrains on the
+top-N features -- with the test split reserved for final evaluation only.
+predict_proba[:, 1] is therefore P(qqbar).
 
 Usage:
     python scripts/trainBDT.py --datasetJSON <Parquet_..._datasets.json> \\
@@ -81,21 +80,45 @@ def resolve_parquet_files(dataset_json_path, training_sample):
 
 
 def read_parquet_files(files, columns, sample=False):
+    """Read the parquet parts into one frame.
+
+    Under --sample the cap is spread evenly over the part files rather than
+    taken from the front of the first one. Parts are written in input-file
+    order, so a head-of-file slice can land inside a single run period or a
+    single generator chunk; an even share from each part keeps the smoke
+    pass at least roughly representative of the dataset it claims to test.
+    """
+    per_file = max(1, SAMPLE_ROW_CAP // max(len(files), 1)) if sample else None
     dfs = []
     total_rows = 0
     for path in files:
         table = pq.read_table(path, columns=columns)
         df = table.to_pandas()
+        if sample and len(df) > per_file:
+            df = df.iloc[:per_file]
         dfs.append(df)
         total_rows += len(df)
         logging.info(f"  Read {len(df)} rows from {os.path.basename(path)} (running total {total_rows})")
-        if sample and total_rows >= SAMPLE_ROW_CAP:
-            logging.info(f"  --sample: reached {total_rows} rows, stopping read early.")
-            break
     df = pd.concat(dfs, ignore_index=True)
-    if sample and len(df) > SAMPLE_ROW_CAP:
-        df = df.iloc[:SAMPLE_ROW_CAP].reset_index(drop=True)
+    if sample:
+        logging.info(f"  --sample: kept {len(df)} rows (<= {per_file} from each of {len(files)} part file(s)).")
     return df
+
+
+def class_display_names(labels):
+    """Map binary class -> a label naming the y values that feed it.
+
+    Derived from the config rather than hard-coded: these strings caption the
+    correlation and overtraining figures, and a stale hard-coded pair
+    silently mislabels every plot the moment Labels changes. (It did: the
+    figures read "gg (class 0)" / "qqbar (class 1)" while the config mapped
+    qqbar->0 and gg->1, so both were exactly backwards.)
+    """
+    y_names = {1: "qqbar", 2: "gg", 3: "qg", 4: "qq'", 5: "qq"}
+    by_class = {}
+    for y_val, cls in sorted((int(k), int(v)) for k, v in labels.items()):
+        by_class.setdefault(int(cls), []).append(y_names.get(y_val, f"y={y_val}"))
+    return {cls: f"{'+'.join(names)} (class {cls})" for cls, names in by_class.items()}
 
 
 def derive_binary_label(df, target_branch, labels):
@@ -177,7 +200,7 @@ def evaluate(bdt, X_test, y_test):
     return y_pred, y_pred_proba, accuracy, auc_score, cm
 
 
-def compute_importances(bdt, features, X_test, y_test, perm_cfg, output_dir):
+def compute_importances(bdt, features, X_val, y_val, perm_cfg, output_dir):
     importance_df = pd.DataFrame({
         "feature": features,
         "importance": bdt.feature_importances_,
@@ -185,8 +208,12 @@ def compute_importances(bdt, features, X_test, y_test, perm_cfg, output_dir):
     importance_df.to_csv(output_dir / "feature_importance.csv", index=False)
     logging.info("Built-in (gain) feature importance:\n" + importance_df.to_string(index=False))
 
+    # Validation split, never test: the top-N features chosen from this
+    # ranking are what the reduced model is built on, so ranking on test and
+    # then reporting the reduced model's test AUC would be scoring a choice
+    # against the data that made it.
     perm = permutation_importance(
-        bdt, X_test, y_test,
+        bdt, X_val, y_val,
         n_repeats=perm_cfg["n_repeats"],
         random_state=perm_cfg["random_state"],
         scoring=perm_cfg["scoring"],
@@ -222,7 +249,7 @@ def compute_importances(bdt, features, X_test, y_test, perm_cfg, output_dir):
     return importance_df, perm_df
 
 
-def save_roc_curve(y_test, y_pred_proba, auc_score, output_dir, title):
+def save_roc_curve(y_test, y_pred_proba, auc_score, output_dir, title, suffix=""):
     fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.plot(fpr, tpr, label=f"AUC = {auc_score:.4f}")
@@ -230,7 +257,7 @@ def save_roc_curve(y_test, y_pred_proba, auc_score, output_dir, title):
     ax.set_xlabel("False Positive Rate"); ax.set_ylabel("True Positive Rate")
     ax.set_title(title); ax.legend()
     plt.tight_layout()
-    plt.savefig(output_dir / "roc_curve.png", dpi=300, bbox_inches="tight")
+    plt.savefig(output_dir / f"roc_curve{suffix}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -245,12 +272,12 @@ def save_scores(df_test, y_test, y_pred_proba, y_pred, target_branch, out_path):
     logging.info(f"Scores saved to {out_path}")
 
 
-def compute_correlations(df, features, output_dir, label_col="y_binary"):
+def compute_correlations(df, features, output_dir, class_names, label_col="y_binary"):
     """Pearson correlation matrix among the BDT input features, computed
     separately per class.
 
     Correlations between event-shape/Fox-Wolfram-moment variables often
-    differ between qqbar and gg events (that's part of why they're
+    differ between signal and background events (that's part of why they're
     discriminating in the first place), and a single combined-class matrix
     can hide that structure or manufacture spurious correlation purely from
     the class-conditional mean shift between the two labels. Computed on the
@@ -258,7 +285,6 @@ def compute_correlations(df, features, output_dir, label_col="y_binary"):
     values, not imputed fill-ins.
     """
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
-    class_names = {0: "gg (class 0)", 1: "qqbar (class 1)"}
     corr_by_class = {}
     for cls, ax in zip([0, 1], axes):
         corr = df.loc[df[label_col] == cls, features].corr()
@@ -279,7 +305,7 @@ def compute_correlations(df, features, output_dir, label_col="y_binary"):
     return corr_by_class
 
 
-def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title, suffix=""):
+def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title, class_names, suffix=""):
     """Classic train-vs-test overtraining check.
 
     Overlays the classifier's score distribution on train vs test data,
@@ -299,7 +325,6 @@ def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title,
     bins = np.linspace(0, 1, 41)
     centers = 0.5 * (bins[1:] + bins[:-1])
     colors = {0: "tab:blue", 1: "tab:red"}
-    class_names = {0: "gg (class 0)", 1: "qqbar (class 1)"}
     ks_results = {}
     for cls in [0, 1]:
         tr = train_scores[y_train_arr == cls]
@@ -335,7 +360,7 @@ def check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir, title,
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train the qqbar-vs-gg XGBoost classifier for one era.")
+    parser = argparse.ArgumentParser(description="Train the qqbar-vs-non-qqbar XGBoost classifier for one era.")
     parser.add_argument("--datasetJSON", required=True, help="Path to Parquet_{tag}_{era}_datasets.json")
     parser.add_argument("--trainingConfig", required=True, help="Path to training_config.yaml")
     parser.add_argument("--outputDir", required=True, help="Directory to write all training artifacts")
@@ -373,23 +398,33 @@ def main():
     df = read_parquet_files(files, features + [target_branch], sample=args.sample)
     logging.info(f"Total events read: {len(df)}")
 
+    class_names = class_display_names(cfg["Labels"])
+    logging.info(f"Class definitions: {class_names}")
     df = derive_binary_label(df, target_branch, cfg["Labels"])
     df, balancing_mode = balance_classes(df, cfg["ClassBalancing"]["method"], cfg["ClassBalancing"]["random_state"])
 
     logging.info("\n" + "=" * 60)
     logging.info("FEATURE CORRELATION STUDY")
     logging.info("=" * 60)
-    compute_correlations(df, features, output_dir)
+    compute_correlations(df, features, output_dir, class_names)
 
     split_cfg = cfg["Split"]
-    df_train, df_test = train_test_split(
+    stratify_on = lambda frame: frame["y_binary"] if split_cfg.get("stratify", True) else None
+    # Test is carved off first and then left alone until the final evaluation.
+    df_trainval, df_test = train_test_split(
         df, test_size=split_cfg["test_size"], random_state=split_cfg["random_state"],
-        stratify=df["y_binary"] if split_cfg.get("stratify", True) else None,
+        stratify=stratify_on(df),
     )
-    logging.info(f"Train: {len(df_train)} events (class0={sum(df_train['y_binary'] == 0)}, "
-                 f"class1={sum(df_train['y_binary'] == 1)})")
-    logging.info(f"Test:  {len(df_test)} events (class0={sum(df_test['y_binary'] == 0)}, "
-                 f"class1={sum(df_test['y_binary'] == 1)})")
+    # Validation comes out of the remainder, so val_size is a fraction of
+    # train+val rather than of the whole sample.
+    val_size = split_cfg.get("val_size", 0.2)
+    df_train, df_val = train_test_split(
+        df_trainval, test_size=val_size, random_state=split_cfg["random_state"],
+        stratify=stratify_on(df_trainval),
+    )
+    for name, frame in (("Train", df_train), ("Val  ", df_val), ("Test ", df_test)):
+        logging.info(f"{name}: {len(frame)} events (class0={int((frame['y_binary'] == 0).sum())}, "
+                     f"class1={int((frame['y_binary'] == 1).sum())})")
 
     extra_params = {}
     if balancing_mode == "scale_pos_weight":
@@ -401,6 +436,7 @@ def main():
 
     preprocessor = build_preprocessor(float_features, integer_features)
     X_train = preprocessor.fit_transform(df_train[features])
+    X_val = preprocessor.transform(df_val[features])
     X_test = preprocessor.transform(df_test[features])
     # Integer feature columns come back as imputed floats (e.g. median of an
     # even-count column); round + cast back so they stay semantically counts.
@@ -409,8 +445,10 @@ def main():
     # it exists for defensive completeness, not because missingness is expected.
     for col in integer_features:
         X_train[col] = X_train[col].round().astype(int)
+        X_val[col] = X_val[col].round().astype(int)
         X_test[col] = X_test[col].round().astype(int)
     y_train = df_train["y_binary"]
+    y_val = df_val["y_binary"]
     y_test = df_test["y_binary"]
 
     logging.info("\n" + "=" * 60)
@@ -427,13 +465,13 @@ def main():
     logging.info("OVERTRAINING CHECK (full model)")
     logging.info("=" * 60)
     check_overtraining(bdt, X_train, y_train, X_test, y_test, output_dir,
-                        f"Overtraining check -- {args.era} (full model)")
+                        f"Overtraining check -- {args.era} (full model)", class_names)
 
     logging.info("\n" + "=" * 60)
     logging.info("FEATURE IMPORTANCE ANALYSIS")
     logging.info("=" * 60)
     importance_df, perm_df = compute_importances(
-        bdt, ordered_features, X_test, y_test, cfg["FeatureSelection"]["permutation_importance"], output_dir,
+        bdt, ordered_features, X_val, y_val, cfg["FeatureSelection"]["permutation_importance"], output_dir,
     )
     save_roc_curve(y_test, y_pred_proba, auc_score, output_dir, f"ROC curve -- {args.era} (full model)")
 
@@ -442,6 +480,7 @@ def main():
         "parquetHash": args.parquetHash,
         "training_hash": training_hash,
         "n_train": len(df_train),
+        "n_val": len(df_val),
         "n_test": len(df_test),
         "class_balance": {"method": cfg["ClassBalancing"]["method"], **extra_params},
         "best_parameters": grid_search.best_params_,
@@ -505,7 +544,10 @@ def main():
         logging.info("OVERTRAINING CHECK (reduced model)")
         logging.info("=" * 60)
         check_overtraining(bdt_reduced, X_train_reduced, y_train, X_test_reduced, y_test, output_dir,
-                            f"Overtraining check -- {args.era} (reduced model)", suffix="_reduced")
+                            f"Overtraining check -- {args.era} (reduced model)", class_names,
+                            suffix="_reduced")
+        save_roc_curve(y_test, y_pred_proba_r, auc_r, output_dir,
+                       f"ROC curve -- {args.era} (reduced model)", suffix="_reduced")
 
         auc_diff = auc_r - auc_score
         threshold = cfg["FeatureSelection"]["performance_drop_threshold"]
