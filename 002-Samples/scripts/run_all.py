@@ -44,6 +44,38 @@ import getFileInfo
 import generateRunLumiFiles
 
 
+def filtered_data_mc_missing_from(json_path, filters, era):
+    """DataMC groups --filter explicitly asks for that an existing JSON doesn't cover.
+
+    Returns a list of (DataMC, reason) pairs; empty means the file on disk
+    already describes everything currently being asked of it. Used to decide
+    whether an existing crabOutput_{era}_datasets.json can be reused as-is.
+    """
+    if not filters:
+        return []
+    wanted = set()
+    for f in filters:
+        parts = f.split('/')
+        if parts[0] not in ('*', era):
+            continue
+        if len(parts) >= 2 and parts[1] != '*':
+            wanted.add(parts[1])
+    if not wanted:
+        return []
+    try:
+        with open(json_path) as fh:
+            existing = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return [(dm, f"existing JSON could not be read ({exc})") for dm in sorted(wanted)]
+    missing = []
+    for data_mc in sorted(wanted):
+        if data_mc not in existing:
+            missing.append((data_mc, "absent from the existing JSON"))
+        elif not any(existing[data_mc].get(g) for g in existing[data_mc]):
+            missing.append((data_mc, "present in the existing JSON but lists no datasets"))
+    return missing
+
+
 def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
     """Check if era/DataMC/group/dataset matches any of the provided filters.
 
@@ -850,6 +882,24 @@ def main():
             output_json_name = f"crabOutput_{era}_datasets.json"
             output_json_path = output_dir / era / output_json_name
             if output_json_path.exists() and not args.force:
+                # Reusing this file is only safe when it already describes the
+                # DataMC groups being asked for now. One left over from an earlier
+                # phase of the same campaign won't mention the current one at all,
+                # and --consolidateCrabOutput downstream reads it verbatim -- so
+                # skipping silently turns consolidation into a no-op against stale
+                # contents rather than an error. Confirmed live: MC_alt consolidation
+                # reported "0/5 datasets consolidated" and 228 missing-file errors,
+                # all of them for Data_mu datasets transferred off weeks earlier,
+                # while the 20 MC_alt datasets actually requested went untouched
+                # and unmentioned.
+                stale = filtered_data_mc_missing_from(output_json_path, args.filter, era)
+                if stale:
+                    print(f"Error: {output_json_path} already exists but does not cover what --filter asks for:")
+                    for data_mc, reason in stale:
+                        print(f"  {era}/{data_mc}: {reason}")
+                    print("This JSON predates the current campaign phase; consolidating against it would "
+                          "silently do nothing. Re-run with --force to regenerate it.")
+                    return 1
                 print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
                 continue
             base_directory = str(Path(storageBase) / config_hash / era)
@@ -923,6 +973,18 @@ def main():
             output_json_name = f"preselection_{era}_datasets.json"
             output_json_path = output_dir / era / output_json_name
             if output_json_path.exists() and not args.force:
+                # Same hazard as the crabOutput JSON above, and with a longer blast
+                # radius: this file is what 003-ObjectSelectionI actually consumes,
+                # so a copy left over from an earlier phase would quietly feed the
+                # next chapter that phase's sample list instead of the current one.
+                stale = filtered_data_mc_missing_from(output_json_path, args.filter, era)
+                if stale:
+                    print(f"Error: {output_json_path} already exists but does not cover what --filter asks for:")
+                    for data_mc, reason in stale:
+                        print(f"  {era}/{data_mc}: {reason}")
+                    print("This JSON predates the current campaign phase; downstream chapters would read "
+                          "the older phase's sample list. Re-run with --force to regenerate it.")
+                    return 1
                 print(f"Output JSON file already exists for {era} and --force not set. Skipping: {output_json_path}")
                 continue
             base_directory = str(Path(storageBase) / 'preselection' / args.tag / config_hash / era)

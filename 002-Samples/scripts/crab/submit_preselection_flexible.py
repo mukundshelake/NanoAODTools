@@ -83,6 +83,15 @@ def make_crab_config(group, key, das_dataset, is_data, output_lfn, golden_json, 
         cfg.General.workArea = work_area
     cfg.section_("JobType")
     cfg.JobType.pluginName       = "Analysis"
+    # CRAB's default wall-clock cap is 1250 min (20:50). With unitsPerJob=1 that
+    # is comfortable for almost every dataset here, but the largest ttbar files
+    # sit right on the boundary: confirmed live during the earlySeptember MC_alt
+    # campaign, UL2017 ttbar_FullyLeptonic_erdON had two jobs killed at exactly
+    # 20:50:36 and 20:50:35, and a plain resubmit reproduced the same kill --
+    # raising the cap let the same work finish in 17:37. Asking for more time
+    # than a job needs costs nothing (jobs are billed for time used, not time
+    # requested); being killed at the cap costs the entire job.
+    cfg.JobType.maxJobRuntimeMin = 2750
     cfg.JobType.psetName         = str(PSET)
     cfg.JobType.scriptExe        = str(SCRIPT_SH)
     cfg.JobType.inputFiles       = [str(SCRIPT_PY), str(CONFIG_YAML)]

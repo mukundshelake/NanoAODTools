@@ -23,6 +23,11 @@ present at its destination (e.g. from a prior run of this same script that
 got interrupted) is treated as already done rather than re-moved, so this
 script is safe to interrupt and re-run.
 
+A dataset the JSON lists but which exists at neither source nor destination
+is reported once as [STALE] rather than as one "source file missing" error
+per file: that pattern means the JSON predates the current state (its phase
+has already been consolidated and moved off), not that data was lost.
+
 Usage:
     python3 consolidateCrabOutput.py --datasetJSON <crabOutput_{era}_datasets.json> \\
         --sourceBase <{STORAGE}/{config_hash}/{era}> \\
@@ -57,7 +62,7 @@ def main():
     include_pat = re.compile(args.include) if args.include else None
     exclude_pat = re.compile(args.exclude) if args.exclude else None
 
-    total_datasets, consolidated_datasets, failed_datasets = 0, 0, 0
+    total_datasets, consolidated_datasets, failed_datasets, stale_datasets = 0, 0, 0, 0
 
     for DataMC, groups in dataset_data.items():
         for group, datasets in groups.items():
@@ -83,7 +88,31 @@ def main():
                     consolidated_datasets += 1
                     continue
 
+                # A dataset whose source subtree is gone *and* which has nothing at
+                # its destination was neither left half-moved nor is it waiting to be
+                # moved -- the JSON is describing something that no longer exists in
+                # either place. In practice that means the JSON is stale: it was built
+                # during an earlier campaign phase, and that phase's output has since
+                # been consolidated, transferred off, and cleaned up. Reporting this
+                # per *file* buries the one fact that matters under hundreds of
+                # identical lines (confirmed live: 228 "source file missing" errors
+                # for five long-since-transferred Data_mu datasets, while the MC_alt
+                # datasets actually being asked for went unmentioned). Diagnose it
+                # once, per dataset, and say what it usually means.
                 dest_dir = Path(args.destinationBase) / DataMC / group / dataset
+                old_dataset_root = Path(args.sourceBase) / DataMC / group / dataset
+                if not old_dataset_root.exists() and not any(
+                    (dest_dir / os.path.basename(fp)).exists() for fp in filepaths
+                ):
+                    print(f"  [STALE] {label}: listed in the JSON with {len(filepaths)} file(s), but present "
+                          f"neither at source ({old_dataset_root}) nor at destination ({dest_dir}) -- "
+                          f"this dataset was most likely consolidated and cleaned up already, meaning the "
+                          f"JSON predates the current state. Regenerate it with "
+                          f"--generateCrabDatasetJSON --force.")
+                    stale_datasets += 1
+                    failed_datasets += 1
+                    continue
+
                 dest_dir.mkdir(parents=True, exist_ok=True)
 
                 ok = True
@@ -114,7 +143,6 @@ def main():
                         ok = False
 
                 if ok:
-                    old_dataset_root = Path(args.sourceBase) / DataMC / group / dataset
                     if old_dataset_root.exists():
                         shutil.rmtree(old_dataset_root)
                         print(f"  [OK] {label}: consolidated {len(filepaths)} files, removed old subtree {old_dataset_root}")
@@ -127,6 +155,11 @@ def main():
 
     print(f"\n{'='*60}")
     print(f"Summary: {consolidated_datasets}/{total_datasets} datasets consolidated, {failed_datasets} failed.")
+    if stale_datasets:
+        print(f"{stale_datasets} of those failures were datasets present at neither source nor destination. "
+              f"If this run consolidated nothing at all, the JSON almost certainly describes an earlier "
+              f"campaign phase whose output has already been moved off -- regenerate it with "
+              f"--generateCrabDatasetJSON --force and re-run.")
 
     if failed_datasets:
         sys.exit(1)
