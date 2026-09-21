@@ -10,10 +10,14 @@ Usage:
 import argparse
 import glob
 import os
+import sys
 
 import awkward as ak
 import numpy as np
 import uproot
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts"))
+import kinematics  # noqa: E402
 
 
 RECO_BRANCHES = [
@@ -38,37 +42,25 @@ GEN_BRANCHES = [
 ]
 
 
-def compute_rapidity(pt, eta, mass):
-    pz = pt * np.sinh(eta)
-    E = np.sqrt((pt * np.cosh(eta)) ** 2 + mass**2)
-    return 0.5 * np.log((E + pz) / (E - pz))
-
-
 def compute_lab_yt_ytbar(a):
-    """Lab-frame top/antitop rapidity, assigning via muon charge.
+    """Lab-frame top/antitop rapidity, assigned from the muon charge.
 
-    mu- (charge=-1) comes from t->W-: leptonic side is top.
-    mu+ (charge=+1) comes from tbar->W+: leptonic side is antitop.
+    The convention lives in kinematics.assign_top_antitop -- read its docstring
+    before touching this. Briefly: t -> W+ b -> mu+ nu b, so mu+ means the
+    LEPTONIC side is the TOP. This file previously had that inverted, which
+    swapped y_t and y_tbar in every event (issue #29).
     """
-    y_lep = compute_rapidity(a["Top_lep_pt"], a["Top_lep_eta"], a["Top_lep_mass"])
-    y_had = compute_rapidity(a["Top_had_pt"], a["Top_had_eta"], a["Top_had_mass"])
-    # selected muon charge: first muon in each event
-    charge = ak.firsts(a["Muon_charge"])
-    mu_minus = charge < 0  # True -> leptonic = top, False -> leptonic = antitop
-    yt_lab    = ak.where(mu_minus, y_lep, y_had)
-    ytbar_lab = ak.where(mu_minus, y_had, y_lep)
-    return yt_lab, ytbar_lab
+    y_lep = kinematics.rapidity(a["Top_lep_pt"], a["Top_lep_eta"], a["Top_lep_mass"])
+    y_had = kinematics.rapidity(a["Top_had_pt"], a["Top_had_eta"], a["Top_had_mass"])
 
+    # FIXME(#33): this is the first muon of the *unfiltered* collection, not the
+    # muon the analysis selected. 45% of events have more than one muon and the
+    # charge disagrees with the properly selected muon in ~1.4% of events.
+    # kinematics.select_muon_index() does it correctly but needs the era, which
+    # this script has no way to know -- it arrives with the config in #41.
+    charge = ak.to_numpy(ak.fill_none(ak.firsts(a["Muon_charge"]), 0))
 
-def compute_mtt(pt1, eta1, phi1, mass1, pt2, eta2, phi2, mass2):
-    px1 = pt1 * np.cos(phi1);  px2 = pt2 * np.cos(phi2)
-    py1 = pt1 * np.sin(phi1);  py2 = pt2 * np.sin(phi2)
-    pz1 = pt1 * np.sinh(eta1); pz2 = pt2 * np.sinh(eta2)
-    E1 = np.sqrt((pt1 * np.cosh(eta1)) ** 2 + mass1**2)
-    E2 = np.sqrt((pt2 * np.cosh(eta2)) ** 2 + mass2**2)
-    return np.sqrt(np.maximum(
-        (E1 + E2)**2 - (px1 + px2)**2 - (py1 + py2)**2 - (pz1 + pz2)**2, 0.0
-    ))
+    return kinematics.assign_top_antitop(y_lep, y_had, charge)
 
 
 def build_weights(a):
@@ -138,10 +130,12 @@ def process_file(path, is_signal):
         atop_pt  = ak.firsts(pt[atop_mask]);  atop_eta = ak.firsts(eta[atop_mask])
         atop_phi = ak.firsts(phi[atop_mask]); atop_mass = ak.firsts(mass[atop_mask])
 
-        gen_yt    = compute_rapidity(top_pt,  top_eta,  top_mass)
-        gen_ytbar = compute_rapidity(atop_pt, atop_eta, atop_mass)
-        mtt_gen   = compute_mtt(top_pt, top_eta, top_phi, top_mass,
-                                atop_pt, atop_eta, atop_phi, atop_mass)
+        gen_yt    = kinematics.rapidity(top_pt,  top_eta,  top_mass)
+        gen_ytbar = kinematics.rapidity(atop_pt, atop_eta, atop_mass)
+        mtt_gen   = kinematics.invariant_mass(
+            (top_pt, top_eta, top_phi, top_mass),
+            (atop_pt, atop_eta, atop_phi, atop_mass),
+        )
 
         result["gen_yt"]    = gen_yt
         result["gen_ytbar"] = gen_ytbar

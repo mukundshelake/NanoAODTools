@@ -67,6 +67,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import binning  # noqa: E402  (single source of truth, see module docstring)
+from kinematics import invariant_mass, rapidity  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHAPTER = Path(__file__).resolve().parents[1]
@@ -97,42 +98,6 @@ BIT_IS_LAST_COPY = 13
 
 LEPTON_CHANNELS = {11: "e", 13: "mu", 15: "tau"}
 CHANNEL_ORDER = ["e", "mu", "tau", "other"]
-
-
-# ---------------------------------------------------------------------------
-# Kinematics
-# ---------------------------------------------------------------------------
-
-def rapidity(pt, eta, mass):
-    """y = 0.5 ln((E+pz)/(E-pz)), returning nan rather than inf when E -> |pz|.
-
-    A massive top never actually reaches E == |pz|, so a non-finite result here
-    means the inputs were garbage and the event must be counted, not silently
-    turned into a central top (issue #42).
-    """
-    pt = np.asarray(pt, dtype=np.float64)
-    eta = np.asarray(eta, dtype=np.float64)
-    mass = np.asarray(mass, dtype=np.float64)
-
-    pz = pt * np.sinh(eta)
-    e = np.sqrt((pt * np.cosh(eta)) ** 2 + mass ** 2)
-    num, den = e + pz, e - pz
-    with np.errstate(divide="ignore", invalid="ignore"):
-        y = 0.5 * np.log(num / den)
-    return np.where((num > 0) & (den > 0), y, np.nan)
-
-
-def invariant_mass(p1, p2):
-    """Invariant mass of two (pt, eta, phi, mass) tuples."""
-    def components(p):
-        pt, eta, phi, mass = (np.asarray(x, dtype=np.float64) for x in p)
-        return (pt * np.cos(phi), pt * np.sin(phi), pt * np.sinh(eta),
-                np.sqrt((pt * np.cosh(eta)) ** 2 + mass ** 2))
-
-    px1, py1, pz1, e1 = components(p1)
-    px2, py2, pz2, e2 = components(p2)
-    m2 = (e1 + e2) ** 2 - (px1 + px2) ** 2 - (py1 + py2) ** 2 - (pz1 + pz2) ** 2
-    return np.sqrt(np.maximum(m2, 0.0))
 
 
 # ---------------------------------------------------------------------------
