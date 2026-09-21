@@ -727,20 +727,53 @@ def main():
             return 1
 
         # Phase 1: build the flat task list (one `crab status` check per dataset).
+        # A dataset with no CRAB project directory is recorded separately rather
+        # than queued: checkStatus.py still exits 0 when its -d path does not
+        # exist (its `ls` failure goes to stderr and the script carries on), so
+        # such a dataset would otherwise be counted as "succeeded" -- a clean
+        # bill of health for datasets nothing ever looked at. Confirmed live:
+        # `--tag earlySep` now hashes to f7b250452aef rather than that
+        # campaign's own a3e6961ac5f1 (config.yaml changed since), so all 73
+        # datasets printed "No such file or directory" and the summary still
+        # read "73 succeeded, 0 failed".
         tasks = []  # (label, command)
+        no_project = []  # labels whose crab_preselection project dir is absent
         for era in config['DASQueries']:
             for DataMC in config['DASQueries'][era]:
                 for group in config['DASQueries'][era][DataMC]:
                     for dataset_name in config['DASQueries'][era][DataMC][group]:
                         if not matches_filter(args.filter, era, DataMC, group, dataset_name):
                             continue
+                        label = f"{era}/{DataMC}/{group}/{dataset_name}"
                         work_area = output_dir / era / DataMC / group / dataset_name / "crab_preselection"
+                        if not (work_area.exists() and any(work_area.glob('crab_presel_*'))):
+                            no_project.append(label)
+                            continue
                         command = f"python3 {check_crab_status_script} -d {work_area}"
                         if args.resubmitFailedCrabJobs:
                             command += " --resubmit"
                         if args.removeSubmitFailedCrabJobs:
                             command += " --removeSubmitFailed"
-                        tasks.append((f"{era}/{DataMC}/{group}/{dataset_name}", command))
+                        tasks.append((label, command))
+
+        # Nothing checkable at all means this tag+hash pair does not point at a
+        # submitted campaign -- almost always because config.yaml changed since
+        # it ran, so its tasks live under the older config's hash. Reporting
+        # "0 failed" for that would be actively misleading.
+        if no_project and not tasks:
+            print(f"\nError: none of the {len(no_project)} datasets matching --filter have a CRAB "
+                  f"project directory under:\n  {output_dir}")
+            print(f"This tag+config-hash pair ({args.tag}/{config_hash}) does not correspond to a "
+                  f"submitted campaign. If these jobs were submitted with an earlier config.yaml, "
+                  f"their tasks live under that config's hash -- look in {output_dir.parent} for "
+                  f"the hash directory that actually holds them.")
+            return 1
+        if no_project:
+            print(f"\nWarning: {len(no_project)} dataset(s) matching --filter have no CRAB project "
+                  f"directory and were NOT checked (never submitted, or submitted under a "
+                  f"different config hash):")
+            for lbl in no_project:
+                print(f"  {lbl}")
 
         print(f"\n{len(tasks)} datasets to check. Checking with {args.workers} parallel workers...")
 
@@ -776,7 +809,8 @@ def main():
                         failed += 1
                         print(f"Error checking CRAB status for dataset: {label}")
 
-        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} total.")
+        print(f"\ncheckCrabStatus: {succeeded} succeeded, {failed} failed out of {len(tasks)} checked"
+              + (f", {len(no_project)} not checked (no CRAB project directory)." if no_project else "."))
 
     # Submit pre-selection jobs to HTCondor (parallel alternative to CRAB). Unlike
     # --submitPreSelectionJobs (one CRAB task per dataset), this submits all
