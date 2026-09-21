@@ -70,27 +70,52 @@ then corrects for the isolation-efficiency mismatch between "loose" (B) and "tig
 
 ## Outputs
 
-Per dataset: `{tag}_{DataMC}_{group}_{dataset}_{era}_region{A,B,C,D}_selectionHists.coffea`
-Per group: `{tag}_{era}_{DataMC}_{group}_region{A,B,C,D}_selectionHists.coffea`
-Per era: `{tag}_{era}_QCDTemplate_selectionHists.coffea` (via `--buildQCDTemplate`),
-`plots/{era}/{histName}.{png,pdf,C}`, `plots/{era}/rootHists.root`, `{tag}_{hash}_report.pdf`
+All under `outputs/{tag}/{hash}/`, `{sample_suffix}` being `_sample` if `--sample` was passed
+for that step, else empty (see "Sample / quick-look mode" below):
+
+Per dataset: `{era}/{DataMC}/{group}/{dataset}/{tag}_{DataMC}_{group}_{dataset}_{era}{sample_suffix}_region{A,B,C,D}_selectionHists.coffea`
+Per group: `{era}/{DataMC}/{group}/{tag}_{era}{sample_suffix}_{DataMC}_{group}_region{A,B,C,D}_selectionHists.coffea`
+Per era: `{era}/{tag}_{era}{sample_suffix}_QCDTemplate_selectionHists.coffea` (via `--buildQCDTemplate`),
+and, inside `{era}/plots/`, one set per `histDetails` variable named
+`{tag}_{hash}_{era}_{sample|full}_{histName}.{png,pdf,C}` plus a matching
+`..._rootHists.root`. Plots live under each era's own folder (not a shared top-level
+`plots/` at the hash root), so `outputs/{tag}/{hash}/UL2016postVFP/` holds that era's
+`Data_mu/`, `MC_mu/`, and `plots/` side by side.
+`{tag}_{hash}_report.pdf` sits at the `outputs/{tag}/{hash}/` root and embeds every era's
+`plots/` folder, grouped by era.
+
+## Sample / quick-look mode
+
+`--sample`, passed to any of `--buildSelectionHists`/`--aggregrateGroupHists`/
+`--buildQCDTemplate`/`--makeplots`, truncates each dataset to its first file only (for a
+fast end-to-end check of the pipeline, not a physics result) **and** inserts `_sample` into
+every filename that step reads or writes, as shown above. This means a sample run and a
+full run of the same tag/hash/era never share a filename at any stage — a later full run
+(no `--sample`) will always actually (re)process, `--force` or not, rather than silently
+picking up a sample run's leftover histograms. The flip side: `--sample` must be passed
+**consistently** to every step of one pipeline pass (build → aggregate → QCD template →
+makeplots) — a step run without it will look for the non-`_sample` files and fail loudly
+("Histogram file not found") if only sample-mode files exist, rather than silently mixing
+sample and full data.
 
 ## Running it
 
 ```
 run_all.py --generateSelectionIIDatasetJSON --selectionIITag <tag> --selectionIIHash <hash>
 run_all.py --fetchABCDScaleFactor --selectionIITag <tag> --selectionIIHash <hash>
-run_all.py --buildSelectionHists --regionFilter 0
-run_all.py --aggregrateGroupHists --regionFilter 0
-run_all.py --buildSelectionHists --regionFilter 1
-run_all.py --aggregrateGroupHists --regionFilter 1
-run_all.py --buildQCDTemplate
-run_all.py --makeplots
+run_all.py --buildSelectionHists --regionFilter 0 [--sample]
+run_all.py --aggregrateGroupHists --regionFilter 0 [--sample]
+run_all.py --buildSelectionHists --regionFilter 1 [--sample]
+run_all.py --aggregrateGroupHists --regionFilter 1 [--sample]
+run_all.py --buildQCDTemplate [--sample]
+run_all.py --makeplots [--sample]
 ```
 
 `--filter` works as in the other chapters. `--regionFilter 2`/`3` (C/D) are also available
 for `--buildSelectionHists`/`--aggregrateGroupHists` if needed for debugging, but the main
-pipeline above only ever needs regions A and B.
+pipeline above only ever needs regions A and B. Include `--sample` on every line above for
+a quick-look pass, or omit it everywhere for the full-dataset run — see "Sample / quick-look
+mode" above for why it can't be mixed partway through.
 
 ## Storage
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-004B-BDT/scripts/crab/submit_bdt_flexible.py
+004B-BDTVariables/scripts/crab/submit_bdt_flexible.py
 ====================================================================
 Generate and (optionally) submit CRAB jobs for the BDT-variable stage,
 processing the reconstruction skims that already live on EOS.
@@ -48,7 +48,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 import utils
 
-CHAPTER_DIR = SCRIPT_DIR.parent.parent           # 004B-BDT/
+CHAPTER_DIR = SCRIPT_DIR.parent.parent           # 004B-BDTVariables/
 CONFIG_YAML = CHAPTER_DIR / "config.yaml"
 PSET        = SCRIPT_DIR / "PSet.py"
 SCRIPT_SH   = SCRIPT_DIR / "crab_bdt.sh"

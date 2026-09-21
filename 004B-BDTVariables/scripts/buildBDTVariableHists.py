@@ -2,7 +2,7 @@
 """
 Build Data/MC histograms for BDT variables from ROOT files.
 
-This script takes BDT variable ROOT files (output from 004B-BDT processing)
+This script takes BDT variable ROOT files (output from 004B-BDTVariables processing)
 and builds histograms for the 17 BDT variables using the coffea framework.
 
 The histogram specifications come from the config file's histDetails section.

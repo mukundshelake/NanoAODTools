@@ -1,5 +1,6 @@
 # This script takes the fileset and config file. Builds the Hist histograms using coffea and saves the output as .coffea file in the said output directory with the said name.
-# Usage: python buildSelectionHists.py --fileset <path to fileset> --config <path to config file> --outputDir <path to output directory> --outputName <name of output file>
+# Usage: python buildSelectionHists.py --fileSet <path to fileset> --configFile <path to config file> --outputDir <path to output directory> --outputFileName <name of output file> --regionFilter <0-3> [--abcdScaleFactorFile <path>] [--sample]
+# --sample: only process the first file of the dataset's fileset (quick-look mode; run_all.py handles giving the output file its own "_sample"-marked name so this never collides with a full run's output).
 
 import os
 import json
@@ -33,11 +34,19 @@ logger = logging.getLogger(__name__)
 
 
 class WeightLookupProcessor(processor.ProcessorABC):
-    def __init__(self, config, region_filter, abcd_scale_factor_file=None):
+    def __init__(self, config, region_filter, abcd_scale_factor_file=None, build_systematics=False):
         self.config = config
         # ABCD_region code: 0=A (signal region), 1=B (QCD control region), 2=C, 3=D.
         # See 003-ObjectSelectionI's SelectedObjectsProducer for the full convention.
         self.region_filter = region_filter
+        # Weight-only systematic variations (config.yaml's weightSystematics) --
+        # opt-in via --systematics, since it multiplies the histogramming work by
+        # roughly (1 + 2*n_sources) and isn't needed for every invocation. See
+        # config.yaml's weightSystematics comment for scope (weight-only sources
+        # that don't change which events/objects are selected -- bTag, muon SFs,
+        # PU, L1prefire -- NOT JES/JER/Rochester/PDF, which would need reprocessing
+        # the skims per variation, not just a different weight column here).
+        self.build_systematics = build_systematics
 
         # ABCD transfer factor R = N_C/N_D, binned in (SelMuon_pt, |SelMuon_eta|),
         # computed by 003-ObjectSelectionII's computeABCDScaleFactor.py. Only needed
@@ -75,12 +84,18 @@ class WeightLookupProcessor(processor.ProcessorABC):
         # 1D, event-flat) and reliably fast.
         region_mask = dak.to_dask_array(events.ABCD_region) == self.region_filter
 
-        # Build total weights by multiplying the individual weights together
+        # Build total weights by multiplying the individual weights together.
+        # branch_arrays stashes each factor's own masked array (keyed by branch
+        # name) so the --systematics variants below can reuse them instead of
+        # re-reading -- a variant just divides out one nominal factor and
+        # multiplies in its shifted value.
         total_weights = None
+        branch_arrays = {}
         weightList = self.config['weightList']['Data'] if isData else self.config['weightList']['MC']
         for weight in weightList:
             if weight in events.fields:
                 w = dak.to_dask_array(events[weight])[region_mask]
+                branch_arrays[weight] = w
                 total_weights = w if total_weights is None else total_weights * w
             else:
                 logger.warning(f"Weight '{weight}' not found in events. Skipping this weight.")
@@ -110,8 +125,46 @@ class WeightLookupProcessor(processor.ProcessorABC):
                                 "run 003-ObjectSelectionII's --computeABCDScaleFactor and pass "
                                 "--abcdScaleFactorFile.")
 
+        # Weight-only systematic variations (opt-in, --systematics): for each
+        # configured source whose nominal branch actually fed total_weights
+        # above, build an Up/Down variant of total_weights by dividing out
+        # that one factor and multiplying in its shifted value -- everything
+        # else (including the ABCD R-factor above) stays nominal. See
+        # config.yaml's weightSystematics for the source list/types.
+        variant_weights = {}
+        if self.build_systematics and total_weights is not None:
+            for source_name, spec in self.config.get('weightSystematics', {}).items():
+                nominal_branch = spec['nominal']
+                if nominal_branch not in branch_arrays:
+                    continue  # this source's nominal factor isn't in this DataMC's weightList (or missing)
+                nominal_val = branch_arrays[nominal_branch]
+                base = total_weights / nominal_val  # product of every other nominal factor
+
+                if spec.get('type') == 'statsyst':
+                    stat_branch, syst_branch = spec['stat'], spec['syst']
+                    if stat_branch not in events.fields or syst_branch not in events.fields:
+                        logger.warning(f"Systematic source '{source_name}': '{stat_branch}'/'{syst_branch}' "
+                                       f"not found in events. Skipping.")
+                        continue
+                    stat_val = dak.to_dask_array(events[stat_branch])[region_mask]
+                    syst_val = dak.to_dask_array(events[syst_branch])[region_mask]
+                    unc = da.sqrt(stat_val**2 + syst_val**2)
+                    up_val, down_val = nominal_val + unc, nominal_val - unc
+                else:  # 'updown': dedicated Up/Down branches already computed by the SF module
+                    up_branch, down_branch = spec['up'], spec['down']
+                    if up_branch not in events.fields or down_branch not in events.fields:
+                        logger.warning(f"Systematic source '{source_name}': '{up_branch}'/'{down_branch}' "
+                                       f"not found in events. Skipping.")
+                        continue
+                    up_val = dak.to_dask_array(events[up_branch])[region_mask]
+                    down_val = dak.to_dask_array(events[down_branch])[region_mask]
+
+                variant_weights[f"{source_name}Up"] = base * up_val
+                variant_weights[f"{source_name}Down"] = base * down_val
+
         # Fill histograms lazily using dask_histogram
         hists = {}
+        hists_syst = {}
         for hist_ in self.config['histDetails']:
             cfg = self.config['histDetails'][hist_]
             var_name = cfg['variable']
@@ -119,16 +172,18 @@ class WeightLookupProcessor(processor.ProcessorABC):
                 logger.warning(f"Variable '{var_name}' not found in events. Skipping histogram '{hist_}'.")
                 continue
             data = dak.to_dask_array(events[var_name])[region_mask]
-            hists[hist_] = dh.factory(
-                data,
-                axes=[bh.axis.Regular(cfg['bins'], cfg['range'][0], cfg['range'][1],
-                                      metadata={'name': cfg['name'], 'label': cfg['label']})],
-                storage=bh.storage.Double(),
-                weights=total_weights,
-            )
+            axes = [bh.axis.Regular(cfg['bins'], cfg['range'][0], cfg['range'][1],
+                                    metadata={'name': cfg['name'], 'label': cfg['label']})]
+            hists[hist_] = dh.factory(data, axes=axes, storage=bh.storage.Double(), weights=total_weights)
+            if variant_weights:
+                hists_syst[hist_] = {
+                    variant: dh.factory(data, axes=axes, storage=bh.storage.Double(), weights=w)
+                    for variant, w in variant_weights.items()
+                }
         return {
             "nEvents": region_mask.sum(),
-            "hists": hists
+            "hists": hists,
+            "histsSyst": hists_syst,
         }
     def postprocess(self, accumulator):
         return accumulator
@@ -148,6 +203,15 @@ def main():
                              'computeABCDScaleFactor.py output). Required when --regionFilter 1 -- the ABCD '
                              'transfer factor R gets looked up from this file and folded into the region-B '
                              'weight, per event, by SelMuon pt/|eta|. Ignored for every other region.')
+    parser.add_argument('--sample', action='store_true',
+                        help='Quick-look mode: only process the first file of this dataset\'s fileset, '
+                             'instead of all of them.')
+    parser.add_argument('--systematics', action='store_true',
+                        help='Also build weight-only systematic variant histograms (config.yaml\'s '
+                             'weightSystematics: bTag, muonID, muonHLT, muonIso, puWeight, L1PreFiring -- '
+                             'sources that only change an event\'s weight, not which events/objects get '
+                             'selected). Opt-in: roughly (1 + 2*n_sources)x the histogramming work. Output '
+                             'under a separate "histsSyst" key alongside the unchanged nominal "hists".')
     args = parser.parse_args()
 
     if args.regionFilter == 1 and not args.abcdScaleFactorFile:
@@ -161,8 +225,15 @@ def main():
     with open(args.fileSet, 'r') as f:
         fileset = json.load(f)
 
+    if args.sample:
+        for dataset_key, dataset_entry in fileset.items():
+            first_file = dict(list(dataset_entry['files'].items())[:1])
+            dataset_entry['files'] = first_file
+        logger.info("--sample: truncated each dataset to its first file only.")
+
     # Create processor instance
-    processor_instance = WeightLookupProcessor(config, args.regionFilter, args.abcdScaleFactorFile)
+    processor_instance = WeightLookupProcessor(config, args.regionFilter, args.abcdScaleFactorFile,
+                                                build_systematics=args.systematics)
 
     # Preprocess and run with dask
     logger.info("Preprocessing fileset...")

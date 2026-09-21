@@ -1,4 +1,4 @@
-# Configuration for 004B-BDT: BDT Variable Computation
+# Configuration for 004B-BDTVariables: BDT Variable Computation
 # This stage computes 17 BDT variables from reconstructed events.
 # Input: ROOT files from 004A-Reconstruction
 # Output: ROOT files with added BDT variable branches
@@ -861,7 +861,12 @@ histDetails:
 
 weightList:
   MC: ["muonIDWeight", "muonHLTWeight", "bTagWeight", "L1PreFiringWeight_Nom", "lheWeightSign"]
-  Data: ["L1PreFiringWeight_Nom"]
+  # L1PreFiringWeight_Nom corrects simulation for a trigger-inefficiency effect
+  # that isn't modeled in MC generation -- real Data already contains this
+  # effect intrinsically, so it must never be reweighted by it. buildBDTVariableHists.py
+  # would happily apply any branch found in this list (see its weightList lookup),
+  # so this list must stay empty rather than omitted.
+  Data: []
 
 # ---------------------------------------------------------------------------
 # Plot settings for rootHists.py Data/MC comparison plots.

@@ -18,7 +18,7 @@ Usage:
 Options:
     --force: Regenerate outputs even if output files already exist
     --tag:   Create a named tag for this run (e.g., "earlyApril")
-    --fetchFromPreviousChapter: Fetch BDTVariables JSONs from 004B-BDT outputs
+    --generateBDTVariablesDatasetJSON: Scan 004B-BDTVariables outputs on disk and build BDTVariables dataset JSONs
     --generateProcessListJSON: Generate process list for extractParquet.py
     --writeBashScript: Create a bash script instead of running directly
     --generateDatasetJSON: Create dataset JSON from parquet outputs
@@ -69,12 +69,20 @@ def main():
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                        help='Filter by era[/DataMC[/group[/dataset]]]. Use * as wildcard at any level. '
                             'Multiple filters are OR-ed. E.g.: --filter UL2017 --filter UL2018/MC_mu/SingleTop')
-    parser.add_argument('--fetchFromPreviousChapter', action='store_true',
-                       help='[0] Fetch BDTVariables_{tag}_{era}_datasets.json from 004B-BDT outputs '
-                            'into inputs/ (and this run\'s outputs/inputs/ snapshot). Requires --previousHash.')
-    parser.add_argument('--previousHash', type=str, default=None,
-                       help='[0] Config hash of the 004B-BDT run to fetch from (its outputs/{tag}/{hash}/ '
-                            'directory). Required by --fetchFromPreviousChapter.')
+    parser.add_argument('--generateBDTVariablesDatasetJSON', action='store_true',
+                       help='[0] Scan {STORAGE}/BDTVariables/{BDTVariablesTag}/{BDTVariablesHash}/{era} on disk '
+                            '(the 004B-BDTVariables output) and build inputs/BDTVariables_{era}_datasets.json '
+                            'via scripts/generateDatasetJSON.py -- the same health-checked scan '
+                            '004B-BDTVariables itself uses, run fresh each time so the recorded file paths '
+                            'always reflect where the files actually are right now (also copied into this run\'s '
+                            'outputs/{tag}/{hash}/inputs/ snapshot). Requires --BDTVariablesTag and '
+                            '--BDTVariablesHash.')
+    parser.add_argument('--BDTVariablesTag', type=str, default=None,
+                       help='[0] Tag of the 004B-BDTVariables run to scan (e.g. "earlyApril"). '
+                            'Required by --generateBDTVariablesDatasetJSON.')
+    parser.add_argument('--BDTVariablesHash', type=str, default=None,
+                       help='[0] Config hash of the 004B-BDTVariables run to scan. '
+                            'Required by --generateBDTVariablesDatasetJSON.')
     parser.add_argument('--generateProcessListJSON', action='store_true',
                        help='[1] Generate process list JSON for extractParquet.py by reading per-era '
                             'BDTVariables dataset JSONs from the inputs folder. One task per dataset.')
@@ -104,8 +112,9 @@ def main():
 
     print("Arguments:")
     print(f"  --tag: {args.tag}")
-    print(f"  --fetchFromPreviousChapter: {args.fetchFromPreviousChapter}")
-    print(f"  --previousHash: {args.previousHash}")
+    print(f"  --generateBDTVariablesDatasetJSON: {args.generateBDTVariablesDatasetJSON}")
+    print(f"  --BDTVariablesTag: {args.BDTVariablesTag}")
+    print(f"  --BDTVariablesHash: {args.BDTVariablesHash}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --generateDatasetJSON: {args.generateDatasetJSON}")
@@ -155,25 +164,50 @@ def main():
             print(f"Training config hash: {utils.compute_config_hash(training_config_path)}")
         return 0
 
-    # Fetch BDTVariables dataset JSON into inputs/
-    if args.fetchFromPreviousChapter:
-        if not args.previousHash:
-            print("Error: --fetchFromPreviousChapter requires --previousHash to be specified.")
+    # Scan 004B-BDTVariables's BDTVariables ROOT files on disk and build
+    # inputs/BDTVariables_{era}_datasets.json fresh via generateDatasetJSON.py --
+    # replaces the old --fetchFromPreviousChapter, which just copied a JSON that
+    # 004B-BDTVariables had generated at some earlier point and could go stale (its
+    # recorded paths pointing at files that had since moved or become unreachable from
+    # this machine, with nothing to catch the drift). Same pattern as
+    # 003-ObjectSelectionII's --generateSelectionIDatasetJSON and
+    # 003-ObjectSelectionIII's --generateSelectionIIDatasetJSON.
+    if args.generateBDTVariablesDatasetJSON:
+        if not args.BDTVariablesTag or not args.BDTVariablesHash:
+            print("Error: --generateBDTVariablesDatasetJSON requires --BDTVariablesTag and --BDTVariablesHash.")
             return 1
-        print(f"\nFetching inputs from 004B-BDT (hash: {args.previousHash})...")
-        previous_chapter_outputs = base_dir.parent / '004B-BDT' / 'outputs' / args.tag / args.previousHash
+        print(f"\nGenerating BDTVariables dataset JSON from disk (tag: {args.BDTVariablesTag}, "
+              f"hash: {args.BDTVariablesHash})...")
+        generateJSON_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        if not generateJSON_script.exists():
+            print(f"Error: {generateJSON_script} not found!")
+            return 1
         for era in eras:
             if not matches_filter(args.filter, era):
                 continue
             print(f"  Era: {era}")
-            filename = f'BDTVariables_{args.tag}_{era}_datasets.json'
-            source_path = previous_chapter_outputs / era / filename
-            if not source_path.exists():
-                print(f"    Error: Source file not found: {source_path}. Skipping.")
-                continue
-            local_path, output_path = utils.fetch_and_snapshot(source_path, inputs_folder, output_dir, filename)
-            print(f"    Fetched {filename} -> {local_path} and {output_path}")
-        print("Finished fetching inputs from 004B-BDT.")
+            output_json_name = f"BDTVariables_{era}_datasets.json"
+            base_directory = os.path.join(storageBase, "BDTVariables", args.BDTVariablesTag,
+                                           args.BDTVariablesHash, era)
+            cmd = [
+                sys.executable, str(generateJSON_script),
+                '--outputDirectory', str(inputs_folder),
+                '--outputFileName', output_json_name,
+                '--baseDirectory', base_directory,
+            ]
+            print(f"    Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    Error running generateDatasetJSON.py for era {era}:\n{result.stderr}")
+                return 1
+            # Also copy into this run's own outputs/{tag}/{hash}/inputs/ snapshot --
+            # create_output_directory() only snapshotted inputs/ as it existed at the
+            # start of this invocation, before this step ran.
+            output_path = output_dir / 'inputs' / output_json_name
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(inputs_folder / output_json_name, output_path)
+            print(f"    Generated {inputs_folder / output_json_name} and copied to {output_path}")
+        print("Finished generating BDTVariables dataset JSON files.")
 
     # --generateProcessListJSON
     if args.generateProcessListJSON:
@@ -187,7 +221,7 @@ def main():
 
             bdtvariables_dataset_json = (
                 output_dir / 'inputs' /
-                f'BDTVariables_{args.tag}_{era}_datasets.json'
+                f'BDTVariables_{era}_datasets.json'
             )
 
             if not bdtvariables_dataset_json.exists():

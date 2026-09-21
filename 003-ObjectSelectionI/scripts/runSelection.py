@@ -29,6 +29,10 @@ from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import Pos
 from multiprocessing import Pool
 from tqdm import tqdm
 from modules.SelectedObjects import SelectedObjectsProducer
+from modules.JetJER import JetJERModule
+from modules.METXYCorr import METXYCorrModule
+from modules.JetVetoMap import JetVetoMapModule
+from modules.MuonRochester import MuonRochesterModule
 
 def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
     """Check if era/DataMC/group/dataset matches any of the provided filters.
@@ -55,6 +59,14 @@ def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
 def _instantiate_module(module_name, era, key, config):
     if module_name == "selectedObjects":
         return SelectedObjectsProducer(config)
+    elif module_name == "jetJER":
+        return JetJERModule(config)
+    elif module_name == "metXYCorr":
+        return METXYCorrModule(config)
+    elif module_name == "jetVetoMap":
+        return JetVetoMapModule(config)
+    elif module_name == "muonRochester":
+        return MuonRochesterModule(config)
     else:
         logging.error(f"Unknown module: {module_name}")
         return None

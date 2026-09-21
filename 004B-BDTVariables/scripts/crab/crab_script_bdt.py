@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-CRAB worker script for the BDT-variable stage (004B-BDT). Mirrors
+CRAB worker script for the BDT-variable stage (004B-BDTVariables). Mirrors
 scripts/runBDTVariables.py's process_file() exactly: no cut string, no
 golden JSON (both already applied upstream) -- just runs BDTvariableModule
 over the reconstruction skim.

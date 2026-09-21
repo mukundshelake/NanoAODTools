@@ -96,7 +96,8 @@ def expected_new_branches(branch_names, is_mc):
 
     abcd_prefix = branch_names["abcdRegion"]
     expected.add(f"{abcd_prefix}_isTightIso")
-    expected.add(f"{abcd_prefix}_isHighMET")
+    expected.add(f"{abcd_prefix}_isHighMTW")
+    expected.add(f"{abcd_prefix}_mTW")
     expected.add(f"{abcd_prefix}_region")
     return expected
 
@@ -211,10 +212,30 @@ def check_invariants(filepaths, branch_names, abcd_cfg, max_entries_for_stats):
     lj, slj = branch_names["leadingJet"], branch_names["subleadingJet"]
     muon_prefix = branch_names["muon"]
     abcd_prefix = branch_names["abcdRegion"]
-    iso_tight_max  = abcd_cfg["isoTightMax"]
-    met_threshold  = abcd_cfg["metThreshold"]
-    met_branch     = abcd_cfg["metBranch"]
-    has_muon       = f"{muon_prefix}_pt > -0.5"
+    iso_low_max  = abcd_cfg["isoLowMax"]
+    iso_high_min = abcd_cfg["isoHighMin"]
+    mtw_low_max  = abcd_cfg["mTWLowMax"]
+    mtw_high_min = abcd_cfg["mTWHighMin"]
+    has_muon     = f"{muon_prefix}_pt > -0.5"
+
+    # Recomputed directly from thresholds -- NOT from the persisted isTightIso/
+    # isHighMTW booleans, so these checks actually catch a mistagged branch
+    # rather than just checking self-consistency between two derived fields.
+    is_tight_iso_expr = f"({muon_prefix}_pfRelIso04_all <= {iso_low_max})"
+    is_loose_iso_expr = f"({muon_prefix}_pfRelIso04_all >= {iso_high_min})"
+    is_low_mtw_expr   = f"({abcd_prefix}_mTW < {mtw_low_max})"
+    is_high_mtw_expr  = f"({abcd_prefix}_mTW >= {mtw_high_min})"
+    # With isoLowMax==isoHighMin and mTWLowMax==mTWHighMin (today's default)
+    # every muon-having event lands in exactly one of the four branches below;
+    # the final -1 only becomes reachable once the low/high pair for either
+    # axis is set apart, opening a gap that's neither tight/loose nor low/high.
+    expected_region_expr = (
+        f"!({has_muon}) ? -1 : "
+        f"(({is_tight_iso_expr}) && ({is_low_mtw_expr})) ? 2 : "
+        f"(({is_tight_iso_expr}) && ({is_high_mtw_expr})) ? 0 : "
+        f"(({is_loose_iso_expr}) && ({is_low_mtw_expr})) ? 3 : "
+        f"(({is_loose_iso_expr}) && ({is_high_mtw_expr})) ? 1 : -1"
+    )
 
     checks = {
         "sel_nbjet_exceeds_sel_nJet": "sel_nbjet > sel_nJet",
@@ -226,18 +247,17 @@ def check_invariants(filepaths, branch_names, abcd_cfg, max_entries_for_stats):
         # always hold given that module's deterministic region-code assignment.
         f"{abcd_prefix}_region_out_of_range":
             f"({abcd_prefix}_region < -1) || ({abcd_prefix}_region > 3)",
-        f"{abcd_prefix}_region_undefined_mismatch":
-            f"({abcd_prefix}_region == -1) != !({has_muon})",
-        f"{abcd_prefix}_isHighMET_inconsistent":
-            f"{abcd_prefix}_isHighMET != ({met_branch} >= {met_threshold})",
+        # region == -1 no longer implies "no muon" one-to-one (it also covers
+        # iso/mTW falling in a gap) -- only the one-directional implication
+        # "no muon => region == -1" still always holds.
+        f"{abcd_prefix}_region_undefined_without_muon":
+            f"!({has_muon}) && ({abcd_prefix}_region != -1)",
         f"{abcd_prefix}_isTightIso_inconsistent":
-            f"({has_muon}) && ({abcd_prefix}_isTightIso != ({muon_prefix}_pfRelIso04_all <= {iso_tight_max}))",
+            f"({has_muon}) && ({abcd_prefix}_isTightIso != {is_tight_iso_expr})",
+        f"{abcd_prefix}_isHighMTW_inconsistent":
+            f"({has_muon}) && ({abcd_prefix}_isHighMTW != {is_high_mtw_expr})",
         f"{abcd_prefix}_region_code_inconsistent":
-            f"({has_muon}) && ("
-            f"({abcd_prefix}_region == 0) != ({abcd_prefix}_isTightIso && {abcd_prefix}_isHighMET) || "
-            f"({abcd_prefix}_region == 1) != (!{abcd_prefix}_isTightIso && {abcd_prefix}_isHighMET) || "
-            f"({abcd_prefix}_region == 2) != ({abcd_prefix}_isTightIso && !{abcd_prefix}_isHighMET) || "
-            f"({abcd_prefix}_region == 3) != (!{abcd_prefix}_isTightIso && !{abcd_prefix}_isHighMET))",
+            f"{abcd_prefix}_region != ({expected_region_expr})",
     }
     for label, expr in checks.items():
         try:

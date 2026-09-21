@@ -51,8 +51,7 @@ def create_plots_pdf(config_file, config_hash, tag, output_dir):
     """Create a comprehensive PDF report with all plots and config details."""
     
     output_dir = Path(output_dir)
-    plots_dir = output_dir / 'plots'
-    
+
     # PDF output file
     pdf_file = output_dir / f'{tag}_{config_hash}_report.pdf'
     
@@ -154,57 +153,54 @@ def create_plots_pdf(config_file, config_hash, tag, output_dir):
     story.append(Paragraph("Analysis Plots", heading_style))
     story.append(Spacer(1, 0.2*inch))
     
-    # Find all plot files recursively (handle nested folder structure like era/plotname.png)
-    if plots_dir.exists():
-        plot_files = sorted(list(plots_dir.glob('**/*.png')) + list(plots_dir.glob('**/*.jpg')))
-        
-        if plot_files:
-            # Group plots by directory (era)
-            plots_by_dir = {}
-            for plot_file in plot_files:
-                # Skip the report itself
-                if 'report' in plot_file.name:
-                    continue
-                
-                # Get the relative directory path from plots_dir
-                rel_dir = plot_file.parent.relative_to(plots_dir)
-                dir_name = str(rel_dir) if str(rel_dir) != '.' else 'Root'
-                
-                if dir_name not in plots_by_dir:
-                    plots_by_dir[dir_name] = []
-                plots_by_dir[dir_name].append(plot_file)
-            
-            # Add plots organized by directory/era
-            for dir_name in sorted(plots_by_dir.keys()):
-                story.append(Paragraph(f"Era: {dir_name}", styles['Heading2']))
-                story.append(Spacer(1, 0.2*inch))
-                
-                for plot_file in sorted(plots_by_dir[dir_name]):
-                    try:
-                        # Add plot title (filename)
-                        plot_title = plot_file.stem.replace('_', ' ').title()
-                        story.append(Paragraph(plot_title, styles['Heading3']))
-                        story.append(Spacer(1, 0.1*inch))
-                        
-                        # Add the image
-                        if plot_file.suffix.lower() in ['.png', '.jpg']:
-                            img_width, img_height = get_image_size(str(plot_file))
-                            img = Image(str(plot_file), width=img_width, height=img_height)
-                            story.append(img)
-                        
-                        story.append(Spacer(1, 0.2*inch))
-                        
-                        # Add page break after each plot to avoid crowding
-                        story.append(PageBreak())
-                        
-                    except Exception as e:
-                        print(f"Warning: Could not add plot {plot_file}: {e}")
-                        story.append(Paragraph(f"Error adding plot {plot_file.name}: {e}", styles['Normal']))
-                        story.append(Spacer(1, 0.2*inch))
-        else:
-            story.append(Paragraph("No plot files found in the plots directory.", styles['Normal']))
+    # Plots now live under each era's own output folder: output_dir/{era}/plots/{file}.
+    # Walk every era's plots/ subfolder rather than a single shared plots_dir.
+    plot_files = sorted(list(output_dir.glob('*/plots/**/*.png')) + list(output_dir.glob('*/plots/**/*.jpg')))
+
+    if plot_files:
+        # Group plots by era: plot_file.parent is .../{era}/plots, so the era
+        # name is one level further up.
+        plots_by_dir = {}
+        for plot_file in plot_files:
+            # Skip the report itself
+            if 'report' in plot_file.name:
+                continue
+
+            dir_name = plot_file.parent.parent.name
+
+            if dir_name not in plots_by_dir:
+                plots_by_dir[dir_name] = []
+            plots_by_dir[dir_name].append(plot_file)
+
+        # Add plots organized by directory/era
+        for dir_name in sorted(plots_by_dir.keys()):
+            story.append(Paragraph(f"Era: {dir_name}", styles['Heading2']))
+            story.append(Spacer(1, 0.2*inch))
+
+            for plot_file in sorted(plots_by_dir[dir_name]):
+                try:
+                    # Add plot title (filename)
+                    plot_title = plot_file.stem.replace('_', ' ').title()
+                    story.append(Paragraph(plot_title, styles['Heading3']))
+                    story.append(Spacer(1, 0.1*inch))
+
+                    # Add the image
+                    if plot_file.suffix.lower() in ['.png', '.jpg']:
+                        img_width, img_height = get_image_size(str(plot_file))
+                        img = Image(str(plot_file), width=img_width, height=img_height)
+                        story.append(img)
+
+                    story.append(Spacer(1, 0.2*inch))
+
+                    # Add page break after each plot to avoid crowding
+                    story.append(PageBreak())
+
+                except Exception as e:
+                    print(f"Warning: Could not add plot {plot_file}: {e}")
+                    story.append(Paragraph(f"Error adding plot {plot_file.name}: {e}", styles['Normal']))
+                    story.append(Spacer(1, 0.2*inch))
     else:
-        story.append(Paragraph(f"Plots directory not found: {plots_dir}", styles['Normal']))
+        story.append(Paragraph(f"No plot files found under {output_dir}/<era>/plots/.", styles['Normal']))
     
     # ===== BUILD PDF =====
     try:

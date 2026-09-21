@@ -6,14 +6,17 @@ Usage:
     python scripts/rootHists.py \\
         --tag earlyApril \\
         --hash 0e454e8b0284 \\
-        --outputDir /path/to/plots \\
+        --outputDir /path/to/outputs/earlyApril/0e454e8b0284 \\
         [--configFile ../config.yaml] \\
-        [--filter UL2018 [UL2017/MC_mu/SingleTop ...]]
+        [--filter UL2018 [UL2017/MC_mu/SingleTop ...]] \\
+        [--sample]
 
-Outputs per era (inside --outputDir/{era}/):
-  - {histName}.png
-  - {histName}.pdf
-  - rootHists.root  (all TH1F objects)
+Outputs per era (inside --outputDir/{era}/plots/), named
+{tag}_{hash}_{era}_{sample|full}_{histName}.{ext}:
+  - {file_stub}_{histName}.png
+  - {file_stub}_{histName}.pdf
+  - {file_stub}_{histName}.C
+  - {file_stub}_rootHists.root  (all TH1F objects)
 """
 
 import argparse
@@ -80,16 +83,17 @@ def bh_to_th1(bh_hist, name: str, title: str) -> TH1F:
 
 
 def get_aggregated_coffea_path(output_dir: Path, tag: str, era: str,
-                               data_mc: str, group: str, region_label: str = "A") -> Path:
-    return output_dir / era / data_mc / group / f"{tag}_{era}_{data_mc}_{group}_region{region_label}_selectionHists.coffea"
+                               data_mc: str, group: str, region_label: str = "A",
+                               sample_suffix: str = "") -> Path:
+    return output_dir / era / data_mc / group / f"{tag}_{era}{sample_suffix}_{data_mc}_{group}_region{region_label}_selectionHists.coffea"
 
 
-def get_qcd_template_path(output_dir: Path, tag: str, era: str) -> Path:
+def get_qcd_template_path(output_dir: Path, tag: str, era: str, sample_suffix: str = "") -> Path:
     """Data-driven QCD template (run_all.py --buildQCDTemplate): region-B Data minus
     non-QCD MC, already reweighted by the ABCD transfer factor -- see that step's
     docstring in run_all.py. Replaces the QCD group's entry in the stack.
     """
-    return output_dir / era / f"{tag}_{era}_QCDTemplate_selectionHists.coffea"
+    return output_dir / era / f"{tag}_{era}{sample_suffix}_QCDTemplate_selectionHists.coffea"
 
 
 def make_mc_total(mc_hists: list) -> TH1F:
@@ -99,6 +103,75 @@ def make_mc_total(mc_hists: list) -> TH1F:
     for h in mc_hists[1:]:
         total.Add(h)
     return total
+
+
+def build_variant_total(mc_coffea: dict, sorted_groups: list, era: str, hist_name: str, variant: str):
+    """Sum one weight-systematic variant's histogram across every MC group for
+    hist_name, falling back to that group's *nominal* histogram wherever the
+    variant is absent (missing entirely for a group that predates --systematics,
+    or the data-driven QCD template, which is built by buildQCDTemplate.py from
+    Data minus MC in region B -- a different pipeline that has no weight-variant
+    equivalent at all). Falling back to nominal there is the correct "no
+    variance from this source for this contribution" statement, not a
+    workaround -- silently dropping that group's yield from the variant total
+    would instead bias the deviation computed against it.
+
+    Returns None if no group had this variant at all (nothing to build).
+    """
+    total = None
+    any_found = False
+    for group in sorted_groups:
+        key = f"{era}_MC_mu_{group}"
+        syst_key = f"{era}_MC_mu_{group}_syst"
+        variant_bh = mc_coffea[group].get(syst_key, {}).get(hist_name, {}).get(variant)
+        if variant_bh is not None:
+            any_found = True
+            h = bh_to_th1(variant_bh, f"h_{hist_name}_{group}_{variant}", group)
+        else:
+            nominal_bh = mc_coffea[group].get(key, {}).get(hist_name)
+            if nominal_bh is None:
+                continue
+            h = bh_to_th1(nominal_bh, f"h_{hist_name}_{group}_{variant}_nomfallback", group)
+        if total is None:
+            total = h.Clone(f"mc_total_{hist_name}_{variant}")
+        else:
+            total.Add(h)
+    return total if any_found else None
+
+
+def compute_syst_band(mc_coffea: dict, sorted_groups: list, era: str, hist_name: str,
+                       h_mc_total: TH1F) -> list:
+    """Per-bin total weight-only systematic uncertainty: for each source with an
+    Up/Down pair present anywhere in mc_coffea, take the envelope
+    max(|up-nominal|, |down-nominal|) per bin, then combine sources in
+    quadrature (treated as independent). Returns a list of per-bin absolute
+    uncertainties (same length as h_mc_total's bins, 1-indexed access via
+    result[i-1]), or an all-zero list if no systematic variants are present
+    anywhere for this histogram (e.g. --systematics was never run).
+    """
+    nbins = h_mc_total.GetNbinsX()
+    # Discover source names from whichever group has the richest histsSyst set
+    # for this histogram (variant keys look like "bTagUp"/"bTagDown").
+    variants_seen = set()
+    for group in sorted_groups:
+        syst_key = f"{era}_MC_mu_{group}_syst"
+        variants_seen.update(mc_coffea[group].get(syst_key, {}).get(hist_name, {}).keys())
+    sources = sorted({v[:-2] for v in variants_seen if v.endswith("Up")} &
+                      {v[:-4] for v in variants_seen if v.endswith("Down")})
+
+    total_sq = [0.0] * nbins
+    for source in sources:
+        h_up = build_variant_total(mc_coffea, sorted_groups, era, hist_name, f"{source}Up")
+        h_down = build_variant_total(mc_coffea, sorted_groups, era, hist_name, f"{source}Down")
+        if h_up is None or h_down is None:
+            continue
+        for i in range(1, nbins + 1):
+            nom = h_mc_total.GetBinContent(i)
+            dev_up = h_up.GetBinContent(i) - nom
+            dev_down = h_down.GetBinContent(i) - nom
+            source_err = max(abs(dev_up), abs(dev_down))
+            total_sq[i - 1] += source_err ** 2
+    return [v ** 0.5 for v in total_sq]
 
 
 def style_canvas():
@@ -115,7 +188,7 @@ def style_canvas():
 
 def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
               h_mc_total: TH1F, hist_cfg: dict, era: str, lumi: float,
-              channel: str = "#mu + jets"):
+              channel: str = "#mu + jets", mc_syst_err: list = None):
     """Draw Data/MC comparison with ratio panel on an existing TCanvas."""
     canvas.Clear()
     canvas.cd()
@@ -217,11 +290,18 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
     h_ratio.SetMarkerColor(ROOT.kBlack)
     h_ratio.SetLineColor(ROOT.kBlack)
 
-    # MC stat uncertainty band (centered at 1)
+    # Uncertainty band (centered at 1): MC stat, combined in quadrature with
+    # the weight-only systematic envelope (mc_syst_err, from
+    # config.yaml's weightSystematics via buildSelectionHists.py --systematics)
+    # when available -- falls back to stat-only (the original behavior) when
+    # mc_syst_err is None or all-zero, e.g. --systematics was never run for
+    # this hash, or this is a region-B call (no systematics support there yet).
     h_unc_band = h_mc_total.Clone("unc_band")
     for i in range(1, h_mc_total.GetNbinsX() + 1):
         mc_val = h_mc_total.GetBinContent(i)
-        mc_err = h_mc_total.GetBinError(i)
+        mc_stat_err = h_mc_total.GetBinError(i)
+        syst_err = mc_syst_err[i - 1] if mc_syst_err else 0.0
+        mc_err = (mc_stat_err ** 2 + syst_err ** 2) ** 0.5
         if mc_val > 0:
             h_unc_band.SetBinContent(i, 1.0)
             h_unc_band.SetBinError(i, mc_err / mc_val)
@@ -276,17 +356,21 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     hist_details = config['histDetails']
     lumi = config['DataLumiInfo'][era]['Lumi']
 
-    era_out = output_dir / era
+    sample_suffix = '_sample' if args.sample else ''
+    file_stub = f"{tag}_{args.hash}_{era}_{'sample' if args.sample else 'full'}"
+
+    era_out = output_dir / era / 'plots'
     era_out.mkdir(parents=True, exist_ok=True)
 
-    root_file = TFile(str(era_out / "rootHists.root"), "RECREATE")
+    root_file = TFile(str(era_out / f"{file_stub}_rootHists.root"), "RECREATE")
 
     canvas = TCanvas("c1", "c1", 800, 800)
     style_canvas()
 
     # Load data coffea
     data_key = f"{era}_Data_mu_SingleMuon"
-    data_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "Data_mu", "SingleMuon")
+    data_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "Data_mu", "SingleMuon",
+                                                   sample_suffix=sample_suffix)
     if not data_coffea_path.exists():
         print(f"  [WARN] Data coffea not found for {era}: {data_coffea_path}. Skipping era.")
         root_file.Close()
@@ -299,7 +383,8 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     for group in mc_groups_config:
         if not matches_filter(args.filter, era, 'MC_mu', group):
             continue
-        mc_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "MC_mu", group)
+        mc_coffea_path = get_aggregated_coffea_path(args.input_base, tag, era, "MC_mu", group,
+                                                      sample_suffix=sample_suffix)
         if not mc_coffea_path.exists():
             print(f"  [WARN] MC coffea not found: {mc_coffea_path}. Skipping group {group}.")
             continue
@@ -312,7 +397,7 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     # script usable before that step has been run, rather than hard-failing.
     qcd_group = getattr(args, 'qcdGroup', 'QCD')
     if qcd_group in mc_coffea:
-        qcd_template_path = get_qcd_template_path(args.input_base, tag, era)
+        qcd_template_path = get_qcd_template_path(args.input_base, tag, era, sample_suffix=sample_suffix)
         if qcd_template_path.exists():
             qcd_template = load(qcd_template_path)[f"{era}_QCDTemplate"]
             mc_coffea[qcd_group] = {f"{era}_MC_mu_{qcd_group}": qcd_template}
@@ -371,14 +456,19 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
         h_mc_total = make_mc_total(mc_hists)
         h_mc_total.SetDirectory(0)
 
+        # Weight-only systematic band (config.yaml's weightSystematics, built by
+        # buildSelectionHists.py --systematics) -- all-zero list if no group has
+        # any histsSyst for this histogram, which make_plot treats as stat-only.
+        mc_syst_err = compute_syst_band(mc_coffea, sorted_groups, era, hist_name, h_mc_total)
+
         # Draw
         kept_refs = make_plot(canvas, h_data, mc_stack, h_mc_total,
-                              hist_cfg, era, lumi)
+                              hist_cfg, era, lumi, mc_syst_err=mc_syst_err)
 
         # Save images
-        canvas.SaveAs(str(era_out / f"{hist_name}.png"))
-        canvas.SaveAs(str(era_out / f"{hist_name}.pdf"))
-        canvas.SaveAs(str(era_out / f"{hist_name}.C"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.png"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.pdf"))
+        canvas.SaveAs(str(era_out / f"{file_stub}_{hist_name}.C"))
 
         # Write TH1F objects to ROOT file
         root_file.cd()
@@ -410,8 +500,9 @@ def main():
                         default=str(Path(__file__).parent.parent / 'config.yaml'),
                         help='Path to config.yaml (default: ../config.yaml relative to this script)')
     parser.add_argument('--outputDir', type=str, default=None,
-                        help='Directory where per-era plot folders will be created. '
-                             'Defaults to outputs/{tag}/{hash}/plots/ relative to the script.')
+                        help='outputs/{tag}/{hash}/ directory to read histograms from and write into. '
+                             'Plots for each era are written to <outputDir>/{era}/plots/. '
+                             'Defaults to outputs/{tag}/{hash}/ relative to the script.')
     parser.add_argument('--filter', nargs='+', default=None, metavar='FILTER',
                         help='Filter by era[/DataMC[/group]]. '
                              'Multiple filters are OR-ed. E.g.: --filter UL2018 UL2017/MC_mu/SingleTop')
@@ -420,6 +511,10 @@ def main():
                              '(run_all.py --buildQCDTemplate), if that template file exists for the era '
                              '(default: QCD). Falls back to plain QCD MC with a warning if the template '
                              "hasn't been built yet.")
+    parser.add_argument('--sample', action='store_true',
+                        help='Read the "_sample" (first-file-only, run_all.py --sample) histograms for '
+                             'this tag/hash instead of the full ones, and mark every plot filename '
+                             "'sample' instead of 'full' accordingly.")
     args = parser.parse_args()
 
     config = load_config(Path(args.configFile))
@@ -431,8 +526,7 @@ def main():
         print(f"Error: Input directory does not exist: {args.input_base}", file=sys.stderr)
         sys.exit(1)
 
-    output_dir = Path(args.outputDir) if args.outputDir else args.input_base / 'plots'
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.outputDir) if args.outputDir else args.input_base
 
     eras = list(config['NgenandXsec'].keys())
     for era in eras:

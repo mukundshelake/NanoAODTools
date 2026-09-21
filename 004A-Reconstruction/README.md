@@ -6,8 +6,10 @@ already handled upstream.
 
 ## Inputs
 
-- `selectionII_{tag}_{era}_datasets.json` from 003-ObjectSelectionII, fetched into
-  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
+- `selectionII_{era}_datasets.json`: built fresh from the 003-ObjectSelectionII
+  output on disk via `--generateSelectionIIDatasetJSON --selectionIITag <tag>
+  --selectionIIHash <hash>` (into `inputs/`, and this run's `outputs/{tag}/{hash}/
+  inputs/` snapshot).
 
 ## What it does
 
@@ -29,13 +31,13 @@ equal-top-mass vs. pinned-172.5 constraint).
 ## Outputs
 
 - Skim ROOT files: `{STORAGE}/reconstruction/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/*_Skim.root`
-- `reconstruction_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — input for 004B-BDT.
+- `reconstruction_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — input for 004B-BDTVariables.
 - `--makeDeltaPlots` — reconstructed-vs-generator top-mass residual plots (`deltaMassPlots.py`), MC only.
 
 ## Running it
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateSelectionIIDatasetJSON --selectionIITag <tag> --selectionIIHash <hash>
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript
 scripts/run_all_{tag}.sh

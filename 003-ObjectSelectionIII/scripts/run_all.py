@@ -3,11 +3,19 @@
 Master script to generate all outputs for 003-ObjectSelectionIII chapter.
 
 Usage:
-    python scripts/run_all.py [--force] [--tag TAG_NAME]
-    
-Options:
-    --force: Regenerate outputs even if config hash already exists
+    python scripts/run_all.py --tag TAG_NAME [--force] [--filter FILTER ...] STEP_FLAGS
+
+Options (see --help for the full list):
     --tag: Create a named tag symlink to this run (e.g., "baseline", "paper_v1")
+    --force: Regenerate outputs even if they already exist for this config hash
+    --filter: Restrict to era[/DataMC[/group[/dataset]]], OR-ed across multiple values
+    --sample: Quick-look mode -- first file per dataset only, and every filename this
+        run reads/writes gets a "_sample" marker, so it never collides with a full run's
+        files. Must be passed consistently to every step of one pipeline pass.
+
+Step flags (run in this order for a full pass -- see README.md):
+    --generateSelectionIIDatasetJSON / --fetchABCDScaleFactor / --buildSelectionHists /
+    --aggregrateGroupHists / --buildQCDTemplate / --makeplots
 """
 
 import argparse
@@ -111,15 +119,27 @@ def main():
     parser.add_argument('--printHash', action='store_true',
                        help='Print the config hash and exit (useful for debugging)')
     parser.add_argument('--sample', action='store_true',
-                       help='Only add the first file of each dataset to the process list JSON (for testing purposes)')
+                       help='Quick-look mode: only process the first file of each dataset, and read/write '
+                            'every histogram filename with a "_sample" marker so a full run never mistakes '
+                            'these for its own output (and vice versa). Must be passed consistently to every '
+                            'step of a given run -- build, aggregate, QCD template, and makeplots.')
     parser.add_argument('--workers', type=int, default=15,
                        help='Number of parallel workers passed to runSelection.py (default: 15)')
+    parser.add_argument('--systematics', action='store_true',
+                       help='With --buildSelectionHists: also build weight-only systematic variant '
+                            'histograms (config.yaml\'s weightSystematics). --aggregrateGroupHists and '
+                            '--makeplots need no flag -- they pick up variants automatically from whatever '
+                            'the per-dataset files already contain. CAUTION: this does not change the output '
+                            'filename, so if a per-dataset histogram file already exists for this tag/hash '
+                            'from an earlier --buildSelectionHists run without --systematics, it will be '
+                            'silently reused as-is (no variants) unless you also pass --force.')
     args = parser.parse_args()
 
     # parsing arguments
     print("Arguments:")
     print(f"  --tag: {args.tag}")
     print(f"  --sample: {args.sample}")
+    print(f"  --systematics: {args.systematics}")
     print(f"  --generateSelectionIIDatasetJSON: {args.generateSelectionIIDatasetJSON}")
     print(f"  --selectionIITag: {args.selectionIITag}")
     print(f"  --selectionIIHash: {args.selectionIIHash}")
@@ -134,6 +154,11 @@ def main():
     print(f"  --force: {args.force}")
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
+
+    # Every stage's input/output filename below is suffixed with this when --sample
+    # is set, so a sample run and a full run of the same tag/hash/era never collide
+    # on a filename -- see --sample's help text above.
+    sample_suffix = '_sample' if args.sample else ''
 
     # Paths
     base_dir = Path(__file__).parent.parent
@@ -309,7 +334,7 @@ def main():
                         outputDirectory = output_dir / era / DataMC / group / dataset
                         outputDirectory.mkdir(parents=True, exist_ok=True)
                         region_label = REGION_LABELS[args.regionFilter]
-                        outputFileName = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_region{region_label}_selectionHists.coffea'
+                        outputFileName = f'{args.tag}_{DataMC}_{group}_{dataset}_{era}{sample_suffix}_region{region_label}_selectionHists.coffea'
                         # Skip if output file already exists and --force is not set
                         if (outputDirectory / outputFileName).exists() and not args.force:
                             print(f"Output file already exists for {era}/{DataMC}/{group}/{dataset} at {outputDirectory / outputFileName}. Skipping (use --force to overwrite).")
@@ -329,6 +354,10 @@ def main():
                                       f"(needed for --regionFilter 1).")
                                 sys.exit(1)
                             command += ['--abcdScaleFactorFile', str(abcd_sf_file)]
+                        if args.sample:
+                            command.append('--sample')
+                        if args.systematics:
+                            command.append('--systematics')
                         subprocess.run(command, check=True)
                         print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
     # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
@@ -351,15 +380,17 @@ def main():
                     # Loop over the histDetails elements
                     groupHists = {}
                     groupHists[f'{era}_{DataMC}_{group}'] = {}
+                    groupSystHists = {}  # histInfo -> {variant: aggregated hist}, only for variants any dataset actually had
                     for histInfo in config['histDetails']:
                         # create empty hist histogram for incrementing later
                         hist_ = None
+                        hist_syst = {}
                         print(f"        Working on histogram {histInfo}")
                         for dataset in config['NgenandXsec'][era][DataMC][group]:
                             if not matches_filter(args.filter, era, DataMC, group, dataset):
                                 continue
                             print(f"      Dataset: {dataset}")
-                            histFile = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}_region{region_label}_selectionHists.coffea'
+                            histFile = output_dir / era / DataMC / group / dataset / f'{args.tag}_{DataMC}_{group}_{dataset}_{era}{sample_suffix}_region{region_label}_selectionHists.coffea'
                             if not histFile.exists():
                                 print(f"Error: Histogram file not found for {era}/{DataMC}/{group}/{dataset} at {histFile}")
                                 continue
@@ -377,10 +408,21 @@ def main():
                             else:
                                 hist_ += histData[key]['hists'][histInfo] * weight
                             print(f"            Added histogram for {era}/{DataMC}/{group}/{dataset} with weight {weight}")
+                            # Weight-only systematic variants (buildSelectionHists.py --systematics),
+                            # if this dataset's file has them -- same Lumi*Xsec/Ngen weighting as nominal.
+                            for variant, vhist in histData[key].get('histsSyst', {}).get(histInfo, {}).items():
+                                if variant not in hist_syst:
+                                    hist_syst[variant] = vhist * weight
+                                else:
+                                    hist_syst[variant] += vhist * weight
                         if hist_ is not None:
                             groupHists[f'{era}_{DataMC}_{group}'][histInfo] = hist_
-                    # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}_{DataMC}_{group}_region{X}_selectionHists.coffea
-                    output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}_{DataMC}_{group}_region{region_label}_selectionHists.coffea'
+                        if hist_syst:
+                            groupSystHists[histInfo] = hist_syst
+                    if groupSystHists:
+                        groupHists[f'{era}_{DataMC}_{group}_syst'] = groupSystHists
+                    # Save the aggregated histograms to outputs/{tag}/{config_hash}/{era}/{DataMC}/{group}/{args.tag}_{era}{sample_suffix}_{DataMC}_{group}_region{X}_selectionHists.coffea
+                    output_file = output_dir / era / DataMC / group / f'{args.tag}_{era}{sample_suffix}_{DataMC}_{group}_region{region_label}_selectionHists.coffea'
                     # check if output file already exists and --force is not set
                     if output_file.exists() and not args.force:
                         print(f"Aggregated histogram file already exists for {era}/{DataMC}/{group} at {output_file}. Skipping (use --force to overwrite).")
@@ -396,7 +438,7 @@ def main():
                 continue
             print(f"Processing era: {era}")
             data_file = (output_dir / era / 'Data_mu' / 'SingleMuon' /
-                         f'{args.tag}_{era}_Data_mu_SingleMuon_region{region_b_label}_selectionHists.coffea')
+                         f'{args.tag}_{era}{sample_suffix}_Data_mu_SingleMuon_region{region_b_label}_selectionHists.coffea')
             if not data_file.exists():
                 print(f"  Error: region-B Data histogram not found: {data_file}. "
                       f"Run --aggregrateGroupHists --regionFilter 1 first. Skipping era.")
@@ -414,7 +456,7 @@ def main():
                 h = data_hists[histInfo].copy()
                 for group in bkg_groups:
                     bkg_file = (output_dir / era / 'MC_mu' / group /
-                                f'{args.tag}_{era}_MC_mu_{group}_region{region_b_label}_selectionHists.coffea')
+                                f'{args.tag}_{era}{sample_suffix}_MC_mu_{group}_region{region_b_label}_selectionHists.coffea')
                     if not bkg_file.exists():
                         print(f"  [WARN] region-B histogram not found for background group '{group}': {bkg_file}. "
                               f"Treating its contribution as 0 for '{histInfo}'.")
@@ -432,7 +474,7 @@ def main():
                     floored_report[histInfo] = n_negative
                     view[view < 0] = 0
                 template[histInfo] = h
-            output_file = output_dir / era / f'{args.tag}_{era}_QCDTemplate_selectionHists.coffea'
+            output_file = output_dir / era / f'{args.tag}_{era}{sample_suffix}_QCDTemplate_selectionHists.coffea'
             save({f'{era}_QCDTemplate': template}, output_file)
             if floored_report:
                 print(f"  [WARN] Floored negative bins (per variable): {floored_report}")
@@ -446,24 +488,23 @@ def main():
             print(f"Error: rootHists.py script not found at {root_hists_script}")
             sys.exit(1)
         
-        plots_dir = output_dir / 'plots'
-        plots_dir.mkdir(parents=True, exist_ok=True)
-        
         command = [
             sys.executable, str(root_hists_script),
             '--tag', args.tag,
             '--hash', config_hash,
-            '--outputDir', str(plots_dir),
+            '--outputDir', str(output_dir),
             '--configFile', str(config_path),
             '--qcdGroup', args.qcdGroup,
         ]
-        
+
         # Add filter argument if provided
         if args.filter:
             command.extend(['--filter'] + args.filter)
-        
+        if args.sample:
+            command.append('--sample')
+
         subprocess.run(command, check=True)
-        print(f"Finished creating plots. Output saved to {plots_dir}")
+        print(f"Finished creating plots. Output saved under {output_dir}/<era>/plots/")
         
         # Create comprehensive PDF report with all plots and config details
         print("Creating comprehensive PDF report...")

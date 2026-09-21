@@ -1,4 +1,4 @@
-# 004B-BDT — Event-Shape / BDT Input Variables
+# 004B-BDTVariables — Event-Shape / BDT Input Variables
 
 Takes the `reconstruction` skims and computes 17 event-shape and Fox-Wolfram-moment
 variables per event, for later use as BDT training/inference input. This chapter only
@@ -6,8 +6,10 @@ computes the variable branches — it does not train a classifier.
 
 ## Inputs
 
-- `reconstruction_{tag}_{era}_datasets.json` from 004A-Reconstruction, fetched into
-  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
+- `reconstruction_{era}_datasets.json`: built fresh from the 004A-Reconstruction
+  output on disk via `--generateReconstructionDatasetJSON --reconstructionTag
+  <tag> --reconstructionHash <hash>` (into `inputs/`, and this run's
+  `outputs/{tag}/{hash}/inputs/` snapshot).
 
 ## What it does
 
@@ -39,7 +41,7 @@ full-tree pass):
 ## Running it
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateReconstructionDatasetJSON --reconstructionTag <tag> --reconstructionHash <hash>
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript
 scripts/run_all_{tag}.sh

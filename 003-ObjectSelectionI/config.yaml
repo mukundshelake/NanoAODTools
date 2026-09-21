@@ -17,28 +17,54 @@ golden_json_urls:
 # ---------------------------------------------------------------------------
 # Event-level selection cuts passed directly to PostProcessor (cut= argument).
 # All cuts are joined with &&. The list-generation script combines these.
+#
+# electronVetoCut / extraMuonVetoCut: additional-lepton veto, to suppress
+# ttbar_FullyLeptonic (and other dileptonic) contamination of this single-muon
+# semileptonic selection -- muonCut only counts *tight* muons, so it never
+# rejects an event just because it also has a second, non-tight lepton.
+# extraMuonVetoCut re-counts muons under a looser WP (pt>15, looseId,
+# pfRelIso04_all<0.25) and requires that count to still be 1 -- since the tight
+# signal muon always also passes this looser WP, `== 1` means "no additional
+# muon beyond the signal one". electronVetoCut rejects any event with a loose
+# electron at all (standard CMS veto-electron recipe: pt/eta_SC acceptance +
+# barrel-endcap gap exclusion, MVA Iso WP90, conversion veto, impact
+# parameter). Era-independent thresholds (same rationale as abcdRegion below).
+#
+# electronVetoCut needs Electron_* branches that only exist in the
+# `earlySeptember` preselection production onward -- do not run this cut
+# string against older preselection inputs that lack them (TTreeFormula will
+# fail on the missing branch). extraMuonVetoCut only needs Muon_looseId/
+# pfRelIso04_all, already present in every existing production.
 # ---------------------------------------------------------------------------
 SelectionCuts:
   UL2016preVFP:
     muonCut:  "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2598 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "(HLT_IsoMu24 || HLT_IsoTkMu24)"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2016postVFP:
     muonCut:  "Sum$(Muon_pt > 26 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2489 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "(HLT_IsoMu24 || HLT_IsoTkMu24)"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2017:
     muonCut:  "Sum$(Muon_pt > 29 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.3040 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "HLT_IsoMu27"
     METFlags: "Flag_goodVertices && Flag_globalSuperTightHalo2016Filter && Flag_HBHENoiseFilter && Flag_HBHENoiseIsoFilter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_BadPFMuonFilter && Flag_BadPFMuonDzFilter && Flag_eeBadScFilter"
   UL2018:
     muonCut:  "Sum$(Muon_pt > 27 && abs(Muon_eta) < 2.4 && Muon_tightId && Muon_pfRelIso04_all <= 0.2) == 1"
+    extraMuonVetoCut: "Sum$(Muon_pt > 15 && abs(Muon_eta) < 2.4 && Muon_looseId && Muon_pfRelIso04_all < 0.25) == 1"
+    electronVetoCut: "Sum$(Electron_pt > 15 && abs(Electron_eta + Electron_deltaEtaSC) < 2.5 && !(abs(Electron_eta + Electron_deltaEtaSC) > 1.4442 && abs(Electron_eta + Electron_deltaEtaSC) < 1.566) && Electron_mvaFall17V2Iso_WP90 && Electron_convVeto && abs(Electron_dxy) < 0.1 && abs(Electron_dz) < 0.2) == 0"
     bjetCut:  "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_btagDeepFlavB > 0.2783 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 2"
     jetCut:   "Sum$(Jet_pt > 25 && abs(Jet_eta) < 2.4 && Jet_jetId == 6 && (Jet_pt > 50 | Jet_puId > 0)) >= 4"
     HLTCut:   "HLT_IsoMu24"
@@ -46,24 +72,122 @@ SelectionCuts:
 
 # ---------------------------------------------------------------------------
 # Which modules run on MC vs Data.
-# All SF modules are MC-only; Data only gets GoldenJSON filtering (no modules).
+#
+# metXYCorr runs on BOTH (real detector effect present in Data and MC alike,
+# just with different fitted coefficients -- see METXYCorr.py's docstring),
+# placed before selectedObjects so its corrected MET_pt/MET_phi feed the mTW
+# computation there. jetJER/jetVetoMap/muonRochester are NOT here -- see
+# PreSelectionCorrectionModuleList below and JetJER.py's docstring for why
+# they have to run as their own earlier pass
+# (run_all.py --applyPreSelectionCorrections) instead of a ModuleList entry.
 # ---------------------------------------------------------------------------
 ModuleList:
-  MC:   [selectedObjects]
-  Data: [selectedObjects]
+  MC:   [metXYCorr, selectedObjects]
+  Data: [metXYCorr, selectedObjects]
+
+# ---------------------------------------------------------------------------
+# Modules run by run_all.py --applyPreSelectionCorrections, its own earlier
+# PostProcessor pass over the raw preselection files (both DataMC branches
+# now -- jetVetoMap/muonRochester apply to Data too). SelectionCuts'
+# muonCut/extraMuonVetoCut/jetCut/bjetCut are evaluated against the *input*
+# tree before any module in the *main* selection pass (ModuleList above)
+# runs, so a per-object exclusion or resolution/scale correction decided
+# only there would be too late to affect which events/objects get selected
+# -- these need to already be baked into Jet_pt/Jet_mass/Muon_pt by the time
+# those cut strings see them. jetJER is MC-only (nothing to correct
+# simulation resolution against in Data); jetVetoMap (hardware defect) and
+# muonRochester (momentum scale/resolution) are both present in Data too.
+# ---------------------------------------------------------------------------
+PreSelectionCorrectionModuleList:
+  MC:   [jetVetoMap, jetJER, muonRochester]
+  Data: [jetVetoMap, muonRochester]
 
 # ---------------------------------------------------------------------------
 # Per-module configuration. Each module's config dict is passed directly to
 # its constructor. Era-dependent fields are nested under the era key.
 # ---------------------------------------------------------------------------
 Modules:
+  # ---------- MuonRochester (PreSelectionCorrectionModuleList entry, MC and Data) --
+  # roccor.Run2.v3's data file is per calendar year, no preVFP/postVFP split
+  # -- RoccoR2016.txt is the only 2016 table this bundle ships, so it's used
+  # for both. isData is filled in by run_all.py (same pattern as
+  # selectedObjects' is_mc / metXYCorr's isData).
+  muonRochester:
+    UL2016preVFP:
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+    UL2016postVFP:
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+    UL2017:
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2017.txt"
+    UL2018:
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2018.txt"
+  # ---------- JetVetoMap (PreSelectionCorrectionModuleList entry, MC and Data) --
+  # Correction name differs per era (JME POG naming, verified directly
+  # against the fetched files -- Summer19UL16_V1 covers both preVFP/postVFP).
+  jetVetoMap:
+    UL2016preVFP:
+      vetoMapFile: "inputs/SFs/UL2016preVFP_jetvetomaps.json.gz"
+      mapName: "Summer19UL16_V1"
+    UL2016postVFP:
+      vetoMapFile: "inputs/SFs/UL2016postVFP_jetvetomaps.json.gz"
+      mapName: "Summer19UL16_V1"
+    UL2017:
+      vetoMapFile: "inputs/SFs/UL2017_jetvetomaps.json.gz"
+      mapName: "Summer19UL17_V1"
+    UL2018:
+      vetoMapFile: "inputs/SFs/UL2018_jetvetomaps.json.gz"
+      mapName: "Summer19UL18_V1"
+  # ---------- METXYCorr (ModuleList entry, MC and Data) ---------------------
+  # Correction key names (pt_metphicorr_pfmet_{data,mc}, phi_metphicorr_pfmet_
+  # {data,mc}) are fixed across all eras in JME POG's met.json.gz -- only the
+  # file path is era-dependent. isData/metFile are filled in by run_all.py
+  # (same pattern already used for selectedObjects' is_mc).
+  metXYCorr:
+    UL2016preVFP:
+      metFile: "inputs/SFs/UL2016preVFP_met.json.gz"
+    UL2016postVFP:
+      metFile: "inputs/SFs/UL2016postVFP_met.json.gz"
+    UL2017:
+      metFile: "inputs/SFs/UL2017_met.json.gz"
+    UL2018:
+      metFile: "inputs/SFs/UL2018_met.json.gz"
+  # ---------- JetJER (--applyPreSelectionCorrections) -----------------------
+  # NOT in ModuleList above -- deliberately run as its own PostProcessor pass
+  # (see run_all.py's --applyPreSelectionCorrections and JetJER.py's docstring for why
+  # it can't just be another ModuleList entry: SelectionCuts' jetCut/bjetCut
+  # are evaluated against the *input* tree before any ModuleList module runs,
+  # so smearing jets there would be too late to affect which events/jets get
+  # selected). jerFile is resolved relative to this chapter's own directory
+  # (003-ObjectSelectionI/), copied from 003-ObjectSelectionII's fetch of the
+  # same era-only jsonpog-integration file (jet_jerc.json.gz depends only on
+  # era, like the golden JSON -- see 003-II's SF_FETCH_SPECS).
+  # resolutionKey/scaleFactorKey verified directly against the fetched file's
+  # actual CorrectionSet keys (correctionlib), not guessed from convention.
+  jetJER:
+    UL2016preVFP:
+      jerFile: "inputs/SFs/UL2016preVFP_jet_Jerc.json.gz"
+      resolutionKey: "Summer20UL16APV_JRV3_MC_PtResolution_AK4PFchs"
+      scaleFactorKey: "Summer20UL16APV_JRV3_MC_ScaleFactor_AK4PFchs"
+    UL2016postVFP:
+      jerFile: "inputs/SFs/UL2016postVFP_jet_Jerc.json.gz"
+      resolutionKey: "Summer20UL16_JRV3_MC_PtResolution_AK4PFchs"
+      scaleFactorKey: "Summer20UL16_JRV3_MC_ScaleFactor_AK4PFchs"
+    UL2017:
+      jerFile: "inputs/SFs/UL2017_jet_Jerc.json.gz"
+      resolutionKey: "Summer19UL17_JRV2_MC_PtResolution_AK4PFchs"
+      scaleFactorKey: "Summer19UL17_JRV2_MC_ScaleFactor_AK4PFchs"
+    UL2018:
+      jerFile: "inputs/SFs/UL2018_jet_Jerc.json.gz"
+      resolutionKey: "Summer19UL18_JRV2_MC_PtResolution_AK4PFchs"
+      scaleFactorKey: "Summer19UL18_JRV2_MC_ScaleFactor_AK4PFchs"
   selectedObjects:
     UL2016preVFP:
       bTagThreshold: 0.2598
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -86,9 +210,10 @@ Modules:
     UL2016postVFP:
       bTagThreshold: 0.2489
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -111,9 +236,10 @@ Modules:
     UL2017:
       bTagThreshold: 0.3040
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -136,9 +262,10 @@ Modules:
     UL2018:
       bTagThreshold: 0.2783
       abcdRegion:
-        isoTightMax:  0.06
-        metBranch:    "MET_pt"
-        metThreshold: 30.0
+        isoLowMax:   0.06
+        isoHighMin:  0.06
+        mTWLowMax:   45.0
+        mTWHighMin:  45.0
       kinematics:
         Muon:
           lohi:
@@ -880,8 +1007,8 @@ ABCDVariables:
     range: [0.0, 0.5]
     label: "SelMuon PF Rel. Isolation (#DeltaR=0.4)"
     variable: "SelMuon_pfRelIso04_all"
-  met:
+  mTW:
     bins: 50
     range: [0.0, 200.0]
-    label: "MET p_{T} [GeV]"
-    variable: "MET_pt"
+    label: "m_{T}(W) [GeV]"
+    variable: "ABCD_mTW"

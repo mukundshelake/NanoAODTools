@@ -1,3 +1,5 @@
+import math
+
 from PhysicsTools.NanoAODTools.postprocessing.framework.eventloop import Module
 from PhysicsTools.NanoAODTools.postprocessing.framework.datamodel import Collection
 
@@ -11,7 +13,8 @@ class SelectedObjectsProducer(Module):
     Identifies the selected leading muon and the 4 reconstructable jets
     (2 b-tagged + 2 light, taken from the 4 highest-pT selected jets), writes
     their kinematics to flat branches, and tags each event with its ABCD-plane
-    region (muon isolation x MET) for a QCD-multijet background estimate.
+    region (muon isolation x W transverse mass) for a QCD-multijet background
+    estimate.
 
     Selection logic mirrors the event-level cut string in config.yaml so that
     downstream modules (SF weights, reco, BDT) have a single consistent source
@@ -25,12 +28,33 @@ class SelectedObjectsProducer(Module):
     region. Reuses the exact muon _fill_muon() already selected (NanoAODTools
     builds each Event strictly from the input tree -- see eventloop.py -- so a
     separate module could not read a branch this module writes; tagging has to
-    happen here, in the same pass, to reuse sel_muon directly). Region codes:
-        0 = A: tight iso, high MET  -- signal region
-        1 = B: loose iso, high MET
-        2 = C: tight iso, low MET
-        3 = D: loose iso, low MET   -- QCD-enriched template region
-       -1 = undefined (no selected muon; isolation is meaningless)
+    happen here, in the same pass, to reuse sel_muon directly).
+
+    The second ABCD-plane axis is the W transverse mass, mTW = sqrt(2 * pT(mu)
+    * MET_pt * (1 - cos(dphi(mu, MET)))) -- chosen over raw MET_pt because a
+    genuine W->mu·nu decay produces a well-understood, sharply-edged mTW shape
+    that isn't as susceptible to the low-MET resolution tail raw MET has (that
+    tail is what caused real ttbar semi-leptonic MC to over-predict the
+    tight-iso/low-MET/high-muon-pT corner of the old MET-based scheme).
+    MET_pt/MET_phi are the standard NanoAOD branches -- not configurable, since
+    there's no actual need to swap MET flavors here.
+
+    Each axis (isolation, mTW) is classified with two independent thresholds,
+    not one: e.g. "tight" iso is <= isoLowMax, "loose" iso is >= isoHighMin.
+    With isoLowMax == isoHighMin (and mTWLowMax == mTWHighMin) every event
+    still falls unambiguously on one side, exactly like a single shared
+    threshold -- that's the default config today. But if the two ever diverge
+    (e.g. widening isoHighMin above isoLowMax to open a gap), an event whose
+    isolation or mTW falls strictly between its pair's two values doesn't
+    unambiguously belong to "tight/loose" or "low/high" -- that event's region
+    is undefined (see below), not assigned to a bucket by an implicit >=/<=
+    tie-break. Region codes:
+        0 = A: tight iso, high mTW  -- signal region
+        1 = B: loose iso, high mTW
+        2 = C: tight iso, low mTW
+        3 = D: loose iso, low mTW   -- QCD-enriched template region
+       -1 = undefined (no selected muon, OR iso/mTW falls in an open gap
+            between its low/high thresholds)
     QCD estimate (computed downstream, NOT by this module): N_A ~= N_B*N_C/N_D.
 
     Expected config keys
@@ -45,9 +69,10 @@ class SelectedObjectsProducer(Module):
         jetId:   int
     bTagThreshold: float
     abcdRegion:
-      isoTightMax:  float  # SelMuon_pfRelIso04_all <= this => "tight" (A/C)
-      metBranch:    str    # e.g. "MET_pt"
-      metThreshold: float  # metBranch >= this => "high MET" (A/B)
+      isoLowMax:   float  # SelMuon_pfRelIso04_all <= this => "tight" (A/C)
+      isoHighMin:  float  # SelMuon_pfRelIso04_all >= this => "loose" (B/D)
+      mTWLowMax:   float  # mTW < this  => "low mTW"  (C/D)
+      mTWHighMin:  float  # mTW >= this => "high mTW" (A/B)
     branchNames:
       muon:           str   # prefix, e.g. "SelMuon"
       leadingbJet:    str   # e.g. "leadingbJet"
@@ -82,9 +107,10 @@ class SelectedObjectsProducer(Module):
         self._is_mc       = bool(config.get('is_mc', True))
 
         abcd_cfg          = config['abcdRegion']
-        self.isoTightMax  = float(abcd_cfg['isoTightMax'])
-        self.metBranch    = abcd_cfg['metBranch']
-        self.metThreshold = float(abcd_cfg['metThreshold'])
+        self.isoLowMax    = float(abcd_cfg['isoLowMax'])
+        self.isoHighMin   = float(abcd_cfg['isoHighMin'])
+        self.mTWLowMax    = float(abcd_cfg['mTWLowMax'])
+        self.mTWHighMin   = float(abcd_cfg['mTWHighMin'])
 
     def beginFile(self, inputFile, outputFile, inputTree, wrappedOutputTree):
         self.out = wrappedOutputTree
@@ -112,7 +138,8 @@ class SelectedObjectsProducer(Module):
 
         abcd_prefix = self.bNames["abcdRegion"]
         self.out.branch(f"{abcd_prefix}_isTightIso", "O")
-        self.out.branch(f"{abcd_prefix}_isHighMET",  "O")
+        self.out.branch(f"{abcd_prefix}_isHighMTW",  "O")
+        self.out.branch(f"{abcd_prefix}_mTW",        "F")
         self.out.branch(f"{abcd_prefix}_region",     "I")
 
     def analyze(self, event):
@@ -162,22 +189,50 @@ class SelectedObjectsProducer(Module):
         # See the class docstring for the full region-code convention. Tags
         # only -- never rejects an event.
         prefix = self.bNames["abcdRegion"]
-        met = getattr(event, self.metBranch)
-        is_high_met = met >= self.metThreshold
-        self.out.fillBranch(f"{prefix}_isHighMET", is_high_met)
 
         if sel_muon is not None:
-            is_tight_iso = sel_muon.pfRelIso04_all <= self.isoTightMax
-            if is_tight_iso:
-                region = 0 if is_high_met else 2
+            mTW = self._compute_mTW(sel_muon, event)
+
+            # Each axis is independently "tight/loose" (iso) or "low/high"
+            # (mTW) against its own pair of thresholds. With the low/high
+            # pair equal (today's default), exactly one side is always true
+            # -- the "else: undefined" case below is only reachable once the
+            # two are deliberately set apart to open a gap.
+            is_tight_iso = sel_muon.pfRelIso04_all <= self.isoLowMax
+            is_loose_iso = sel_muon.pfRelIso04_all >= self.isoHighMin
+            is_low_mTW   = mTW < self.mTWLowMax
+            is_high_mTW  = mTW >= self.mTWHighMin
+
+            if is_tight_iso and is_low_mTW:
+                region = 2  # C
+            elif is_tight_iso and is_high_mTW:
+                region = 0  # A
+            elif is_loose_iso and is_low_mTW:
+                region = 3  # D
+            elif is_loose_iso and is_high_mTW:
+                region = 1  # B
             else:
-                region = 1 if is_high_met else 3
+                region = -1  # iso and/or mTW fell in a gap between its thresholds
         else:
+            mTW = 0.0
             is_tight_iso = False
+            is_high_mTW  = False
             region = -1
 
         self.out.fillBranch(f"{prefix}_isTightIso", is_tight_iso)
+        self.out.fillBranch(f"{prefix}_isHighMTW",  is_high_mTW)
+        self.out.fillBranch(f"{prefix}_mTW",        mTW)
         self.out.fillBranch(f"{prefix}_region",     region)
+
+    @staticmethod
+    def _compute_mTW(sel_muon, event):
+        """W transverse mass from the selected muon and MET_pt/MET_phi (the
+        standard NanoAOD MET branches -- not configurable, see class docstring).
+        """
+        dphi = abs(sel_muon.phi - event.MET_phi)
+        if dphi > math.pi:
+            dphi = 2.0 * math.pi - dphi
+        return math.sqrt(2.0 * sel_muon.pt * event.MET_pt * (1.0 - math.cos(dphi)))
 
     def _fill_jets(self, sel_jets):
         # Sort all selected jets by pT descending, then greedily pick the first

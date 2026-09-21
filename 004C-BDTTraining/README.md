@@ -1,6 +1,6 @@
 # 004C-BDTTraining — Parquet Extraction & BDT Training
 
-Takes the `BDTVariables` ROOT files from 004B-BDT, extracts the BDT feature
+Takes the `BDTVariables` ROOT files from 004B-BDTVariables, extracts the BDT feature
 branches plus the `y` training target into parquet files (one, or more if a
 dataset is too bulky, per dataset), and then trains an XGBoost classifier per
 era that distinguishes qqbar-initiated (`y==1`) from gg-initiated (`y==2`)
@@ -15,8 +15,10 @@ not inside `cmsenv`.
 
 ## Inputs
 
-- `BDTVariables_{tag}_{era}_datasets.json` from 004B-BDT, fetched into
-  `inputs/` via `--fetchFromPreviousChapter --previousHash <hash>`.
+- `BDTVariables_{era}_datasets.json`: built fresh from the 004B-BDTVariables output on
+  disk via `--generateBDTVariablesDatasetJSON --BDTVariablesTag <tag>
+  --BDTVariablesHash <hash>` (into `inputs/`, and this run's
+  `outputs/{tag}/{hash}/inputs/` snapshot).
 
 ## What it does
 
@@ -38,7 +40,7 @@ Columns pulled out:
   `SelectedObjectsProducer` and carried through untouched (every stage in
   this pipeline runs with `branchsel=None`).
 - `TargetBranch` (`y`): the truth-level hard-scattering classification
-  filled by `BDTvariableModule` in 004B-BDT (`1`=qqbar, `2`=gg, `3`=qg,
+  filled by `BDTvariableModule` in 004B-BDTVariables (`1`=qqbar, `2`=gg, `3`=qg,
   `4`=qq' diff. flavour, `5`=qq same flavour, `0`=undefined/data).
 
 So a dataset that fits in one accumulated chunk gets a single `_part0.parquet`,
@@ -60,10 +62,15 @@ full schema): keep only events with `y in {1, 2}` and map `1`(qqbar)`->0`,
 into a "background" class); balance the two classes (downsampling by
 default, or `scale_pos_weight` to keep all events); `train_test_split`;
 median/mean imputation (median for the two integer jet-count features);
-`GridSearchCV` over an XGBoost hyperparameter grid; built-in (gain) and
+`GridSearchCV` over an XGBoost hyperparameter grid; a per-class feature
+correlation study (Pearson correlation matrix, computed separately for
+qqbar and gg since the two often correlate differently); a train-vs-test
+overtraining check (Kolmogorov-Smirnov test between the BDT score
+distributions on train and test data, per class); built-in (gain) and
 permutation feature importance; and, if `FeatureSelection.select_features`
-is set, a retrain on just the top-N most important features, with a
-full-vs-reduced AUC comparison. This mirrors the structure of an old,
+is set, a retrain on just the top-N most important features (with its own
+overtraining check), with a full-vs-reduced AUC comparison. This mirrors
+the structure of an old,
 now-deleted ad-hoc training script (recoverable from git history at
 `git show f7fd8f5:004B-BDT/scripts/old_ignore/BDT.py`) which used
 `sklearn.GradientBoostingClassifier` and — a bug this rewrite fixes —
@@ -80,9 +87,13 @@ trained qqbar-vs-*everything-else* rather than strictly qqbar-vs-gg.
   (`bdt_model.pkl`, a `joblib`-pickled `{'model', 'imputer', 'features'}`
   dict), `best_params.json`, `scores.csv`, `feature_importance.csv`,
   `permutation_importance.csv`, `feature_importance_comparison.png`,
-  `roc_curve.png`, a `training_config.yaml` snapshot, `trainBDT_{era}.log`,
+  `roc_curve.png`, `correlation_class0.csv`/`correlation_class1.csv` +
+  `correlation_matrix.png` (per-class feature correlation),
+  `overtraining_check.json` + `overtraining_check.png` (train-vs-test KS
+  test per class), a `training_config.yaml` snapshot, `trainBDT_{era}.log`,
   `run_manifest.json`, and — if feature selection is enabled —
-  `reduced_model_params.json`, `bdt_model_reduced.pkl`, `scores_reduced.csv`.
+  `reduced_model_params.json`, `bdt_model_reduced.pkl`, `scores_reduced.csv`,
+  `overtraining_check_reduced.json`/`overtraining_check_reduced.png`.
   Nested under the **extraction** run's `{parquetHash}` (not a new top-level
   hash) because a training run is only meaningful relative to a specific
   parquet extraction; `training_hash` (from `training_config.yaml`, hashed
@@ -92,7 +103,7 @@ trained qqbar-vs-*everything-else* rather than strictly qqbar-vs-gg.
 ## Running it
 
 ```
-run_all.py --fetchFromPreviousChapter --previousHash <hash>
+run_all.py --generateBDTVariablesDatasetJSON --BDTVariablesTag <tag> --BDTVariablesHash <hash>
 run_all.py --generateProcessListJSON
 run_all.py --writeBashScript
 scripts/run_all_{tag}.sh
