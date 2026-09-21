@@ -75,9 +75,24 @@ if era is None:
 
 print(f"era={era}, isData={is_data}")
 
-# Same module config the local process-list JSON carries. reconstruction runs
-# identically for MC and Data (ModuleList.MC == ModuleList.Data == [reconstruction]).
-mod_cfg = _config["Modules"]["reconstruction"]
+# Same module set the local path runs, read from config.yaml rather than
+# hardcoded here, so adding a ModuleList entry can't leave grid output quietly
+# different from local output (an unknown name raises below instead).
+_module_names = _config["ModuleList"]["Data" if is_data else "MC"]
+print("ModuleList:", _module_names)
+
+
+def _build_modules(module_names):
+    built = []
+    for mod_name in module_names:
+        mod_cfg = _config["Modules"].get(mod_name, {})
+        if mod_name == "reconstruction":
+            built.append(RecoModule(era, mod_cfg))
+        else:
+            raise RuntimeError(
+                f"Unknown module '{mod_name}' in ModuleList. Add it here and ship "
+                f"its source via submit_reconstruction_flexible.py's MODULE_FILES.")
+    return built
 
 p = PostProcessor(
     ".",
@@ -85,7 +100,7 @@ p = PostProcessor(
     cut=None,
     jsonInput=None,
     branchsel=None,
-    modules=[RecoModule(era, mod_cfg)],
+    modules=_build_modules(_module_names),
     noOut=False,
     justcount=False,
     compression="ZLIB:9",

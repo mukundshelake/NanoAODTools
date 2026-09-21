@@ -1,13 +1,35 @@
 #!/usr/bin/env python
 """
 CRAB worker script for the object-selection stage (003-ObjectSelectionI).
-Applies the era's event-level cut string and runs SelectedObjectsProducer,
+Applies the era's event-level cut string and runs config.yaml's ModuleList,
 mirroring scripts/runSelection.py's local per-file event loop exactly.
 
 This script is sent to the grid worker node as an inputFile and executed by
-crab_selection.sh. SelectedObjects.py is shipped alongside it (flat, no
-modules/ subpackage) since it isn't part of the installed NanoAODTools
-package.
+crab_selection.sh. Each ModuleList module's source is shipped alongside it
+(flat, no modules/ subpackage) since they aren't part of the installed
+NanoAODTools package.
+
+NOTE on ModuleList: the module set is read from config.yaml rather than
+hardcoded here. It used to be hardcoded to SelectedObjectsProducer alone,
+which silently diverged from the local path the moment metXYCorr was added
+to ModuleList -- CRAB kept producing output with no MET xy-shift correction
+applied while runSelection.py applied it, with nothing anywhere reporting a
+problem. Reading the same list both paths read is what keeps them honest;
+an unknown name raises rather than being skipped.
+
+NOTE on SF file layout: correctionlib paths in config.yaml (Modules.
+metXYCorr.metFile etc.) are chapter-relative, e.g. "inputs/SFs/UL2018_met.
+json.gz", and the shared module code expects that literal layout. CRAB
+flattens all JobType.inputFiles into the sandbox root, so this script
+recreates the expected inputs/SFs/... layout before instantiating any
+module -- same approach as 003-ObjectSelectionII's worker script.
+
+NOTE on correctionlib: it is NOT part of the stock CMSSW release's python
+environment -- on lxplus it only imports because of a user-local pip install
+under AFS, which a grid worker node cannot see. The grid-safe equivalent is
+the LCG stack on CVMFS, whose site-packages is prepended to sys.path below
+(not a full `source setup.sh`, which would risk swapping out CMSSW's own
+ROOT build and breaking the PhysicsTools.NanoAODTools import).
 
 Unlike the preselection stage, this job's input files are not a DBS-registered
 dataset (Data.userInputFiles was used, not Data.inputDataset), so CRAB has no
@@ -30,13 +52,24 @@ using this chapter's own LFN_Base (shipped via config.yaml) to know the mapping.
 
 import os
 import sys
+import shutil
 import yaml
-import PSet
 import ROOT
 ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
+
+# Must precede any import that reaches correctionlib (METXYCorr does, at its
+# own module top) -- see the correctionlib note in this script's docstring.
+_LCG_VIEW = "/cvmfs/sft.cern.ch/lcg/views/LCG_105/x86_64-el9-gcc12-opt"
+for _lib in ("lib64", "lib"):
+    _p = f"{_LCG_VIEW}/{_lib}/python3.9/site-packages"
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import PSet
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
 from SelectedObjects import SelectedObjectsProducer
+from METXYCorr import METXYCorrModule
 
 print("Running crab_script_selection.py")
 
@@ -79,9 +112,37 @@ _era_cuts = _config["SelectionCuts"][era]
 cut_string = " && ".join(v for v in _era_cuts.values() if v and v.strip())
 print("Cut string:", cut_string)
 
-# Same module config the local process-list JSON carries, era-resolved + is_mc flag
-_mod_cfg_raw = _config["Modules"]["selectedObjects"]
-mod_cfg = dict(_mod_cfg_raw.get(era, _mod_cfg_raw), is_mc=not is_data)
+# Same module configs the local process-list JSON carries, era-resolved with the
+# same per-module injections run_all.py applies locally (selectedObjects' is_mc,
+# metXYCorr's isData/metFile) so both paths hand identical config to the modules.
+_module_names = _config["ModuleList"]["Data" if is_data else "MC"]
+print("ModuleList:", _module_names)
+
+module_configs = []
+for _mod_name in _module_names:
+    _raw = _config["Modules"].get(_mod_name, {})
+    _cfg = dict(_raw.get(era, _raw))
+    if _mod_name == "selectedObjects":
+        _cfg["is_mc"] = not is_data
+    elif _mod_name == "metXYCorr":
+        _cfg["isData"] = is_data
+    module_configs.append((_mod_name, _cfg))
+
+# Rebuild the chapter-relative inputs/SFs/... layout the module code expects
+# out of the flat-shipped sandbox copies (see the SF file layout note above).
+for _mod_name, _cfg in module_configs:
+    for _file_key in ("metFile",):
+        if _file_key in _cfg:
+            _expected = _cfg[_file_key]          # e.g. "inputs/SFs/UL2018_met.json.gz"
+            _flat = os.path.basename(_expected)
+            if os.path.isfile(_flat) and not os.path.isfile(_expected):
+                os.makedirs(os.path.dirname(_expected), exist_ok=True)
+                shutil.move(_flat, _expected)
+            if not os.path.isfile(_expected):
+                raise RuntimeError(
+                    f"{_mod_name}: correction file '{_expected}' not in the sandbox "
+                    f"(looked for flat-shipped '{_flat}' too). It must be added to "
+                    f"JobType.inputFiles by submit_selection_flexible.py.")
 
 # Golden JSON: shipped flat as an inputFile only for data jobs
 json_input = None
@@ -91,6 +152,27 @@ if is_data:
         json_input = golden_json_name
     else:
         print(f"[WARNING] Data job but golden JSON '{golden_json_name}' not found in sandbox.")
+
+
+def _build_modules(configs):
+    """Instantiate ModuleList entries, mirroring runSelection.py's dispatch.
+
+    Raises on an unrecognised name rather than skipping it: a module that is
+    in ModuleList but missing here means CRAB output would silently differ
+    from what the local path produces, which is exactly the failure this
+    dispatch replaced.
+    """
+    built = []
+    for mod_name, mod_cfg in configs:
+        if mod_name == "selectedObjects":
+            built.append(SelectedObjectsProducer(mod_cfg))
+        elif mod_name == "metXYCorr":
+            built.append(METXYCorrModule(mod_cfg))
+        else:
+            raise RuntimeError(
+                f"Unknown module '{mod_name}' in ModuleList. Add it here and ship "
+                f"its source via submit_selection_flexible.py's MODULE_FILES.")
+    return built
 
 
 def _passes_cut_precheck(filepath, cut_string):
@@ -131,7 +213,7 @@ p = PostProcessor(
     branchsel=None,
     provenance=True,
     fwkJobReport=True,
-    modules=[SelectedObjectsProducer(mod_cfg)],
+    modules=_build_modules(module_configs),
     jsonInput=json_input,
 )
 print("Starting PostProcessor")

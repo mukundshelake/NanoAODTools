@@ -60,6 +60,10 @@ MODULE_FILES = {
     "muonHLT":       MODULES_DIR / "MuonHLTWeight.py",
     "bTagging":      MODULES_DIR / "bTaggingWeight.py",
     "puWeight":      MODULES_DIR / "PUWeight.py",
+    # topPtWeight takes no correction file -- its config is just branchNames --
+    # so unlike the SF-backed modules above it needs nothing beyond the module
+    # source itself shipped.
+    "topPtWeight":   MODULES_DIR / "TopPtWeight.py",
 }
 
 # ---------------------------------------------------------------------------

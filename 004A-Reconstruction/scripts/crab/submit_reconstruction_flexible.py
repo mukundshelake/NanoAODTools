@@ -56,7 +56,16 @@ CONFIG_YAML = CHAPTER_DIR / "config.yaml"
 PSET        = SCRIPT_DIR / "PSet.py"
 SCRIPT_SH   = SCRIPT_DIR / "crab_reconstruction.sh"
 SCRIPT_PY   = SCRIPT_DIR / "crab_script_reconstruction.py"
-MODULE_PY   = CHAPTER_DIR / "scripts" / "modules" / "RecoModule.py"
+MODULES_DIR = CHAPTER_DIR / "scripts" / "modules"
+# Keyed by the names config.yaml's ModuleList uses, so what gets shipped follows
+# from that list. ModuleList is a single entry today and shipping RecoModule.py
+# unconditionally would work, but 003-ObjectSelectionI shipped its one module
+# the same way and silently kept doing so after a second was added to
+# ModuleList -- producing grid output that no longer matched the local path.
+# A ModuleList entry with no mapping here raises at submit time instead.
+MODULE_FILES = {
+    "reconstruction": MODULES_DIR / "RecoModule.py",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,7 +89,10 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, wo
     cfg.JobType.pluginName = "Analysis"
     cfg.JobType.psetName   = str(PSET)
     cfg.JobType.scriptExe  = str(SCRIPT_SH)
-    cfg.JobType.inputFiles = [str(SCRIPT_PY), str(MODULE_PY), str(CONFIG_YAML)]
+    input_files = [str(SCRIPT_PY), str(CONFIG_YAML)]
+    for mod_name in utils.load_config(CONFIG_YAML)["ModuleList"]["Data" if is_data else "MC"]:
+        input_files.append(str(MODULE_FILES[mod_name]))
+    cfg.JobType.inputFiles = input_files
     cfg.JobType.scriptArgs = [f"era={era}", f"isData={is_data}"]
     cfg.section_("Data")
     cfg.Data.userInputFiles       = lfn_files
@@ -137,11 +149,10 @@ def main():
     for path, label in [
         (SCRIPT_SH,   "crab_reconstruction.sh"),
         (SCRIPT_PY,   "crab_script_reconstruction.py"),
-        (MODULE_PY,   "RecoModule.py"),
         (PSET,        "PSet.py"),
         (CONFIG_YAML, "config.yaml"),
         (args.dataset_json, "dataset JSON"),
-    ]:
+    ] + [(p, f"module: {name}") for name, p in MODULE_FILES.items()]:
         if not Path(path).is_file():
             print(f"ERROR: required file not found: {path}  ({label})", file=sys.stderr)
             sys.exit(1)

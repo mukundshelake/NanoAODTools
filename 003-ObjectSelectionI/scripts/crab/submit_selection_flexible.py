@@ -52,7 +52,21 @@ CONFIG_YAML = SCRIPT_DIR.parent.parent / "config.yaml"  # 003-ObjectSelectionI/c
 PSET        = SCRIPT_DIR / "PSet.py"
 SCRIPT_SH   = SCRIPT_DIR / "crab_selection.sh"
 SCRIPT_PY   = SCRIPT_DIR / "crab_script_selection.py"
-MODULE_PY   = SCRIPT_DIR.parent / "modules" / "SelectedObjects.py"
+CHAPTER_DIR = SCRIPT_DIR.parent.parent  # crab/ -> scripts/ -> 003-ObjectSelectionI/
+MODULES_DIR = SCRIPT_DIR.parent / "modules"
+# Keyed by the names config.yaml's ModuleList uses, so what gets shipped follows
+# from that list rather than from a hardcoded file here -- shipping only
+# SelectedObjects.py is what let metXYCorr go missing from the CRAB path while
+# it was running locally. A ModuleList entry with no mapping raises at submit
+# time (KeyError below), before any job is queued.
+MODULE_FILES = {
+    "selectedObjects": MODULES_DIR / "SelectedObjects.py",
+    "metXYCorr":       MODULES_DIR / "METXYCorr.py",
+}
+# jetVetoMap/jetJER/muonRochester are deliberately absent: they belong to
+# PreSelectionCorrectionModuleList, an earlier local PostProcessor pass whose
+# output files are what these jobs take as input (run_all.py prefers
+# preSelectionCorrected_{era}_datasets.json), so they never run on a worker.
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -76,7 +90,29 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, go
     cfg.JobType.pluginName = "Analysis"
     cfg.JobType.psetName   = str(PSET)
     cfg.JobType.scriptExe  = str(SCRIPT_SH)
-    input_files = [str(SCRIPT_PY), str(MODULE_PY), str(CONFIG_YAML)]
+    input_files = [str(SCRIPT_PY), str(CONFIG_YAML)]
+    config = utils.load_config(CONFIG_YAML)
+    for mod_name in config["ModuleList"]["Data" if is_data else "MC"]:
+        input_files.append(str(MODULE_FILES[mod_name]))
+        mod_cfg_raw = config["Modules"].get(mod_name, {})
+        mod_cfg = mod_cfg_raw.get(era, mod_cfg_raw)
+        # Chapter-relative ("inputs/SFs/..."); the worker script rebuilds that
+        # layout from the flattened sandbox copy. Unlike 003-ObjectSelectionII,
+        # this chapter has no --fetchSFFiles step -- config.yaml's jetJER comment
+        # describes these as copied in from 003-ObjectSelectionII's fetch of the
+        # same era-only jsonpog-integration files -- so on a fresh checkout the
+        # directory may simply not exist.
+        for file_key in ("metFile",):
+            if file_key in mod_cfg:
+                sf_path = CHAPTER_DIR / mod_cfg[file_key]
+                if not sf_path.is_file():
+                    raise FileNotFoundError(
+                        f"{mod_name}: correction file not found: {sf_path}\n"
+                        f"This chapter has no --fetchSFFiles step; the file has to be "
+                        f"put in place (003-ObjectSelectionII/scripts/run_all.py "
+                        f"--fetchSFFiles pulls the equivalent jsonpog-integration "
+                        f"files for its own modules) before {era} jobs can be submitted.")
+                input_files.append(str(sf_path))
     if is_data:
         input_files.append(str(golden_json))
     cfg.JobType.inputFiles  = input_files
@@ -144,11 +180,10 @@ def main():
     for path, label in [
         (SCRIPT_SH,    "crab_selection.sh"),
         (SCRIPT_PY,    "crab_script_selection.py"),
-        (MODULE_PY,    "SelectedObjects.py"),
         (PSET,         "PSet.py"),
         (CONFIG_YAML,  "config.yaml"),
         (args.dataset_json, "dataset JSON"),
-    ]:
+    ] + [(p, f"module: {name}") for name, p in MODULE_FILES.items()]:
         if not Path(path).is_file():
             print(f"ERROR: required file not found: {path}  ({label})", file=sys.stderr)
             sys.exit(1)

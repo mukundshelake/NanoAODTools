@@ -64,6 +64,7 @@ from MuonIsoWeight import MuonIsoWeightProducer
 from MuonHLTWeight import MuonHLTWeightProducer
 from bTaggingWeight import bTaggingWeightProducer
 from PUWeight import PUWeightProducer
+from TopPtWeight import TopPtWeightProducer
 
 print("Running crab_script_selectionII.py")
 
@@ -198,6 +199,8 @@ for mod_name, mod_cfg in module_configs:
         modules.append(bTaggingWeightProducer(mod_cfg, dataset_key))
     elif mod_name == "puWeight":
         modules.append(PUWeightProducer(mod_cfg))
+    elif mod_name == "topPtWeight":
+        modules.append(TopPtWeightProducer(mod_cfg))
     else:
         raise RuntimeError(f"Unknown module: {mod_name}")
 
