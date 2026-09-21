@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import yaml
@@ -368,3 +369,129 @@ def validate_golden_jsons(config):
         }
     
     return status
+
+
+# ---------------------------------------------------------------------------
+# Scale-factor / correction file fetching.
+#
+# This chapter fetches its own correction inputs rather than borrowing
+# 003-ObjectSelectionII's: every chapter is meant to stand on its own, and the
+# overlap is only incidental (both happen to want era-keyed jsonpog-integration
+# files). Previously config.yaml pointed jetJER/jetVetoMap/metXYCorr at
+# inputs/SFs/... paths that nothing in this chapter ever created -- the files
+# had to be copied in by hand from 003-II's fetch, so a fresh checkout had no
+# way to run those modules at all, locally or on the grid.
+#
+# Each spec names a file in jsonpog-integration's POG tree:
+#   POG/<pog>/<era_dir>/<source_filename>
+# 'outputs' lists the chapter-local filename suffix(es) to write it to, under
+# inputs/SFs/<era>_<suffix>, matching the paths config.yaml's Modules section
+# already expects. 'gunzip' controls whether the .gz is decompressed on the way
+# in -- correctionlib reads .json.gz directly, so all three stay compressed.
+# ---------------------------------------------------------------------------
+SF_FETCH_SPECS = [
+    {"pog": "JME", "source_filename": "met.json.gz",         "outputs": ["met.json.gz"],          "gunzip": False},
+    {"pog": "JME", "source_filename": "jetvetomaps.json.gz", "outputs": ["jetvetomaps.json.gz"],  "gunzip": False},
+    {"pog": "JME", "source_filename": "jet_jerc.json.gz",    "outputs": ["jet_Jerc.json.gz"],     "gunzip": False},
+]
+
+# muonRochester's data file is not a jsonpog-integration product -- it ships
+# inside NanoAODTools itself (python/postprocessing/data/roccor.Run2.v3/). It
+# is copied into this chapter's inputs/SFs/ rather than referenced in place:
+# a "../python/..." path out of the chapter directory breaks the moment the
+# chapter is run from anywhere else, and cannot be shipped to a batch worker,
+# where the sandbox is flat. Keyed by era because the bundle is per calendar
+# year -- RoccoR2016.txt is the only 2016 table it ships, so both preVFP and
+# postVFP use it.
+ROCHESTER_SOURCE_DIR = Path(__file__).resolve().parents[2] / "python" / "postprocessing" / "data" / "roccor.Run2.v3"
+ROCHESTER_FILES = {
+    "UL2016preVFP":  "RoccoR2016.txt",
+    "UL2016postVFP": "RoccoR2016.txt",
+    "UL2017":        "RoccoR2017.txt",
+    "UL2018":        "RoccoR2018.txt",
+}
+
+
+def cvmfs_era_dir(era: str) -> str:
+    """Translate this repo's era string to jsonpog-integration's era directory name.
+
+    "UL2018" -> "2018_UL", "UL2016preVFP" -> "2016preVFP_UL", etc. -- strip the
+    leading "UL" and move it to a suffix instead.
+    """
+    if not era.startswith("UL"):
+        raise ValueError(f"Unrecognized era '{era}': expected a 'UL...' era string.")
+    return era[2:] + "_UL"
+
+
+def resolve_sf_source(config):
+    """
+    Resolve where to read the jsonpog-integration POG/ tree from, for the machine this
+    script is running on.
+
+    Returns (base_path, ssh_host):
+      ssh_host is None -> base_path is a local filesystem path (a CVMFS mount on this
+                           machine); read files directly.
+      ssh_host is a str -> base_path is the path AS IT EXISTS on ssh_host; every file
+                            must be read remotely (see ssh_read_file()) instead of via
+                            local filesystem I/O.
+
+    SFSource in config.yaml is a dict keyed the same way as STORAGE (a substring of
+    socket.gethostname()):
+        SFSource:
+          lxplus: "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG"
+
+    If the current hostname doesn't match any SFSource key (e.g. a machine with no local
+    CVMFS mount), SFSourceSSHRelay -- a plain hostname/alias string -- is used as a
+    fallback: relay every fetch through that host over SSH instead, reusing SFSource's
+    "lxplus" entry as the path valid there. The SSH session runs fully interactively
+    (see ssh_read_file()), so the caller needs a real, attached terminal -- password/2FA
+    prompts land there exactly like a manual `ssh <relay>` login would.
+        SFSourceSSHRelay: "lxplus.cern.ch"
+    """
+    sf_source = config.get('SFSource', {})
+    hostname = socket.gethostname()
+    for key, path in sf_source.items():
+        if key in hostname:
+            return path, None
+
+    relay_host = config.get('SFSourceSSHRelay')
+    relay_base = sf_source.get('lxplus')
+    if relay_host and relay_base:
+        return relay_base, relay_host
+
+    raise ValueError(
+        f"Could not resolve SFSource path: hostname '{hostname}' does not match "
+        f"any key in config SFSource ({list(sf_source.keys())}), and no usable "
+        f"SFSourceSSHRelay fallback is configured (needs both SFSourceSSHRelay and an "
+        f"SFSource.lxplus entry to relay through). Add a direct SFSource entry for "
+        f"this machine, or configure SFSourceSSHRelay, the same way STORAGE is "
+        f"configured."
+    )
+
+
+# SSH multiplexing options shared by every relayed fetch: the first call authenticates
+# interactively (password/2FA land on the real terminal, since stdin/stderr are left
+# attached -- only stdout, the file's own bytes, is captured) and opens a background
+# ControlMaster; every subsequent call in this process reuses that same connection via
+# ControlPath, so the user is prompted once per session, not once per file.
+_SSH_RELAY_CONTROL_OPTS = [
+    "-o", "ControlMaster=auto",
+    "-o", "ControlPersist=600",
+    "-o", "ControlPath=~/.ssh/cm-sf-%r@%h:%p",
+]
+
+
+def ssh_read_file(ssh_host, remote_path):
+    """Read one remote file's raw bytes via `ssh <ssh_host> cat <remote_path>`.
+
+    Runs interactively (stdin/stderr inherited from the caller's terminal, so SSH's own
+    password/2FA prompts work normally) while capturing only stdout -- the file's bytes.
+    Raises FileNotFoundError if the remote `cat` fails (missing file, permission, etc).
+    """
+    cmd = ["ssh"] + _SSH_RELAY_CONTROL_OPTS + [ssh_host, "cat", shlex.quote(str(remote_path))]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        raise FileNotFoundError(
+            f"ssh {ssh_host} cat {remote_path} failed (exit code {result.returncode})"
+        )
+    return result.stdout

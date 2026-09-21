@@ -5,6 +5,14 @@ STORAGE:
 # /store/... LFN base for CRAB (lxplus only). Must point at the same physical
 # files as STORAGE.lxplus (its EOS mount) -- see utils.lfn_path_for_local_file().
 LFN_Base: "/store/user/mshelake/DataFiles"
+# Where --fetchSFFiles reads jsonpog-integration's POG/ tree from. Keyed the same
+# way as STORAGE (a substring of socket.gethostname()).
+SFSource:
+  lxplus: "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/POG"
+# Fallback for any machine not listed in SFSource above (no local CVMFS mount): relay
+# the fetch through this host over SSH instead, reusing SFSource.lxplus's path as it
+# exists there. Runs interactively -- expect a password/2FA prompt on first use.
+SFSourceSSHRelay: "lxplus.cern.ch"
 # Golden JSON download URLs, used by --downloadGoldenJSONs (scripts/downloadGoldenJsons.py).
 # Same CMS-published files 002-Samples uses -- content only depends on era, not on any
 # particular 002-Samples run, so this chapter downloads them directly rather than fetching
@@ -114,13 +122,13 @@ Modules:
   # selectedObjects' is_mc / metXYCorr's isData).
   muonRochester:
     UL2016preVFP:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+      rochesterFile: "inputs/SFs/UL2016preVFP_RoccoR2016.txt"
     UL2016postVFP:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+      rochesterFile: "inputs/SFs/UL2016postVFP_RoccoR2016.txt"
     UL2017:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2017.txt"
+      rochesterFile: "inputs/SFs/UL2017_RoccoR2017.txt"
     UL2018:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2018.txt"
+      rochesterFile: "inputs/SFs/UL2018_RoccoR2018.txt"
   # ---------- JetVetoMap (PreSelectionCorrectionModuleList entry, MC and Data) --
   # Correction name differs per era (JME POG naming, verified directly
   # against the fetched files -- Summer19UL16_V1 covers both preVFP/postVFP).

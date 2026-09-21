@@ -12,6 +12,7 @@ Options:
 
 import argparse
 import os
+import gzip
 import shutil
 import sys
 from pathlib import Path
@@ -74,6 +75,15 @@ def main():
                             'config.yaml\'s golden_json_urls, into inputs/ (and this run\'s outputs/{tag}/{hash}/'
                             'inputs/ snapshot). Independent of any particular 002-Samples run -- the golden JSON '
                             'only depends on era, not on a preselection tag/hash.')
+    parser.add_argument('--fetchSFFiles', action='store_true',
+                       help='[0a] Fetch this chapter\'s correction inputs into inputs/SFs/ (and this run\'s '
+                            'outputs/{tag}/{hash}/inputs/ snapshot): the JME jsonpog-integration files '
+                            'metXYCorr/jetVetoMap/jetJER need (met, jetvetomaps, jet_jerc), plus the Rochester '
+                            'table muonRochester needs, copied out of NanoAODTools\' own bundled '
+                            'python/postprocessing/data/roccor.Run2.v3/. Reads jsonpog-integration from '
+                            'config.yaml\'s SFSource (a local CVMFS mount), or relays through SFSourceSSHRelay '
+                            'over SSH from a machine without one. Like the golden JSONs these depend only on '
+                            'era, not on any preselection tag/hash.')
     parser.add_argument('--applyPreSelectionCorrections', action='store_true',
                        help='[0b] Run PreSelectionCorrectionModuleList (jetVetoMap/muonRochester for both Data '
                             'and MC -- hardware defect map / momentum-scale correction, not simulation-vs-data '
@@ -167,6 +177,7 @@ def main():
     print(f"  --preselectionTag: {args.preselectionTag}")
     print(f"  --preselectionHash: {args.preselectionHash}")
     print(f"  --downloadGoldenJSONs: {args.downloadGoldenJSONs}")
+    print(f"  --fetchSFFiles: {args.fetchSFFiles}")
     print(f"  --applyPreSelectionCorrections: {args.applyPreSelectionCorrections}")
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
@@ -270,6 +281,79 @@ def main():
     # Download {era}_goldenJSON.json directly from the CMS URLs in config.yaml's
     # golden_json_urls. Independent of any particular 002-Samples run -- the golden
     # JSON content only depends on era.
+    if args.fetchSFFiles:
+        print("\nFetching correction files into inputs/SFs/ ...")
+        try:
+            sf_source_base, ssh_relay_host = utils.resolve_sf_source(config)
+        except ValueError as e:
+            print(f"Error: {e}")
+            return 1
+        sf_source_base = Path(sf_source_base)
+        if ssh_relay_host:
+            print(f"  No local CVMFS mount for this host; relaying through {ssh_relay_host} "
+                  f"(expect an SSH password/2FA prompt on first read).")
+        else:
+            print(f"  Reading from local CVMFS: {sf_source_base}")
+
+        any_fetched = False
+        for era in config['SelectionCuts']:
+            if not matches_filter(args.filter, era):
+                continue
+            era_dir = utils.cvmfs_era_dir(era)
+            for spec in utils.SF_FETCH_SPECS:
+                source_path = sf_source_base / spec['pog'] / era_dir / spec['source_filename']
+                for out_suffix in spec['outputs']:
+                    rel_path = Path('SFs') / f"{era}_{out_suffix}"
+                    local_path = inputs_folder / rel_path
+                    snapshot_path = output_dir / 'inputs' / rel_path
+                    if local_path.exists() and not args.force:
+                        print(f"  [skip, already fetched] {rel_path}")
+                        continue
+                    if ssh_relay_host:
+                        try:
+                            raw = utils.ssh_read_file(ssh_relay_host, source_path)
+                        except FileNotFoundError as e:
+                            print(f"  Error: {e}. Skipping {rel_path}.")
+                            continue
+                    else:
+                        if not source_path.exists():
+                            print(f"  Error: source not found: {source_path}. Skipping {rel_path}.")
+                            continue
+                        raw = source_path.read_bytes()
+                    content = gzip.decompress(raw) if spec['gunzip'] else raw
+                    local_path.parent.mkdir(parents=True, exist_ok=True)
+                    local_path.write_bytes(content)
+                    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(local_path, snapshot_path)
+                    any_fetched = True
+                    src_desc = f"{ssh_relay_host}:{source_path}" if ssh_relay_host else str(source_path)
+                    print(f"  Fetched {src_desc} -> {local_path}")
+
+            # The Rochester table is bundled with NanoAODTools rather than coming
+            # from jsonpog-integration, so it is copied in from the local checkout
+            # instead of fetched -- no CVMFS or relay involved either way.
+            roccor_name = utils.ROCHESTER_FILES.get(era)
+            if roccor_name:
+                rel_path = Path('SFs') / f"{era}_{roccor_name}"
+                local_path = inputs_folder / rel_path
+                snapshot_path = output_dir / 'inputs' / rel_path
+                source_path = utils.ROCHESTER_SOURCE_DIR / roccor_name
+                if local_path.exists() and not args.force:
+                    print(f"  [skip, already fetched] {rel_path}")
+                elif not source_path.is_file():
+                    print(f"  Error: Rochester table not found in this checkout: {source_path}. "
+                          f"Skipping {rel_path}.")
+                else:
+                    local_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_path, local_path)
+                    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(local_path, snapshot_path)
+                    any_fetched = True
+                    print(f"  Copied {source_path} -> {local_path}")
+
+        if not any_fetched:
+            print("  All correction files already present in inputs/SFs/ (use --force to refetch).")
+
     if args.downloadGoldenJSONs:
         print("\nDownloading golden JSON files specified in config...")
         download_script = base_dir / 'scripts' / 'downloadGoldenJsons.py'
