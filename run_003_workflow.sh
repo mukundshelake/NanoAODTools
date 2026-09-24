@@ -16,7 +16,7 @@
 # Usage:
 #   ./run_003_workflow.sh --tag TAG --era ERA \
 #       --preselectionTag PRESELECTION_TAG --preselectionHash PRESELECTION_HASH \
-#       [--sample] [--systematics] [--workers N] [--computeEfficiencyMaps]
+#       [--sample] [--systematics] [--workers N] [--computeEfficiencyMaps] [--condor]
 #
 # --sample:     first file per dataset only (quick-look; safe to run before a
 #               full pass under the same tag -- every 003-III filename this
@@ -28,6 +28,13 @@
 #               --systematics, pass --force manually (edit the
 #               --buildSelectionHists call below) to rebuild them with
 #               variants included.
+# --condor:     run 003-I's and 003-II's per-file skim production as HTCondor
+#               jobs instead of locally (scripts/condor/ in each chapter).
+#               Only those two stages move -- every JSON/efficiency/histogram
+#               step around them still runs here, since they are single
+#               aggregate passes with nothing to parallelise. lxplus only:
+#               needs eossubmit schedds, and --output-dir/--work-area must be
+#               on EOS.
 # --computeEfficiencyMaps: compute this era's b-tagging (and jet-PU-ID, even
 #               though that SF isn't in ModuleList.MC yet) efficiency maps
 #               before 003-II's SF-weighting pass. Needed once per era ever
@@ -55,12 +62,12 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- argument parsing -------------------------------------------------------
 TAG=""; ERA=""; PRESELECTION_TAG=""; PRESELECTION_HASH=""
-SAMPLE=false; SYSTEMATICS=false; WORKERS=15; COMPUTE_EFF=false
+SAMPLE=false; SYSTEMATICS=false; WORKERS=15; COMPUTE_EFF=false; CONDOR=false
 
 usage() {
     cat <<EOF
 Usage: $0 --tag TAG --era ERA --preselectionTag PTAG --preselectionHash PHASH
-          [--sample] [--systematics] [--workers N] [--computeEfficiencyMaps]
+          [--sample] [--systematics] [--workers N] [--computeEfficiencyMaps] [--condor]
 EOF
     exit 1
 }
@@ -75,6 +82,7 @@ while [[ $# -gt 0 ]]; do
         --systematics) SYSTEMATICS=true; shift ;;
         --workers) WORKERS="$2"; shift 2 ;;
         --computeEfficiencyMaps) COMPUTE_EFF=true; shift ;;
+        --condor) CONDOR=true; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
@@ -97,7 +105,7 @@ mkdir -p "$LOGDIR"
 STATUS_FILE="$LOGDIR/STATUS.txt"
 {
     echo "STARTED $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "TAG=$TAG ERA=$ERA PRESELECTION_TAG=$PRESELECTION_TAG PRESELECTION_HASH=$PRESELECTION_HASH SAMPLE=$SAMPLE SYSTEMATICS=$SYSTEMATICS WORKERS=$WORKERS COMPUTE_EFF=$COMPUTE_EFF"
+    echo "TAG=$TAG ERA=$ERA PRESELECTION_TAG=$PRESELECTION_TAG PRESELECTION_HASH=$PRESELECTION_HASH SAMPLE=$SAMPLE SYSTEMATICS=$SYSTEMATICS WORKERS=$WORKERS COMPUTE_EFF=$COMPUTE_EFF CONDOR=$CONDOR"
 } > "$STATUS_FILE"
 
 # send_telegram.py needs requests+dotenv, which live in the base conda env,
@@ -117,11 +125,59 @@ source /home/mukund/miniconda3/etc/profile.d/conda.sh
 conda activate latestcoffea
 source "$REPO/standalone/env_standalone.sh" >/dev/null 2>&1
 
+# Resolve {STORAGE} for this machine exactly as run_all.py does, so condor
+# --output-dir/--work-area land where every other stage expects to find them.
+resolve_storage() {
+    ( cd "$REPO/$1" && python3 -c "
+import sys
+sys.path.insert(0, 'scripts')
+import utils
+print(utils.resolve_storage_path(utils.load_config('config.yaml')))
+" )
+}
+
+# Block until a condor work area has no queued or missing jobs left, nudging
+# held/missing ones along the way. checkCondorStatus.py's own guard refuses a
+# mass resubmit (>25 jobs and >40% of the work area at once), so a systemic
+# failure stops here rather than silently re-queueing the whole era.
+condor_wait() {
+    local chapter="$1" work_area="$2" stage="$3"
+    local checker="$REPO/$chapter/scripts/condor/checkCondorStatus.py"
+    while true; do
+        local line
+        line="$(python3 "$checker" -d "$work_area" 2>&1 | tail -1)"
+        log "  [$stage] $line"
+        if echo "$line" | grep -qE "missing=[1-9]|held=[1-9]"; then
+            log "  [$stage] releasing held / resubmitting missing..."
+            python3 "$checker" -d "$work_area" --resubmitHeld --resubmitMissing \
+                >>"$LOGDIR/${stage}_condor.log" 2>&1 || \
+                log "  [$stage] resubmit declined or failed (see ${stage}_condor.log)"
+        elif ! echo "$line" | grep -qE "idle=[1-9]|running=[1-9]"; then
+            log "  [$stage] all jobs complete."
+            break
+        fi
+        sleep 120
+    done
+}
+
 get_hash() {
     local dir="$1"; shift
     ( cd "$REPO/$dir" && python3 scripts/run_all.py --tag "$TAG" --printHash "$@" 2>&1 \
         | grep "Config hash:" | awk '{print $NF}' )
 }
+
+if $CONDOR; then
+    # `module` is a shell function, absent in a non-interactive shell until the
+    # modules init is sourced. It must also be run unpiped and in THIS shell --
+    # piping it (e.g. `module load ... | tail -1`) runs it in a subshell, so
+    # CONDOR_CONFIG and the eossubmit schedd routing never reach condor_submit.
+    # That exact mistake cost days of silently-failing submissions in 002-Samples.
+    if ! command -v module >/dev/null 2>&1; then
+        [ -f /etc/profile.d/modules.sh ] && source /etc/profile.d/modules.sh
+    fi
+    module load lxbatch/eossubmit
+    log "condor mode: loaded lxbatch/eossubmit (CONDOR_CONFIG=${CONDOR_CONFIG:-unset})"
+fi
 
 notify "Starting ($RUN_LABEL, systematics=$SYSTEMATICS): preselection=$PRESELECTION_TAG/$PRESELECTION_HASH"
 
@@ -146,11 +202,31 @@ notify "003-I: pre-selection corrections pass done."
 python3 scripts/run_all.py --tag "$TAG" --generateProcessListJSON "${SAMPLE_FLAG[@]}" \
     --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003I_steps.log"
 
-python3 scripts/run_all.py --tag "$TAG" --writeBashScript "${SAMPLE_FLAG[@]}" \
-    --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003I_steps.log"
+if $CONDOR; then
+    I_HASH_PRE="$(get_hash 003-ObjectSelectionI)"
+    STORAGE_I="$(resolve_storage 003-ObjectSelectionI)"
+    # --applyPreSelectionCorrections above writes the corrected inputs; prefer
+    # them exactly as the local and CRAB paths do, falling back with a warning.
+    DSJSON="inputs/preSelectionCorrected_${ERA}_datasets.json"
+    if [[ ! -f "$DSJSON" ]]; then
+        log "WARNING: $DSJSON not found; submitting against UNCORRECTED preselection inputs."
+        DSJSON="inputs/preselection_${ERA}_datasets.json"
+    fi
+    WORK_I="${STORAGE_I%/}/condor_work_selectionI/${TAG}/${I_HASH_PRE}/${ERA}"
+    OUT_I="${STORAGE_I%/}/selectionI/${TAG}/${I_HASH_PRE}/${ERA}"
+    log "Submitting 003-I skims to condor (${RUN_LABEL}); work area $WORK_I"
+    python3 scripts/condor/submit_selection_condor.py --era "$ERA" \
+        --dataset-json "$DSJSON" --golden-json "inputs/${ERA}_goldenJSON.json" \
+        --output-dir "$OUT_I" --work-area "$WORK_I" \
+        "${SAMPLE_FLAG[@]}" --submit 2>&1 | tee -a "$LOGDIR/003I_production.log"
+    condor_wait 003-ObjectSelectionI "$WORK_I" 003I
+else
+    python3 scripts/run_all.py --tag "$TAG" --writeBashScript "${SAMPLE_FLAG[@]}" \
+        --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003I_steps.log"
 
-log "Running 003-I object-selection skim production (${RUN_LABEL})..."
-bash "scripts/run_all_${TAG}.sh" 2>&1 | tee -a "$LOGDIR/003I_production.log"
+    log "Running 003-I object-selection skim production (${RUN_LABEL})..."
+    bash "scripts/run_all_${TAG}.sh" 2>&1 | tee -a "$LOGDIR/003I_production.log"
+fi
 
 python3 scripts/run_all.py --tag "$TAG" --generateDatasetJSON \
     --filter "$ERA" 2>&1 | tee -a "$LOGDIR/003I_steps.log"
@@ -189,11 +265,28 @@ fi
 python3 scripts/run_all.py --tag "$TAG" --generateProcessListJSON "${SAMPLE_FLAG[@]}" \
     --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003II_steps.log"
 
-python3 scripts/run_all.py --tag "$TAG" --writeBashScript "${SAMPLE_FLAG[@]}" \
-    --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003II_steps.log"
+if $CONDOR; then
+    II_HASH_PRE="$(get_hash 003-ObjectSelectionII)"
+    STORAGE_II="$(resolve_storage 003-ObjectSelectionII)"
+    WORK_II="${STORAGE_II%/}/condor_work_selectionII/${TAG}/${II_HASH_PRE}/${ERA}"
+    OUT_II="${STORAGE_II%/}/selectionII/${TAG}/${II_HASH_PRE}/${ERA}"
+    log "Submitting 003-II skims to condor (${RUN_LABEL}); work area $WORK_II"
+    # MC jobs need this era's b-tagging efficiency maps; the submitter checks
+    # per dataset and exits nonzero before queueing anything if one is absent,
+    # which is what --computeEfficiencyMaps above exists to prevent.
+    python3 scripts/condor/submit_selectionII_condor.py --era "$ERA" \
+        --dataset-json "inputs/selectionI_${ERA}_datasets.json" \
+        --golden-json "inputs/${ERA}_goldenJSON.json" \
+        --output-dir "$OUT_II" --work-area "$WORK_II" \
+        "${SAMPLE_FLAG[@]}" --submit 2>&1 | tee -a "$LOGDIR/003II_production.log"
+    condor_wait 003-ObjectSelectionII "$WORK_II" 003II
+else
+    python3 scripts/run_all.py --tag "$TAG" --writeBashScript "${SAMPLE_FLAG[@]}" \
+        --filter "$ERA/Data_mu" "$ERA/MC_mu" 2>&1 | tee -a "$LOGDIR/003II_steps.log"
 
-log "Running 003-II SF-weighted skim production (${RUN_LABEL}; includes TopPtWeight)..."
-bash "scripts/run_all_${TAG}.sh" 2>&1 | tee -a "$LOGDIR/003II_production.log"
+    log "Running 003-II SF-weighted skim production (${RUN_LABEL}; includes TopPtWeight)..."
+    bash "scripts/run_all_${TAG}.sh" 2>&1 | tee -a "$LOGDIR/003II_production.log"
+fi
 
 python3 scripts/run_all.py --tag "$TAG" --generateDatasetJSON \
     --filter "$ERA" 2>&1 | tee -a "$LOGDIR/003II_steps.log"
