@@ -3,8 +3,8 @@
 # scripts/crab/ itself).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
-cd /eos/user/m/mshelake/Analysis/CMSSW_13_3_0/src; cmsenv; cd -; echo "cmsenv done"
-echo "Setting up CRAB environment and initializing VOMS proxy..."
-source /cvmfs/cms.cern.ch/crab3/crab.sh
+# cmsenv + CRAB client -- shared with unattended runs via setupEnv.sh.
+source "$SCRIPT_DIR/setupEnv.sh"; echo "cmsenv + CRAB environment done"
+echo "Initializing VOMS proxy..."
 voms-proxy-init --voms cms -valid 192:00
 python3 "$SCRIPT_DIR/checkStatus.py" --resubmit -d .

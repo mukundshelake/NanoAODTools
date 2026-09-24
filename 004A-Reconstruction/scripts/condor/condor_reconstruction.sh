@@ -56,6 +56,12 @@ python3 "./$(basename "$WORKER_PY")" "$ERA" "$FILES_JSON" "$IS_DATA" "$CHAPTER_D
 # consolidateCrabOutput.py both already handle explicitly.
 SKIM=$(ls *_Skim.root 2>/dev/null | head -1)
 if [ -z "$SKIM" ]; then
+    # Record that this job ran to completion with nothing to write, next to its
+    # files.json in the work area (never in the output tree, which dataset-JSON
+    # scans read). Without it checkCondorStatus sees "no output file" and treats
+    # the job as missing -- confirmed live: a QCD job with 0 events passing the
+    # cut was resubmitted over and over, forever.
+    touch "$(dirname "$FILES_JSON")/ZERO_EVENTS"
     echo "No *_Skim.root produced (no events survived); nothing to copy."
     echo "DONE condor_reconstruction.sh"
     exit 0

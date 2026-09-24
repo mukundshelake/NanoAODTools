@@ -11,7 +11,11 @@ def _roccor_dir():
     the installed package rather than hardcoded, so this works the same whether
     NanoAODTools is used standalone (build/lib/python/... symlink) or from a
     CMSSW checkout."""
-    return os.path.join(os.path.dirname(_pp.__file__), "data", "roccor.Run2.v3")
+    # __path__, not __file__: under a CMSSW checkout this package is a namespace
+    # package (no __init__.py), so its __file__ is None and dirname(None) raised
+    # "expected str, bytes or os.PathLike object, not NoneType" for every dataset
+    # on lxplus. __path__ is populated in both layouts.
+    return os.path.join(list(_pp.__path__)[0], "data", "roccor.Run2.v3")
 
 
 def _load_roccor():
@@ -34,6 +38,15 @@ def _load_roccor():
         return
     cc_path = os.path.join(_roccor_dir(), "RoccoR.cc")
     cwd = os.getcwd()
+    # Under CMSSW's Cling (Clang 9, genuinely C++17), Boost.Config wrongly defines
+    # BOOST_NO_CXX11_HDR_CHRONO, and Boost.Math >= 1.76 turns any such "missing
+    # C++11 feature" into a hard #error ("Support for C++03 has been removed") the
+    # moment erf.hpp is included -- so RoccoR.cc failed to load on lxplus even with
+    # Boost present. RoccoR needs only erf_inv, never <chrono>. Pull in
+    # boost/config.hpp once and drop that single false flag; its include guard
+    # keeps it from being redefined when erf.hpp includes the config again.
+    # Harmless where the flag was never set (e.g. the cms02 conda environment).
+    ROOT.gInterpreter.Declare("#include <boost/config.hpp>\n#undef BOOST_NO_CXX11_HDR_CHRONO\n")
     try:
         os.chdir(_roccor_dir())  # RoccoR.cc #includes "RoccoR.h" by relative path
         rc = ROOT.gROOT.ProcessLine(f'.L {cc_path}')
@@ -42,8 +55,10 @@ def _load_roccor():
     if not hasattr(ROOT, "RoccoR"):
         raise RuntimeError(
             f"Failed to load RoccoR from {cc_path} (ProcessLine returned {rc}). "
-            f"Common cause: libboost-headers missing from this environment "
-            f"(conda install -c conda-forge libboost-headers)."
+            f"Check the Cling error printed above: in a conda environment the usual cause "
+            f"is missing Boost headers (conda install -c conda-forge libboost-headers); "
+            f"under CMSSW, Boost is present, so look for another false C++11 feature "
+            f"flag like the BOOST_NO_CXX11_HDR_CHRONO one undefined above."
         )
 
 

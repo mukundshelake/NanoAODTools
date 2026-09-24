@@ -120,6 +120,25 @@ def main():
                        help='[lxplus][CRAB] With --checkCrabStatus: resubmit failed CRAB jobs.')
     parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
                        help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
+    parser.add_argument('--submitCondorJobs', action='store_true',
+                       help='[2alt][lxplus][condor] Submit this stage\'s per-file jobs to HTCondor instead of '
+                            'running them locally or via CRAB. Same inputs, same --filter semantics and the same '
+                            '{STORAGE}/selectionII/{tag}/{hash}/{era}/{DataMC}/{group}/{dataset}/ output layout, so '
+                            'every later step works unchanged. Uses scripts/condor/submit_selectionII_condor.py. Requires '
+                            '`module load lxbatch/eossubmit` in the calling shell (all job files live on EOS).')
+    parser.add_argument('--checkCondorStatus', action='store_true',
+                       help='[lxplus][condor] Check HTCondor job status for jobs submitted with --submitCondorJobs. '
+                            'Uses scripts/condor/checkCondorStatus.py.')
+    parser.add_argument('--resubmitHeldCondorJobs', action='store_true',
+                       help='[lxplus][condor] With --checkCondorStatus: condor_release held jobs.')
+    parser.add_argument('--resubmitMissingCondorJobs', action='store_true',
+                       help='[lxplus][condor] With --checkCondorStatus: resubmit jobs whose output is missing '
+                            'and not currently queued.')
+    parser.add_argument('--condorFilesPerJob', type=int, default=1,
+                       help='[2alt] How many input files each condor job processes (default 1, matching '
+                            "CRAB's Data.unitsPerJob=1).")
+    parser.add_argument('--condorJobFlavour', type=str, default='workday',
+                       help='[2alt] HTCondor +JobFlavour for submitted jobs (default "workday", ~1 day cap).')
     parser.add_argument('--generateDatasetJSON', action='store_true',
                        help='[3] Generate dataset JSON file using the script generateDatasetJSON.py')
     parser.add_argument('--computeABCDScaleFactor', action='store_true',
@@ -160,6 +179,8 @@ def main():
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --runBashScript: {args.runBashScript}")
     print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
+    print(f"  --submitCondorJobs: {args.submitCondorJobs}")
+    print(f"  --checkCondorStatus: {args.checkCondorStatus}")
     print(f"  --checkCrabStatus: {args.checkCrabStatus}")
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
@@ -696,6 +717,109 @@ def main():
         print(f"\nsubmitSelectionJobs: {submitted} submitted, {failed} failed out of {len(tasks)} total.")
 
     # Check CRAB job status for jobs submitted with --submitSelectionJobs
+    # Submit this stage to HTCondor (parallel alternative to --submitSelectionJobs /
+    # local execution). Modelled on 002-Samples' --submitCondorJobs: run_all.py owns
+    # input selection, --filter semantics and output/work-area layout, and hands the
+    # submitter one pre-filtered JSON per era (the submitter's own --include takes a
+    # single regex, which can't express run_all.py's OR'd, wildcarded filters).
+    if args.submitCondorJobs:
+        print("\nSubmitting jobs to HTCondor...")
+        submit_condor_script = base_dir / 'scripts' / 'condor' / 'submit_selectionII_condor.py'
+        if not submit_condor_script.exists():
+            print(f"Error: {submit_condor_script} not found!")
+            return 1
+        storageBase = utils.resolve_storage_path(config)
+        submitted_eras = 0
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nPreparing condor submission for era: {era}")
+            selectionI_json = output_dir / 'inputs' / f'selectionI_{era}_datasets.json'
+            if not selectionI_json.exists():
+                print(f"  Warning: Dataset JSON not found: {selectionI_json}. Run --generateSelectionIDatasetJSON first. Skipping era {era}.")
+                era_inputs = None
+            else:
+                with open(selectionI_json) as f:
+                    era_inputs = json.load(f)
+            if era_inputs is None:
+                continue
+            golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
+            if not golden_json_path.exists():
+                print(f"  Error: golden JSON not found: {golden_json_path}. Run --downloadGoldenJSONs first.")
+                return 1
+            filtered = {}
+            for DataMC, groups in era_inputs.items():
+                for group, datasets in groups.items():
+                    for dataset, files in datasets.items():
+                        if matches_filter(args.filter, era, DataMC, group, dataset):
+                            filtered.setdefault(DataMC, {}).setdefault(group, {})[dataset] = files
+            if not filtered:
+                print(f"  No datasets match --filter for era {era}, skipping.")
+                continue
+            n_files = sum(len(fl) for gs in filtered.values() for ds in gs.values() for fl in ds.values())
+            if n_files == 0:
+                print(f"  Error: the dataset(s) matching --filter for era {era} list no input files "
+                      f"at all. Nothing would be submitted; refusing to report that as success.")
+                return 1
+            filtered_json_path = output_dir / 'inputs' / f'condorInputs_{era}.json'
+            with open(filtered_json_path, 'w') as f:
+                json.dump(filtered, f)
+            condor_output_dir = Path(storageBase) / 'selectionII' / args.tag / config_hash / era
+            condor_work_area = Path(storageBase) / 'condor_work_selectionII' / args.tag / config_hash / era
+            cmd = (
+                f"python3 {submit_condor_script} --era {era} "
+                f"--dataset-json {filtered_json_path} --golden-json {golden_json_path} "
+                f"--output-dir {condor_output_dir} --work-area {condor_work_area} "
+                f"--files-per-job {args.condorFilesPerJob} --job-flavour {args.condorJobFlavour} "
+                f"{'--sample ' if args.sample else ''}--submit"
+            )
+            print(f"Running command: {cmd}")
+            result = subprocess.run(cmd, shell=True)
+            if result.returncode != 0:
+                print(f"Error submitting condor jobs for era: {era}")
+                return 1
+            print(f"Successfully submitted condor jobs for era: {era} (work area: {condor_work_area})")
+            submitted_eras += 1
+        if submitted_eras == 0:
+            print("Error: --submitCondorJobs submitted nothing (no era/dataset matched, or inputs missing).")
+            return 1
+
+    # Check HTCondor job status (parallel alternative to --checkCrabStatus). Same shape
+    # as 002-Samples': one work area per era, located from tag/hash exactly as
+    # --submitCondorJobs created it.
+    if args.checkCondorStatus:
+        print("\nChecking HTCondor job status for jobs submitted with --submitCondorJobs...")
+        check_condor_script = base_dir / 'scripts' / 'condor' / 'checkCondorStatus.py'
+        if not check_condor_script.exists():
+            print(f"Error: {check_condor_script} not found!")
+            return 1
+        storageBase = utils.resolve_storage_path(config)
+        checked = 0
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            condor_work_area = Path(storageBase) / 'condor_work_selectionII' / args.tag / config_hash / era
+            if not (condor_work_area / 'jobs.txt').exists():
+                print(f"  No condor work area found for era {era} at {condor_work_area}, skipping.")
+                continue
+            cmd = f"python3 {check_condor_script} -d {condor_work_area}"
+            if args.resubmitHeldCondorJobs:
+                cmd += " --resubmitHeld"
+            if args.resubmitMissingCondorJobs:
+                cmd += " --resubmitMissing"
+            print(f"\nRunning command: {cmd}")
+            result = subprocess.run(cmd, shell=True)
+            checked += 1
+            if result.returncode != 0:
+                print(f"Error checking condor status for era: {era}")
+        # Same trap --checkCrabStatus fell into: finding nothing to check is not a
+        # clean result, it means this tag+hash has no condor submission at all.
+        if checked == 0:
+            print(f"Error: no condor work area found for any era matching --filter under "
+                  f"{Path(storageBase) / 'condor_work_selectionII' / args.tag / config_hash}. Nothing was "
+                  f"submitted under this tag+config-hash (config.yaml may have changed since).")
+            return 1
+
     if args.checkCrabStatus:
         print("\nChecking CRAB job status for scale-factor-weight jobs submitted with --submitSelectionJobs...")
         check_crab_status_script = base_dir / 'scripts' / 'crab' / 'checkStatus.py'

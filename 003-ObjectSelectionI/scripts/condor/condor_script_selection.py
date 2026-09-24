@@ -55,14 +55,21 @@ from METXYCorr import METXYCorrModule
 
 print("Running condor_script_selection.py")
 
-if len(sys.argv) != 6:
+if len(sys.argv) not in (6, 7):
     raise SystemExit(
         "usage: condor_script_selection.py <era> <files_json> <golden_json|NONE> "
-        "<is_data 0|1> <chapter_dir>")
+        "<is_data 0|1> <chapter_dir> [selection|precorrection]")
 
 era, files_json, golden_json, is_data_arg, chapter_dir = sys.argv[1:6]
 is_data = is_data_arg == "1"
-print(f"era={era}, isData={is_data}, chapter_dir={chapter_dir}")
+# Which of this chapter's two per-file passes to run. Both are the same
+# PostProcessor loop over one file at a time; they differ only in module list,
+# cut and lumi mask -- mirroring run_all.py's --applyPreSelectionCorrections
+# (precorrection) and --generateProcessListJSON (selection) exactly.
+stage = sys.argv[6] if len(sys.argv) == 7 else "selection"
+if stage not in ("selection", "precorrection"):
+    raise SystemExit(f"unknown stage '{stage}'")
+print(f"era={era}, isData={is_data}, stage={stage}, chapter_dir={chapter_dir}")
 
 with open("config.yaml") as f:
     config = yaml.safe_load(f)
@@ -71,21 +78,29 @@ with open(files_json) as f:
     files = json.load(f)
 print("INPUT FILES:", files)
 
-# Same combined cut string the local path and the CRAB worker build.
-era_cuts = config["SelectionCuts"][era]
-cut_string = " && ".join(v for v in era_cuts.values() if v and v.strip())
+if stage == "selection":
+    # Same combined cut string the local path and the CRAB worker build.
+    era_cuts = config["SelectionCuts"][era]
+    cut_string = " && ".join(v for v in era_cuts.values() if v and v.strip())
+    json_input = golden_json if (is_data and golden_json != "NONE") else None
+    if is_data and json_input is None:
+        print("[WARNING] Data job with no golden JSON -- running without lumi filtering.")
+else:
+    # The corrections pass keeps every event and applies no lumi mask, exactly
+    # as the local pass does (cut_string/goldenJSON None in its process list):
+    # it only rewrites Jet_pt/Jet_mass/Muon_pt ahead of the selection, which is
+    # where the cuts and the golden JSON are applied.
+    cut_string = None
+    json_input = None
 print("Cut string:", cut_string)
-
-json_input = golden_json if (is_data and golden_json != "NONE") else None
-if is_data and json_input is None:
-    print("[WARNING] Data job with no golden JSON -- running without lumi filtering.")
 
 # Same per-module injections run_all.py applies locally, so all three paths
 # (local, CRAB, condor) hand identical config to the modules. Correction file
 # paths are chapter-relative in config.yaml; resolve them against the real
 # chapter directory rather than the job's scratch cwd.
-module_names = config["ModuleList"]["Data" if is_data else "MC"]
-print("ModuleList:", module_names)
+_list_key = "ModuleList" if stage == "selection" else "PreSelectionCorrectionModuleList"
+module_names = config[_list_key]["Data" if is_data else "MC"]
+print(f"{_list_key}:", module_names)
 
 module_configs = []
 for mod_name in module_names:
@@ -95,11 +110,17 @@ for mod_name in module_names:
         mod_cfg["is_mc"] = not is_data
     elif mod_name == "metXYCorr":
         mod_cfg["isData"] = is_data
-        mod_cfg["metFile"] = os.path.join(chapter_dir, mod_cfg["metFile"])
-        if not os.path.isfile(mod_cfg["metFile"]):
-            raise RuntimeError(
-                f"metXYCorr: correction file not found: {mod_cfg['metFile']}. "
-                f"Run run_all.py --fetchSFFiles for era {era} first.")
+    elif mod_name == "muonRochester":
+        mod_cfg["isData"] = is_data
+    # Correction files are chapter-relative in config.yaml; the local pass joins
+    # them onto the chapter directory, so do the same here.
+    for file_key in ("metFile", "jerFile", "vetoMapFile", "rochesterFile"):
+        if file_key in mod_cfg:
+            mod_cfg[file_key] = os.path.join(chapter_dir, mod_cfg[file_key])
+            if not os.path.isfile(mod_cfg[file_key]):
+                raise RuntimeError(
+                    f"{mod_name}: correction file not found: {mod_cfg[file_key]}. "
+                    f"Run run_all.py --fetchSFFiles for era {era} first.")
     module_configs.append((mod_name, mod_cfg))
 
 
@@ -116,6 +137,17 @@ def build_modules(configs):
             built.append(SelectedObjectsProducer(mod_cfg))
         elif mod_name == "metXYCorr":
             built.append(METXYCorrModule(mod_cfg))
+        # Correction-pass modules, imported only when used so selection jobs don't
+        # pay for them (MuonRochester compiles RoccoR.cc through Cling on load).
+        elif mod_name == "jetJER":
+            from JetJER import JetJERModule
+            built.append(JetJERModule(mod_cfg))
+        elif mod_name == "jetVetoMap":
+            from JetVetoMap import JetVetoMapModule
+            built.append(JetVetoMapModule(mod_cfg))
+        elif mod_name == "muonRochester":
+            from MuonRochester import MuonRochesterModule
+            built.append(MuonRochesterModule(mod_cfg))
         else:
             raise RuntimeError(
                 f"Unknown module '{mod_name}' in ModuleList. Add it here and to "

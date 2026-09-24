@@ -115,10 +115,17 @@ def main():
     for job in jobs:
         out_path = Path(job["out_dir"]) / f"{job['job_id']}.root"
         label = job["out_dir"]
-        counts = per_dataset.setdefault(label, {"total": 0, "done": 0, "idle": 0, "running": 0, "held": 0, "missing": 0})
+        counts = per_dataset.setdefault(label, {"total": 0, "done": 0, "empty": 0, "idle": 0, "running": 0, "held": 0, "missing": 0})
         counts["total"] += 1
         if out_path.exists():
             counts["done"] += 1
+            continue
+        # The wrapper leaves ZERO_EVENTS beside files.json when a job finished with
+        # nothing to write (e.g. no event passed the cut). That is a completed job,
+        # not a missing one -- counted as done, but reported separately as "empty".
+        if (Path(job["files_json"]).parent / "ZERO_EVENTS").exists():
+            counts["done"] += 1
+            counts["empty"] += 1
             continue
         state = queue_states.get(job["job_id"])
         if state in ("idle", "running"):
@@ -130,15 +137,17 @@ def main():
             counts["missing"] += 1
             missing_jobs.append(job)
 
-    total = {"total": 0, "done": 0, "idle": 0, "running": 0, "held": 0, "missing": 0}
+    total = {"total": 0, "done": 0, "empty": 0, "idle": 0, "running": 0, "held": 0, "missing": 0}
     for label, counts in sorted(per_dataset.items()):
         print(f"{label}: {counts['done']}/{counts['total']} done  "
-              f"(idle={counts['idle']} running={counts['running']} held={counts['held']} missing={counts['missing']})")
+              f"(empty={counts['empty']} idle={counts['idle']} running={counts['running']} "
+              f"held={counts['held']} missing={counts['missing']})")
         for k in total:
             total[k] += counts[k]
 
     print(f"\nTOTAL: {total['done']}/{total['total']} done  "
-          f"(idle={total['idle']} running={total['running']} held={total['held']} missing={total['missing']})")
+          f"(empty={total['empty']} idle={total['idle']} running={total['running']} "
+          f"held={total['held']} missing={total['missing']})")
 
     if args.resubmitHeld and held_jobs:
         print(f"\nReleasing {len(held_jobs)} held job(s) across cluster(s) {cluster_ids}...")

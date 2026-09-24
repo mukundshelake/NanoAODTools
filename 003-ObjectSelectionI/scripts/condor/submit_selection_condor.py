@@ -57,7 +57,13 @@ WORKER_PY = SCRIPT_DIR / "condor_script_selection.py"
 MODULE_FILES = {
     "selectedObjects": MODULES_DIR / "SelectedObjects.py",
     "metXYCorr":       MODULES_DIR / "METXYCorr.py",
+    # --stage precorrection (PreSelectionCorrectionModuleList)
+    "jetJER":          MODULES_DIR / "JetJER.py",
+    "jetVetoMap":      MODULES_DIR / "JetVetoMap.py",
+    "muonRochester":   MODULES_DIR / "MuonRochester.py",
 }
+# Which config.yaml module list each stage runs -- see condor_script_selection.py.
+STAGE_LIST_KEY = {"selection": "ModuleList", "precorrection": "PreSelectionCorrectionModuleList"}
 
 
 def safe_name(s: str) -> str:
@@ -83,7 +89,12 @@ def main():
                              "preSelectionCorrected_{era}_datasets.json produced by "
                              "--applyPreSelectionCorrections (preferred when it exists, "
                              "same as the local and CRAB paths).")
-    parser.add_argument("--golden-json", required=True)
+    parser.add_argument("--stage", choices=sorted(STAGE_LIST_KEY), default="selection",
+                        help="selection (default): ModuleList + SelectionCuts + golden JSON. "
+                             "precorrection: PreSelectionCorrectionModuleList with no cut and no "
+                             "lumi mask, i.e. the --applyPreSelectionCorrections pass.")
+    parser.add_argument("--golden-json", default=None,
+                        help="Required for --stage selection; unused for precorrection.")
     parser.add_argument("--output-dir", required=True,
                         help="Selection output base for this era, e.g. "
                              "{STORAGE}/selectionI/{tag}/{hash}/{era}. Must be on EOS.")
@@ -104,11 +115,15 @@ def main():
         (WORKER_PY, "condor_script_selection.py"),
         (CONFIG_YAML, "config.yaml"),
         (args.dataset_json, "dataset JSON"),
-        (args.golden_json, "golden JSON"),
     ] + [(p, f"module: {name}") for name, p in MODULE_FILES.items()]:
         if not Path(path).is_file():
             print(f"ERROR: required file not found: {path}  ({label})", file=sys.stderr)
             sys.exit(1)
+
+    if args.stage == "selection" and not (args.golden_json and Path(args.golden_json).is_file()):
+        print(f"ERROR: --stage selection needs an existing --golden-json (got {args.golden_json})",
+              file=sys.stderr)
+        sys.exit(1)
 
     for path, label in [(args.output_dir, "--output-dir"), (args.work_area, "--work-area")]:
         if not str(path).startswith("/eos/"):
@@ -123,9 +138,9 @@ def main():
     # Fail before queueing anything if ModuleList names something the condor
     # worker cannot build (see MODULE_FILES' comment).
     for data_mc_key in ("MC", "Data"):
-        for mod_name in config["ModuleList"].get(data_mc_key, []):
+        for mod_name in config[STAGE_LIST_KEY[args.stage]].get(data_mc_key, []):
             if mod_name not in MODULE_FILES:
-                print(f"ERROR: ModuleList.{data_mc_key} names '{mod_name}', which the condor "
+                print(f"ERROR: {STAGE_LIST_KEY[args.stage]}.{data_mc_key} names '{mod_name}', which the condor "
                       f"path does not know how to run. Add it to MODULE_FILES here and to "
                       f"condor_script_selection.py's build_modules().", file=sys.stderr)
                 sys.exit(1)
@@ -134,10 +149,10 @@ def main():
     # absolute path from inside the job; a missing one would fail every job
     # individually, so check once here instead.
     for data_mc_key in ("MC", "Data"):
-        for mod_name in config["ModuleList"].get(data_mc_key, []):
+        for mod_name in config[STAGE_LIST_KEY[args.stage]].get(data_mc_key, []):
             raw = config["Modules"].get(mod_name, {})
             mod_cfg = raw.get(args.era, raw)
-            for file_key in ("metFile",):
+            for file_key in ("metFile", "jerFile", "vetoMapFile", "rochesterFile"):
                 if file_key in mod_cfg:
                     sf_path = CHAPTER_DIR / mod_cfg[file_key]
                     if not sf_path.is_file():
@@ -201,7 +216,7 @@ def main():
     manifest_path = work_area / "jobs.txt"
     submit_path = work_area / "selection.sub"
 
-    golden_abs = str(Path(args.golden_json).resolve())
+    golden_abs = str(Path(args.golden_json).resolve()) if args.golden_json else "NONE"
     manifest_lines = []
     for job_id, file_chunk, is_data, dataset_out_dir in job_specs:
         job_dir = jobs_dir / job_id
@@ -225,7 +240,7 @@ def main():
     # the submitting directory (002-Samples hit exactly this: 2714 stray files, 234G).
     submit_txt = f"""universe = vanilla
 executable = {WRAPPER_SH}
-arguments = "$(job_id) $(era) {CONFIG_YAML} $(files_json) $(golden_json) $(is_data) $(out_dir) {WORKER_PY} {CHAPTER_DIR} {MODULES_DIR}"
+arguments = "$(job_id) $(era) {CONFIG_YAML} $(files_json) $(golden_json) $(is_data) $(out_dir) {WORKER_PY} {CHAPTER_DIR} {MODULES_DIR} {args.stage}"
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
 transfer_output_files = ""

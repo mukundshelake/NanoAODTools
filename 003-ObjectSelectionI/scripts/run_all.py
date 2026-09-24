@@ -25,6 +25,95 @@ sys.path.insert(0, str(Path(__file__).parent))
 import utils
 
 
+# --condorStage -> (output tree, condor work-area tree) under {STORAGE}. The output
+# trees are the ones the local path writes, so later steps can't tell the difference.
+CONDOR_STAGE_DIRS = {
+    'selection':     ('selectionI',            'condor_work_selectionI'),
+    'precorrection': ('preSelectionCorrected', 'condor_work_preSelectionCorrected'),
+}
+
+
+def scan_preselection_corrected(base_dir, inputs_folder, output_dir, storageBase, tag, config_hash, era):
+    """Scan this era's preSelectionCorrected output on disk into
+    preSelectionCorrected_{era}_datasets.json (inputs/ + this run's snapshot),
+    with the same health-checked generateDatasetJSON.py scan used everywhere else
+    in this pipeline, so later steps can prefer corrected inputs. Returns True on
+    success. Shared by the local corrections pass and the condor one, which runs
+    it as its own step once the jobs have finished."""
+    psc_base_directory = os.path.join(storageBase, "preSelectionCorrected", tag, config_hash, era)
+    psc_output_name = f"preSelectionCorrected_{era}_datasets.json"
+    cmd = [
+        sys.executable, str(base_dir / 'scripts' / 'generateDatasetJSON.py'),
+        '--outputDirectory', str(inputs_folder),
+        '--outputFileName', psc_output_name,
+        '--baseDirectory', psc_base_directory,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  Error running generateDatasetJSON.py for preSelectionCorrected/{era}:\n{result.stderr}")
+        return False
+    output_path = output_dir / 'inputs' / psc_output_name
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(inputs_folder / psc_output_name, output_path)
+    print(f"  Generated {inputs_folder / psc_output_name} and copied to {output_path}")
+    return True
+
+
+def load_selection_inputs(output_dir, era):
+    """This era's selection inputs, preferring pre-selection-corrected files.
+
+    Returns {DataMC: {group: {dataset: files}}}, or None if the base preselection
+    dataset JSON is missing. For each DataMC branch --applyPreSelectionCorrections
+    covered, its corrected files (jetVetoMap/muonRochester, plus jetJER on MC)
+    replace the raw preselection ones; any branch it didn't cover falls back to
+    raw files with a warning.
+
+    Shared by every way this stage can run -- local (--generateProcessListJSON),
+    CRAB (--submitSelectionJobs) and condor (--submitCondorJobs) -- because they
+    used to disagree: only the local path applied this preference, so CRAB jobs
+    silently selected on uncorrected Jet_pt/Muon_pt while local jobs used the
+    corrected values. One helper means one answer.
+    """
+    preselection_dataset_json = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+    if not preselection_dataset_json.exists():
+        print(f"  Warning: Dataset JSON not found: {preselection_dataset_json}. Skipping era {era}.")
+        return None
+    with open(preselection_dataset_json) as f:
+        datasetJSON = json.load(f)
+    preselcorrected_dataset_json = output_dir / 'inputs' / f'preSelectionCorrected_{era}_datasets.json'
+    if preselcorrected_dataset_json.exists():
+        with open(preselcorrected_dataset_json) as f:
+            pscDatasetJSON = json.load(f)
+        for DataMC in list(datasetJSON.keys()):
+            if DataMC in pscDatasetJSON:
+                # A dataset with raw files but no corrected ones means the corrections
+                # pass produced nothing for it -- proceeding would quietly select on
+                # nothing (confirmed live: the pass failed for every dataset, the
+                # corrected JSON listed them all with no files, and the condor step
+                # then "successfully" submitted zero jobs).
+                empty = [f"{DataMC}/{g}/{d}"
+                         for g, ds in datasetJSON[DataMC].items() for d, fl in ds.items()
+                         if fl and not pscDatasetJSON[DataMC].get(g, {}).get(d)]
+                if empty:
+                    print(f"  Error: {len(empty)} dataset(s) have raw preselection files but no "
+                          f"pre-selection-corrected output in {preselcorrected_dataset_json.name}, e.g. "
+                          f"{empty[0]}. The corrections pass did not complete for them; rerun "
+                          f"--applyPreSelectionCorrections rather than selecting on missing inputs.")
+                    return None
+                datasetJSON[DataMC] = pscDatasetJSON[DataMC]
+                print(f"  Using pre-selection-corrected inputs for {DataMC} "
+                      f"(from {preselcorrected_dataset_json.name})")
+            else:
+                print(f"  Warning: no pre-selection-corrected inputs found for {DataMC} in "
+                      f"{preselcorrected_dataset_json.name}; falling back to raw preselection "
+                      f"files (uncorrected) for it.")
+    else:
+        print(f"  Note: {preselcorrected_dataset_json.name} not found; using raw "
+              f"(uncorrected) preselection files for all DataMC branches. Run "
+              f"--applyPreSelectionCorrections first to enable jetVetoMap/JER/muonRochester.")
+    return datasetJSON
+
+
 def matches_filter(filters, era, data_mc=None, group=None, dataset=None):
     """Check if era/DataMC/group/dataset matches any of the provided filters.
 
@@ -118,6 +207,36 @@ def main():
                        help='[lxplus][CRAB] With --checkCrabStatus: resubmit failed CRAB jobs.')
     parser.add_argument('--removeSubmitFailedCrabJobs', action='store_true',
                        help='[lxplus][CRAB] With --checkCrabStatus: remove CRAB jobs that never submitted successfully.')
+    parser.add_argument('--submitCondorJobs', action='store_true',
+                       help='[2alt][lxplus][condor] Submit this stage\'s per-file jobs to HTCondor instead of '
+                            'running them locally or via CRAB. Same inputs, same --filter semantics and the same '
+                            '{STORAGE}/selectionI/{tag}/{hash}/{era}/{DataMC}/{group}/{dataset}/ output layout, so '
+                            'every later step works unchanged. Uses scripts/condor/submit_selection_condor.py. Requires '
+                            '`module load lxbatch/eossubmit` in the calling shell (all job files live on EOS).')
+    parser.add_argument('--condorStage', choices=['selection', 'precorrection'], default='selection',
+                       help='[lxplus][condor] Which per-file pass --submitCondorJobs/--checkCondorStatus act on: '
+                            '"selection" (default; ModuleList, SelectionCuts, golden JSON -> {STORAGE}/selectionI/...) '
+                            'or "precorrection" (PreSelectionCorrectionModuleList, no cut, no lumi mask, on the raw '
+                            'preselection files -> {STORAGE}/preSelectionCorrected/..., i.e. the condor form of '
+                            '--applyPreSelectionCorrections). Follow a finished precorrection pass with '
+                            '--generatePreSelectionCorrectedDatasetJSON.')
+    parser.add_argument('--generatePreSelectionCorrectedDatasetJSON', action='store_true',
+                       help='[0c] Scan {STORAGE}/preSelectionCorrected/{tag}/{hash}/{era} into '
+                            'inputs/preSelectionCorrected_{era}_datasets.json -- the scan step of '
+                            '--applyPreSelectionCorrections on its own, for after a condor precorrection pass.')
+    parser.add_argument('--checkCondorStatus', action='store_true',
+                       help='[lxplus][condor] Check HTCondor job status for jobs submitted with --submitCondorJobs. '
+                            'Uses scripts/condor/checkCondorStatus.py.')
+    parser.add_argument('--resubmitHeldCondorJobs', action='store_true',
+                       help='[lxplus][condor] With --checkCondorStatus: condor_release held jobs.')
+    parser.add_argument('--resubmitMissingCondorJobs', action='store_true',
+                       help='[lxplus][condor] With --checkCondorStatus: resubmit jobs whose output is missing '
+                            'and not currently queued.')
+    parser.add_argument('--condorFilesPerJob', type=int, default=1,
+                       help='[2alt] How many input files each condor job processes (default 1, matching '
+                            "CRAB's Data.unitsPerJob=1).")
+    parser.add_argument('--condorJobFlavour', type=str, default='workday',
+                       help='[2alt] HTCondor +JobFlavour for submitted jobs (default "workday", ~1 day cap).')
     parser.add_argument('--generateCrabDatasetJSON', action='store_true',
                        help='[2b][lxplus][CRAB] Scan the raw CRAB output tree {STORAGE}/selectionI/{tag}/{config_hash}/{era} '
                             '(still nested under CRAB\'s own {primaryDataset}/{outputDatasetTag}/{timestamp}/'
@@ -182,6 +301,10 @@ def main():
     print(f"  --generateProcessListJSON: {args.generateProcessListJSON}")
     print(f"  --writeBashScript: {args.writeBashScript}")
     print(f"  --submitSelectionJobs: {args.submitSelectionJobs}")
+    print(f"  --submitCondorJobs: {args.submitCondorJobs}")
+    print(f"  --checkCondorStatus: {args.checkCondorStatus}")
+    print(f"  --condorStage: {args.condorStage}")
+    print(f"  --generatePreSelectionCorrectedDatasetJSON: {args.generatePreSelectionCorrectedDatasetJSON}")
     print(f"  --checkCrabStatus: {args.checkCrabStatus}")
     print(f"  --resubmitFailedCrabJobs: {args.resubmitFailedCrabJobs}")
     print(f"  --removeSubmitFailedCrabJobs: {args.removeSubmitFailedCrabJobs}")
@@ -478,27 +601,28 @@ def main():
                 print(f"  Error: pre-selection correction pass failed for era {era}.")
                 return 1
 
-            # Scan this era's preSelectionCorrected output on disk, same
-            # generateDatasetJSON.py health-checked scan used everywhere else
-            # in this pipeline, so --generateProcessListJSON can prefer it
-            # below (both DataMC branches).
-            psc_base_directory = os.path.join(storageBase, "preSelectionCorrected", args.tag, config_hash, era)
-            psc_output_name = f"preSelectionCorrected_{era}_datasets.json"
-            cmd = [
-                sys.executable, str(base_dir / 'scripts' / 'generateDatasetJSON.py'),
-                '--outputDirectory', str(inputs_folder),
-                '--outputFileName', psc_output_name,
-                '--baseDirectory', psc_base_directory,
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"  Error running generateDatasetJSON.py for preSelectionCorrected/{era}:\n{result.stderr}")
+            if not scan_preselection_corrected(base_dir, inputs_folder, output_dir, storageBase,
+                                               args.tag, config_hash, era):
                 return 1
-            output_path = output_dir / 'inputs' / psc_output_name
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(inputs_folder / psc_output_name, output_path)
-            print(f"  Generated {inputs_folder / psc_output_name} and copied to {output_path}")
         print("Finished applying pre-selection corrections.")
+
+    # The scan half of --applyPreSelectionCorrections on its own, for when the
+    # correction jobs themselves ran on condor (--submitCondorJobs --condorStage
+    # precorrection) and have now finished.
+    if args.generatePreSelectionCorrectedDatasetJSON:
+        print("\nScanning pre-selection-corrected output into preSelectionCorrected_{era}_datasets.json...")
+        storageBase = utils.resolve_storage_path(config)
+        scanned = 0
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            if not scan_preselection_corrected(base_dir, inputs_folder, output_dir, storageBase,
+                                               args.tag, config_hash, era):
+                return 1
+            scanned += 1
+        if scanned == 0:
+            print("Error: no era matched --filter; nothing scanned.")
+            return 1
 
     # Generate process list JSON for runSelection.py
     if args.generateProcessListJSON:
@@ -521,31 +645,9 @@ def main():
                 print(f"  Warning: Golden JSON file not found: {golden_json_file}. Data tasks will run without golden JSON filtering for era {era}.")
 
 
-            with open(preselection_dataset_json) as f:
-                datasetJSON = json.load(f)
-
-            # Prefer pre-selection-corrected files (--applyPreSelectionCorrections:
-            # jetVetoMap/muonRochester for both DataMC branches, jetJER MC-only)
-            # over raw preselection ones, once they exist, for whichever DataMC
-            # branches that pass actually covered (per
-            # PreSelectionCorrectionModuleList).
-            preselcorrected_dataset_json = output_dir / 'inputs' / f'preSelectionCorrected_{era}_datasets.json'
-            if preselcorrected_dataset_json.exists():
-                with open(preselcorrected_dataset_json) as f:
-                    pscDatasetJSON = json.load(f)
-                for DataMC in list(datasetJSON.keys()):
-                    if DataMC in pscDatasetJSON:
-                        datasetJSON[DataMC] = pscDatasetJSON[DataMC]
-                        print(f"  Using pre-selection-corrected inputs for {DataMC} "
-                              f"(from {preselcorrected_dataset_json.name})")
-                    else:
-                        print(f"  Warning: no pre-selection-corrected inputs found for {DataMC} in "
-                              f"{preselcorrected_dataset_json.name}; falling back to raw preselection "
-                              f"files (uncorrected) for it.")
-            else:
-                print(f"  Note: {preselcorrected_dataset_json.name} not found; using raw "
-                      f"(uncorrected) preselection files for all DataMC branches. Run "
-                      f"--applyPreSelectionCorrections first to enable jetVetoMap/JER/muonRochester.")
+            datasetJSON = load_selection_inputs(output_dir, era)
+            if datasetJSON is None:
+                continue
 
             # Build combined cut string for this era
             era_cuts = config['SelectionCuts'][era]
@@ -699,15 +801,15 @@ def main():
             if not matches_filter(args.filter, era):
                 continue
             print(f"\nSubmitting object-selection jobs for era: {era}")
-            dataset_json_path = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
-            if not dataset_json_path.exists():
-                print(f"Error: Dataset JSON not found for era {era} at {dataset_json_path}. Run --generatePreselectionDatasetJSON first.")
+            era_dataset_json = load_selection_inputs(output_dir, era)
+            if era_dataset_json is None:
                 continue
+            # submit_selection_flexible.py reads files out of a JSON on disk; give it
+            # the same corrected-where-available inputs the local path uses.
+            dataset_json_path = output_dir / 'inputs' / f'crabInputs_{era}.json'
+            with open(dataset_json_path, 'w') as jf:
+                json.dump(era_dataset_json, jf)
             golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
-            # Enumerate DataMC/group/dataset from the actual fetched preselection dataset
-            # JSON, not config['NgenandXsec'] -- see the matching comment in --writeBashScript.
-            with open(dataset_json_path) as jf:
-                era_dataset_json = json.load(jf)
             for DataMC in era_dataset_json:
                 print(f"  DataMC: {DataMC}")
                 for group in era_dataset_json[DataMC]:
@@ -746,6 +848,115 @@ def main():
               f"out of {submitted + failed + pre_skipped} total.")
 
     # Check CRAB job status for jobs submitted with --submitSelectionJobs
+    # Submit this stage to HTCondor (parallel alternative to --submitSelectionJobs /
+    # local execution). Modelled on 002-Samples' --submitCondorJobs: run_all.py owns
+    # input selection, --filter semantics and output/work-area layout, and hands the
+    # submitter one pre-filtered JSON per era (the submitter's own --include takes a
+    # single regex, which can't express run_all.py's OR'd, wildcarded filters).
+    if args.submitCondorJobs:
+        print("\nSubmitting jobs to HTCondor...")
+        submit_condor_script = base_dir / 'scripts' / 'condor' / 'submit_selection_condor.py'
+        if not submit_condor_script.exists():
+            print(f"Error: {submit_condor_script} not found!")
+            return 1
+        storageBase = utils.resolve_storage_path(config)
+        submitted_eras = 0
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nPreparing condor submission for era: {era}")
+            if args.condorStage == 'precorrection':
+                # Corrections read the raw preselection files -- they are what
+                # produces the corrected ones -- and need no golden JSON.
+                raw_json = output_dir / 'inputs' / f'preselection_{era}_datasets.json'
+                if not raw_json.exists():
+                    print(f"  Error: {raw_json} not found. Run --generatePreselectionDatasetJSON first.")
+                    return 1
+                with open(raw_json) as f:
+                    era_inputs = json.load(f)
+                golden_json_path = None
+            else:
+                era_inputs = load_selection_inputs(output_dir, era)
+                if era_inputs is None:
+                    continue
+                golden_json_path = output_dir / 'inputs' / f'{era}_goldenJSON.json'
+                if not golden_json_path.exists():
+                    print(f"  Error: golden JSON not found: {golden_json_path}. Run --downloadGoldenJSONs first.")
+                    return 1
+            filtered = {}
+            for DataMC, groups in era_inputs.items():
+                for group, datasets in groups.items():
+                    for dataset, files in datasets.items():
+                        if matches_filter(args.filter, era, DataMC, group, dataset):
+                            filtered.setdefault(DataMC, {}).setdefault(group, {})[dataset] = files
+            if not filtered:
+                print(f"  No datasets match --filter for era {era}, skipping.")
+                continue
+            n_files = sum(len(fl) for gs in filtered.values() for ds in gs.values() for fl in ds.values())
+            if n_files == 0:
+                print(f"  Error: the dataset(s) matching --filter for era {era} list no input files "
+                      f"at all. Nothing would be submitted; refusing to report that as success.")
+                return 1
+            filtered_json_path = output_dir / 'inputs' / f'condorInputs_{args.condorStage}_{era}.json'
+            with open(filtered_json_path, 'w') as f:
+                json.dump(filtered, f)
+            condor_output_dir = Path(storageBase) / CONDOR_STAGE_DIRS[args.condorStage][0] / args.tag / config_hash / era
+            condor_work_area = Path(storageBase) / CONDOR_STAGE_DIRS[args.condorStage][1] / args.tag / config_hash / era
+            cmd = (
+                f"python3 {submit_condor_script} --era {era} "
+                f"--dataset-json {filtered_json_path} --stage {args.condorStage} "
+                + (f"--golden-json {golden_json_path} " if golden_json_path else "") +
+                f"--output-dir {condor_output_dir} --work-area {condor_work_area} "
+                f"--files-per-job {args.condorFilesPerJob} --job-flavour {args.condorJobFlavour} "
+                f"{'--sample ' if args.sample else ''}--submit"
+            )
+            print(f"Running command: {cmd}")
+            result = subprocess.run(cmd, shell=True)
+            if result.returncode != 0:
+                print(f"Error submitting condor jobs for era: {era}")
+                return 1
+            print(f"Successfully submitted condor jobs for era: {era} (work area: {condor_work_area})")
+            submitted_eras += 1
+        if submitted_eras == 0:
+            print("Error: --submitCondorJobs submitted nothing (no era/dataset matched, or inputs missing).")
+            return 1
+
+    # Check HTCondor job status (parallel alternative to --checkCrabStatus). Same shape
+    # as 002-Samples': one work area per era, located from tag/hash exactly as
+    # --submitCondorJobs created it.
+    if args.checkCondorStatus:
+        print("\nChecking HTCondor job status for jobs submitted with --submitCondorJobs...")
+        check_condor_script = base_dir / 'scripts' / 'condor' / 'checkCondorStatus.py'
+        if not check_condor_script.exists():
+            print(f"Error: {check_condor_script} not found!")
+            return 1
+        storageBase = utils.resolve_storage_path(config)
+        checked = 0
+        for era in config['NgenandXsec']:
+            if not matches_filter(args.filter, era):
+                continue
+            condor_work_area = Path(storageBase) / CONDOR_STAGE_DIRS[args.condorStage][1] / args.tag / config_hash / era
+            if not (condor_work_area / 'jobs.txt').exists():
+                print(f"  No condor work area found for era {era} at {condor_work_area}, skipping.")
+                continue
+            cmd = f"python3 {check_condor_script} -d {condor_work_area}"
+            if args.resubmitHeldCondorJobs:
+                cmd += " --resubmitHeld"
+            if args.resubmitMissingCondorJobs:
+                cmd += " --resubmitMissing"
+            print(f"\nRunning command: {cmd}")
+            result = subprocess.run(cmd, shell=True)
+            checked += 1
+            if result.returncode != 0:
+                print(f"Error checking condor status for era: {era}")
+        # Same trap --checkCrabStatus fell into: finding nothing to check is not a
+        # clean result, it means this tag+hash has no condor submission at all.
+        if checked == 0:
+            print(f"Error: no condor work area found for any era matching --filter under "
+                  f"{Path(storageBase) / CONDOR_STAGE_DIRS[args.condorStage][1] / args.tag / config_hash}. Nothing was "
+                  f"submitted under this tag+config-hash (config.yaml may have changed since).")
+            return 1
+
     if args.checkCrabStatus:
         print("\nChecking CRAB job status for object-selection jobs submitted with --submitSelectionJobs...")
         check_crab_status_script = base_dir / 'scripts' / 'crab' / 'checkStatus.py'

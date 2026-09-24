@@ -9,7 +9,7 @@
 # transfers" restrictions -- just read/write EOS directly by absolute path
 # from inside the job. Same approach as 002-Samples' condor path.
 #
-# Args: job_id era config_yaml files_json golden_json_or_NONE is_data out_dir worker_py chapter_dir modules_dir
+# Args: job_id era config_yaml files_json golden_json_or_NONE is_data out_dir worker_py chapter_dir modules_dir [stage]
 
 set -e
 
@@ -23,6 +23,7 @@ OUT_DIR=$7
 WORKER_PY=$8
 CHAPTER_DIR=$9
 MODULES_DIR=${10}
+STAGE=${11:-selection}   # selection | precorrection
 
 echo "JOB_ID=$JOB_ID ERA=$ERA hostname=$(hostname) date=$(date)"
 echo "CONFIG_YAML=$CONFIG_YAML FILES_JSON=$FILES_JSON GOLDEN_JSON=$GOLDEN_JSON IS_DATA=$IS_DATA"
@@ -48,8 +49,8 @@ cp "$MODULES_DIR"/*.py .
 # (confirmed live: ModuleNotFoundError: No module named 'SelectedObjects').
 cp "$WORKER_PY" .
 
-echo "Running object selection..."
-python3 "./$(basename "$WORKER_PY")" "$ERA" "$FILES_JSON" "$GOLDEN_JSON" "$IS_DATA" "$CHAPTER_DIR"
+echo "Running stage: $STAGE ..."
+python3 "./$(basename "$WORKER_PY")" "$ERA" "$FILES_JSON" "$GOLDEN_JSON" "$IS_DATA" "$CHAPTER_DIR" "$STAGE"
 
 # A job whose input files all fail the cut string legitimately produces no
 # output (the worker says so and exits 0). Treat that as success, not as a
@@ -57,6 +58,12 @@ python3 "./$(basename "$WORKER_PY")" "$ERA" "$FILES_JSON" "$GOLDEN_JSON" "$IS_DA
 # consolidateCrabOutput.py both already handle explicitly.
 SKIM=$(ls *_Skim.root 2>/dev/null | head -1)
 if [ -z "$SKIM" ]; then
+    # Record that this job ran to completion with nothing to write, next to its
+    # files.json in the work area (never in the output tree, which dataset-JSON
+    # scans read). Without it checkCondorStatus sees "no output file" and treats
+    # the job as missing -- confirmed live: a QCD job with 0 events passing the
+    # cut was resubmitted over and over, forever.
+    touch "$(dirname "$FILES_JSON")/ZERO_EVENTS"
     echo "No *_Skim.root produced (0 events passed the cut string); nothing to copy."
     echo "DONE condor_selection.sh"
     exit 0

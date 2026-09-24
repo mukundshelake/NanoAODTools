@@ -244,3 +244,10 @@ if __name__ == "__main__":
     logging.info(f"Processing complete: {succeeded} succeeded, {failed} failed, {zero_ev} skipped (0 events) "
                  f"out of {len(results)} total ({pre_skipped} pre-skipped).")
     logging.info("Finished all processing.")
+    # "N failed" used to be logged and then ignored with exit 0, so a caller had
+    # no way to tell a pass where every file failed from one where every file
+    # succeeded -- a whole pre-selection corrections pass once failed to build
+    # its modules for every dataset and the workflow carried on regardless.
+    if failed:
+        logging.error(f"{failed} file(s) failed; exiting nonzero.")
+        sys.exit(1)
