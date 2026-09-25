@@ -154,6 +154,14 @@ elif [[ -d "$LXPLUS_CMSSW_SRC" ]]; then
     # Same environment getcrabReady.sh sets up, minus its proxy creation and
     # CRAB resubmission (see setupEnv.sh for why those are split off).
     source "$REPO/003-ObjectSelectionI/scripts/crab/setupEnv.sh"
+    # coffea stack matching cms02's latestcoffea (coffea.dataset_tools etc.) --
+    # built once by setup_lxplus_venv.sh; ROOT/NanoAODTools still come from CMSSW.
+    LXPLUS_VENV="${LXPLUS_VENV:-/eos/user/m/mshelake/venvs/latestcoffea}"
+    if [[ ! -f "$LXPLUS_VENV/bin/activate" ]]; then
+        echo "Error: no Python venv at $LXPLUS_VENV. Build it once with $REPO/setup_lxplus_venv.sh"
+        exit 1
+    fi
+    source "$LXPLUS_VENV/bin/activate"
 else
     echo "Error: no known environment found (neither $CMS02_CONDA nor $LXPLUS_CMSSW_SRC)."
     exit 1
@@ -382,6 +390,16 @@ log "003-ObjectSelectionIII config hash: $III_HASH"
 echo "$III_HASH" > "$LOGDIR/III_HASH.txt"
 
 REPORT_PDF="$REPO/003-ObjectSelectionIII/outputs/${TAG}/${III_HASH}/${TAG}_${III_HASH}_report.pdf"
+# --makeplots deliberately carries on if createPlotsPDF.py fails ("Continuing
+# without PDF creation..."), so its exit status says nothing about the report.
+# Check the file itself before claiming it: a run once logged "Final PDF: <path>"
+# and RESULT=SUCCESS with no PDF there, createPlotsPDF.py having died on a
+# missing reportlab.
+if [[ ! -s "$REPORT_PDF" ]]; then
+    log "ERROR: plots were made but the report PDF is missing or empty: $REPORT_PDF"
+    log "       See createPlotsPDF.py's traceback in $LOGDIR/003III_steps.log."
+    exit 1
+fi
 log "=== DONE ($RUN_LABEL). Final PDF: $REPORT_PDF ==="
 echo "REPORT_PDF=$REPORT_PDF" >> "$STATUS_FILE"
 notify "003-III: plots + PDF done. Report: $REPORT_PDF"

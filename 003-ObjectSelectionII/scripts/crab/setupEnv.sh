@@ -15,4 +15,11 @@ source /cvmfs/cms.cern.ch/cmsset_default.sh
 pushd /eos/user/m/mshelake/Analysis/CMSSW_13_3_0/src >/dev/null
 eval "$(scram runtime -sh)"
 popd >/dev/null
-source /cvmfs/cms.cern.ch/crab3/crab.sh
+# crab.sh parses $1 as a CRAB type (prod|pre|dev). A sourced file sees its
+# caller's positional arguments, so sourcing it directly handed it whatever $1
+# the caller had -- e.g. setup_lxplus_venv.sh's venv path, rejected as an
+# "Invalid CRAB type". Sourcing it inside a function gives it an empty argument
+# list; the environment it exports persists either way.
+_setupEnv_crab() { source /cvmfs/cms.cern.ch/crab3/crab.sh; }
+_setupEnv_crab
+unset -f _setupEnv_crab
