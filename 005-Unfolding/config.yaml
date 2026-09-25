@@ -1,0 +1,165 @@
+# Configuration for 005-Unfolding: TUnfold-based ttbar charge asymmetry measurement.
+#
+# Input : BDTScore ROOT files from 004C, under {STORAGE}/BDTScore/{InputTag}/{era}/
+# Output: parquet -> histograms + response matrix -> unfolded A_C, under
+#         {STORAGE}/unfolding/{tag}/{config_hash}/{era}/
+#
+# This file is the only place binning, selection, weights and normalisation are
+# defined. Before adding a constant to a script, add it here instead -- the Pgof
+# cut drifting between response_matrix.py and make_histograms.py (issue #32) is
+# what the old four-script layout cost.
+
+STORAGE:
+  cms2:      "/mnt/disk1/skimmed_Run2"
+  localhost: "/nfs/disk3/mukund/DataFiles"
+  lxplus:    "/eos/user/m/mshelake/DataFiles"
+
+# BDTScore campaign this chapter consumes (004C output).
+InputTag: midNov
+
+Eras: [UL2016preVFP]
+
+# ---------------------------------------------------------------------------
+# Samples. Signal is the sample the response matrix is built from; Backgrounds
+# are subtracted from the measured spectrum; Data is the measured spectrum.
+# ---------------------------------------------------------------------------
+Signal: ttbar_SemiLeptonic
+
+# NOTE(#37): these directory names are what exists under {STORAGE}/BDTScore/
+# {InputTag}/{era}/Data_mu/, and they do NOT match the Data_mu keys in
+# 004B-BDTVariables/config.yaml (which has Run2016C_mu where disk has
+# Run2016C_HIPM_mu, and no Run2016B_ver1_mu at all). Reconcile before using
+# data; luminosity bookkeeping depends on getting this list right.
+Data:
+  - Run2016B_ver1_mu
+  - Run2016B_ver2_mu
+  - Run2016C_HIPM_mu
+  - Run2016D_HIPM_mu
+  - Run2016E_HIPM_mu
+  - Run2016F_HIPM_mu
+
+# ---------------------------------------------------------------------------
+# Binning. Consumed by scripts/binning.py, which is the single implementation
+# of the N+/N- classification and the unrolling.
+#
+# scheme: "sign"      delta|y| = |y_t| - |y_tbar|;  N+ = delta|y| > 0
+#                     Every event is classified. This is what theory
+#                     predictions are quoted against.
+#         "threshold" N+ = |y_t| > y0 AND |y_tbar| < y0 (and vice versa).
+#                     Discards ~73% of reco events as "neither" (issue #34).
+#
+# Edges must lie on binning.FINE_MTT_EDGES (25 GeV grid) and y0 on
+# binning.FINE_Y_EDGES (0.1 grid), so that the gen-acceptance scan can be
+# projected onto them exactly; binning.check_edges_representable() enforces it.
+# ---------------------------------------------------------------------------
+binning:
+  scheme: sign
+  y0: 1.2
+  gen_mtt_edges:  [300, 450, 600, 750, 900, 1050, 1200]
+  reco_mtt_edges: [300, 375, 450, 525, 600, 675, 750, 825, 900, 975, 1050, 1125, 1200]
+
+# ---------------------------------------------------------------------------
+# Reco selection. Applied identically to the response matrix, the measured
+# histogram, every background and every systematic variation, by
+# scripts/selection.py. There is no second place to change it.
+# ---------------------------------------------------------------------------
+selection:
+  # Pgof = exp(-0.5*chi2) from 004A RecoModule, so it is never mathematically
+  # zero -- values of 0.0 are float32 underflow at chi2 >~ 180, i.e. genuinely
+  # catastrophic fits. This is "reject hopeless fits", not a p-value cut; the
+  # branch name is a misnomer (it is a likelihood ratio, not a probability).
+  pgof_min: 0.0
+
+  # 004A writes chi2_status from the soft-constraint fit. Status 3 events fall
+  # back to the unfitted momenta and are written as if successful, so they are
+  # rejected here rather than silently degrading the resolution (issue #42).
+  reject_chi2_status: [3]
+
+  # Physical sanity window. The soft-constraint fit is unbounded and reaches
+  # m_tt = 101,632 GeV in the signal parquet; |y| > 5 is not a top. Events
+  # outside are counted and reported, never dropped silently (issue #42).
+  mtt_reco_max: 3000.0
+  abs_y_max: 5.0
+
+  # BDT score cut. null = no cut. 004C targets qqbar-vs-non-qqbar.
+  bdt_cut: null
+
+# ---------------------------------------------------------------------------
+# Event weights.
+#
+# L1PreFiringWeight_Nom corrects simulation for a trigger inefficiency that
+# real data already contains intrinsically, so it must NEVER appear in the Data
+# list. Same rule as 004B's weightList and 003-III's config.
+# ---------------------------------------------------------------------------
+weights:
+  MC:   [LHEWeightSign, puWeight, bTaggingWeight, MuonHLTWeight, MuonIDWeight, L1PreFiringWeight_Nom]
+  Data: []
+
+# Systematic variations, as (nominal branch -> up/down branches). A source with
+# no up/down pair here is applied nominally and carries no uncertainty --
+# MuonHLTWeight is currently in that position (issue #43).
+systematics:
+  pileup:    {nominal: puWeight,               up: puWeightUp,              down: puWeightDown}
+  btag:      {nominal: bTaggingWeight,         up: bTaggingWeightUp,        down: bTaggingWeightDown}
+  muonID:    {nominal: MuonIDWeight,           up: MuonIDWeightUp,          down: MuonIDWeightDown}
+  prefiring: {nominal: L1PreFiringWeight_Nom,  up: L1PreFiringWeight_Up,    down: L1PreFiringWeight_Dn}
+
+# ---------------------------------------------------------------------------
+# Normalisation.
+#
+# lumi_scale = Xsec * Lumi / Ngen.
+#
+# Ngen is the sum of SIGNED generator weights, NOT the raw generated count --
+# verified from the Runs trees of the UL2016preVFP ttbar_SemiLeptonic skim:
+#   sum genEventCount = 132,178,000   (raw)
+#   sum genEventSumw  = 39,772,305,735.1
+#   |genWeight|       = 303.358 exactly (constant for this powheg sample)
+#   sum genEventSumw / |genWeight| = 131,106,830  ==  the Ngen below.
+# This matters because LHEWeightSign is applied as an event weight, so the
+# denominator must be the corresponding sum of signed weights (issue #41). The
+# "--ngen 110787582" in the old script docstrings was simply wrong.
+#
+# Values below are copied from 004B-BDTVariables/config.yaml and pinned against
+# it by scripts/test_config.py, so the two cannot drift.
+# ---------------------------------------------------------------------------
+DataLumiInfo:
+  UL2016preVFP: {Lumi: 19521.2, LumiUnc: 0.012}
+
+NgenandXsec:
+  UL2016preVFP:
+    MC_mu:
+      Diboson:
+        WWTo2L2Nu: {Ngen: 3006596, Xsec: 11.09, nfiles: 12}
+        WWTolnulnu: {Ngen: 4932000, Xsec: 10.48, nfiles: 14}
+        WZTo2Q2L: {Ngen: 9780392, Xsec: 6.565, nfiles: 17}
+        ZZTo2L2Nu: {Ngen: 16826232, Xsec: 0.974, nfiles: 25}
+        ZZTo2Q2L: {Ngen: 10406942, Xsec: 3.676, nfiles: 17}
+      DrellYan:
+        DYJetsToLL: {Ngen: 95170552, Xsec: 6424.0, nfiles: 66}
+      FullyLeptonic:
+        ttbar_FullyLeptonic: {Ngen: 37202073, Xsec: 88.5, nfiles: 33}
+      QCD:
+        QCD_Pt-1000_MuEnriched: {Ngen: 13660999, Xsec: 1.34449145, nfiles: 42}
+        QCD_Pt-120To170_MuEnriched: {Ngen: 19136907, Xsec: 21509.488, nfiles: 32}
+        QCD_Pt-15To20_MuEnriched: {Ngen: 4749558, Xsec: 2881500, nfiles: 28}
+        QCD_Pt-170To300_MuEnriched: {Ngen: 37080544, Xsec: 7224.3, nfiles: 63}
+        QCD_Pt-20To30_MuEnriched: {Ngen: 31926643, Xsec: 3657550, nfiles: 50}
+        QCD_Pt-300To470_MuEnriched: {Ngen: 28465385, Xsec: 617.1102, nfiles: 46}
+        QCD_Pt-30To50_MuEnriched: {Ngen: 28664840, Xsec: 1154520, nfiles: 47}
+        QCD_Pt-470To600_MuEnriched: {Ngen: 19695298, Xsec: 57.84961, nfiles: 48}
+        QCD_Pt-50To80_MuEnriched: {Ngen: 19724658, Xsec: 347191, nfiles: 29}
+        QCD_Pt-600To800_MuEnriched: {Ngen: 19598815, Xsec: 22.21919375, nfiles: 62}
+        QCD_Pt-800To1000_MuEnriched: {Ngen: 38933940, Xsec: 3.86242284, nfiles: 80}
+        QCD_Pt-80To120_MuEnriched: {Ngen: 21978558, Xsec: 90131, nfiles: 55}
+      SemiLeptonic:
+        ttbar_SemiLeptonic: {Ngen: 131106831, Xsec: 366.3, nfiles: 117}
+      SingleTop:
+        Schannel: {Ngen: 3592772, Xsec: 2.215836, nfiles: 12}
+        Tbarchannel: {Ngen: 29205915, Xsec: 80.0, nfiles: 46}
+        Tchannel: {Ngen: 52437432, Xsec: 134.2, nfiles: 49}
+        tw_antitop: {Ngen: 3176335, Xsec: 39.65, nfiles: 12}
+        tw_top: {Ngen: 3294485, Xsec: 39.65, nfiles: 4}
+      WJets:
+        WJetsToLNu_0J: {Ngen: 121208493, Xsec: 52780.0, nfiles: 107}
+        WJetsToLNu_1J: {Ngen: 84198168, Xsec: 8832.0, nfiles: 114}
+        WJetsToLNu_2J: {Ngen: 27463756, Xsec: 3276.0, nfiles: 73}
