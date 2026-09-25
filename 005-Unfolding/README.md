@@ -61,26 +61,50 @@ Outputs land under `{STORAGE}/unfolding/{tag}/{config_hash}/{era}/`. The hash is
 of `config.yaml`, so changing a cut or a binning cannot overwrite earlier
 results. Parquets are **not** committed to the repo.
 
-## The N₊/N₋ definition
+## The N₊/N₋ definition — an open decision (#34)
 
 `config.yaml: binning.scheme` selects between:
 
-- **`sign`** (default) — `N₊ = N(Δ|y| > 0)`, `N₋ = N(Δ|y| < 0)`. Every event is
-  classified, and this is the quantity theory predictions are quoted against.
-- **`threshold`** — `N₊ = |y_t| > y₀ ∧ |y_t̄| < y₀`. Enhances the per-event
-  asymmetry but discards every event with both tops forward or both central.
+- **`sign`** (current default) — `N₊ = N(Δ|y| > 0)`, `N₋ = N(Δ|y| < 0)`. Every
+  event is classified, and this is the quantity theory predictions and
+  published CMS results are quoted against.
+- **`threshold`** — `N₊ = |y_t| > y₀ ∧ |y_t̄| < y₀`, and vice versa. Events with
+  both tops forward or both central are unclassified.
 
-The difference is not marginal. On UL2016preVFP signal, response-matrix
-categories:
+**The trade-off is not the one you would guess**, so it is written out here
+rather than assumed. Measured on the UL2016preVFP signal, with the corrected
+charge convention:
 
 | | `threshold` (y₀ = 1.2) | `sign` |
 |---|---|---|
-| hits | 14.77% | **96.95%** |
+| response-matrix hits | 14.77% | **96.95%** |
 | misses | 20.51% | 2.12% |
 | fakes | 10.94% | 0.55% |
 | neither (discarded) | 53.78% | **0.37%** |
+| usable yield | 77,201 | **292,329** |
+| dilution D | **0.508** | 0.216 |
+| A_C(gen) | **+0.00260** | +0.00156 |
+| σ(A_C) ≈ 1/(D√N) | **0.0071** | 0.0085 |
+| **σ(A_C) / A_C** | **2.73** | 5.45 |
 
-`threshold` is kept only so the earlier result can be reproduced.
+The threshold estimator throws away 73% of the events and is still **2.0×
+better in relative precision**, because the y₀ requirement more than doubles
+the dilution — 0.508 against 0.216. Issue #34's parenthetical that it enhances
+the per-event asymmetry "at the cost of statistics" is empirically backwards:
+on these numbers it is a net statistical *gain*.
+
+What still argues for `sign`:
+
+- it is the definition theory predicts and other experiments publish, so the
+  result is directly comparable without a dedicated calculation;
+- its response matrix is 97% diagonal rather than 15%, so the unfolding is
+  barely an inversion at all;
+- correcting a 54%-discarded sample leans much harder on the MC modelling of
+  the discarded class, which is a systematic cost this table does not price.
+
+The default is `sign` pending that decision. Whichever is chosen, the
+"neither" class needs explicit treatment in the response matrix rather than
+being merged into the fakes — that part is #36.
 
 ## Normalisation
 
