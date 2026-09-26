@@ -178,3 +178,91 @@ def correlation_matrix(h_cov, outdir, era, name="correlation_matrix"):
 
     _save(canvas, outdir, name)
     return canvas, corr
+
+
+def asymmetry_vs_mtt(values, stat, total, edges, outdir, era,
+                     name="asymmetry_vs_mtt"):
+    """A_C per m_tt bin with stat and stat+syst bands (issue #39).
+
+    `values`, `stat` and `total` carry n_mtt + 1 entries, the last being the
+    inclusive asymmetry, which is drawn separately as a band across the full
+    range rather than as another m_tt point -- it is a different quantity, not
+    an extra bin.
+    """
+    import array
+
+    n = len(edges) - 1
+    edge_array = array.array("d", [float(e) for e in edges])
+
+    h_total = ROOT.TH1D(name + "_total", "", n, edge_array)
+    h_stat = ROOT.TH1D(name + "_stat", "", n, edge_array)
+    for i in range(n):
+        for hist, err in ((h_total, total), (h_stat, stat)):
+            hist.SetBinContent(i + 1, values[i])
+            hist.SetBinError(i + 1, err[i])
+
+    canvas = ROOT.TCanvas("c_ac", "A_C vs m_tt", 900, 700)
+    canvas.SetLeftMargin(0.15)
+    canvas.SetRightMargin(0.05)
+    canvas.SetTopMargin(0.10)
+    canvas.SetBottomMargin(0.13)
+
+    span = max(abs(values[i]) + total[i] for i in range(n)) * 1.6 or 0.01
+    h_total.SetTitle(";m_{t#bar{t}} [GeV];A_{C}")
+    h_total.GetYaxis().SetTitleSize(0.05)
+    h_total.GetYaxis().SetTitleOffset(1.4)
+    h_total.GetXaxis().SetTitleSize(0.05)
+    h_total.SetMinimum(-span)
+    h_total.SetMaximum(span)
+    h_total.SetFillColorAlpha(ROOT.kAzure - 9, 0.7)
+    h_total.SetLineColor(ROOT.kAzure + 2)
+    h_total.SetMarkerStyle(0)
+    h_total.Draw("E2")
+
+    h_stat.SetFillColorAlpha(ROOT.kAzure + 2, 0.55)
+    h_stat.SetLineColor(ROOT.kAzure + 2)
+    h_stat.SetMarkerStyle(0)
+    h_stat.Draw("E2 SAME")
+
+    points = h_total.Clone(name + "_points")
+    points.SetFillStyle(0)
+    points.SetMarkerStyle(20)
+    points.SetMarkerSize(1.2)
+    points.SetMarkerColor(ROOT.kBlack)
+    points.SetLineColor(ROOT.kBlack)
+    points.Draw("P SAME")
+
+    zero = ROOT.TLine(edges[0], 0.0, edges[-1], 0.0)
+    zero.SetLineStyle(2)
+    zero.SetLineColor(ROOT.kGray + 2)
+    zero.Draw()
+
+    # Inclusive value as a horizontal band across the whole range.
+    inclusive = ROOT.TBox(edges[0], values[-1] - total[-1],
+                          edges[-1], values[-1] + total[-1])
+    inclusive.SetFillColorAlpha(ROOT.kOrange + 1, 0.22)
+    inclusive.SetLineColor(ROOT.kOrange + 2)
+    inclusive.Draw()
+    inclusive_line = ROOT.TLine(edges[0], values[-1], edges[-1], values[-1])
+    inclusive_line.SetLineColor(ROOT.kOrange + 2)
+    inclusive_line.SetLineWidth(2)
+    inclusive_line.Draw()
+
+    legend = ROOT.TLegend(0.55, 0.72, 0.93, 0.88)
+    legend.SetBorderSize(0)
+    legend.SetTextSize(0.035)
+    legend.AddEntry(points, "A_{C} unfolded", "lep")
+    legend.AddEntry(h_stat, "stat", "f")
+    legend.AddEntry(h_total, "stat #oplus syst", "f")
+    legend.AddEntry(inclusive_line,
+                    f"inclusive = {values[-1]:+.4f} #pm {total[-1]:.4f}", "l")
+    legend.Draw()
+
+    latex = ROOT.TLatex()
+    latex.SetNDC(True)
+    latex.SetTextFont(62)
+    latex.SetTextSize(0.045)
+    latex.DrawLatex(0.17, 0.92, f"Charge asymmetry  {era}")
+
+    _save(canvas, outdir, name)
+    return canvas, (h_total, h_stat, points, inclusive, inclusive_line, legend, zero)

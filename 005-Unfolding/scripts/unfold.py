@@ -22,9 +22,8 @@ half-addressed here, because each is its own issue:
             fixes the normalisation, which is a choice that needs justifying
             against kEConstraintNone.
 
-  TODO(#39) A_C is never computed from the unfolded vector. It needs to be,
-            with its uncertainty propagated through the full covariance rather
-            than assuming independent bins.
+(#39 is done: A_C is extracted below, with its uncertainty propagated through
+the full covariance by scripts/asymmetry.py.)
 """
 
 import argparse
@@ -35,10 +34,20 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import asymmetry  # noqa: E402
 import binning  # noqa: E402
 import config as cfgmod  # noqa: E402
 import plots  # noqa: E402
 from tunfold_env import ROOT, load_tunfold  # noqa: E402
+
+
+def th2_to_matrix(hist, n):
+    """TUnfold covariance TH2 -> numpy matrix over the n physical bins."""
+    out = np.empty((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(n):
+            out[i, j] = hist.GetBinContent(i + 1, j + 1)
+    return out
 
 
 def add_systematics(unfold, f_resp, sources):
@@ -164,12 +173,57 @@ def main():
         print(f"  {i + 1:<4} {label:<26} {value:>12,.1f} {err:>10,.1f} "
               f"{truth:>12,.1f} {pull:>7.3f}")
 
-    print("\n  TODO(#39): A_C is not computed from this vector yet. It must be, "
-          "with the\n  uncertainty propagated through the covariance -- the "
-          "unfolded bins are\n  strongly correlated, so treating them as "
-          f"independent would misstate it (rho avg = {unfold.GetRhoAvg():.3f}).")
+    # --- A_C from the unfolded vector (issue #39) ---
+    x = np.array([h_unfolded.GetBinContent(i + 1) for i in range(n_gen_bins)])
+    cov_stat = th2_to_matrix(h_cov_stat, n_gen_bins)
+    cov_total = th2_to_matrix(h_cov_total, n_gen_bins)
+
+    ac, ac_cov_stat = asymmetry.propagate(x, cov_stat, gen_edges)
+    _, ac_cov_total = asymmetry.propagate(x, cov_total, gen_edges)
+
+    # Per-source breakdown: TUnfold gives the shift of the unfolded spectrum
+    # for each source, and the induced shift in A_C is J dx to first order.
+    shifts = {}
+    for source in added:
+        h_delta = unfold.GetDeltaSysSource(source, f"delta_{source}")
+        if not h_delta:
+            continue
+        h_delta.SetDirectory(0)
+        dx = np.array([h_delta.GetBinContent(i + 1) for i in range(n_gen_bins)])
+        shifts[source] = asymmetry.propagate_shift(x, dx, gen_edges)
+
+    print(f"\n{'=' * 72}")
+    print("Charge asymmetry from the unfolded spectrum:")
+    print(asymmetry.format_table(ac, ac_cov_stat, ac_cov_total, gen_edges, shifts))
+
+    # What the correlations are worth: the same numbers with the off-diagonal
+    # terms discarded, which is what treating the bins as independent gives.
+    _, naive = asymmetry.propagate(x, np.diag(np.diag(cov_total)), gen_edges)
+    # Is the measured histogram data-like, or MC with far better statistics?
+    # A weighted MC histogram scaled to a lumi yield carries the MC's
+    # statistical error, not that of a real dataset of the same size, so its
+    # stat uncertainty must not be read as a sensitivity projection.
+    integral = h_data.Integral()
+    sumw2 = sum(h_data.GetBinError(i + 1) ** 2 for i in range(h_data.GetNbinsX()))
+    n_eff = integral ** 2 / sumw2 if sumw2 > 0 else float("nan")
+    if np.isfinite(n_eff) and n_eff > 2 * integral:
+        factor = np.sqrt(n_eff / integral)
+        print(f"\n  WARNING: the measured histogram is MC, not data. Its yield is "
+              f"{integral:,.0f}\n  but its errors correspond to {n_eff:,.0f} effective "
+              f"entries, so the stat\n  uncertainty above is ~{factor:.1f}x smaller than a "
+              f"real {integral:,.0f}-event\n  dataset would give. Scaled: stat(A_C) ~ "
+              f"{asymmetry.errors(ac_cov_stat)[-1] * factor:.4f} inclusive. "
+              f"Do not quote\n  the closure number as a sensitivity projection (issue #38).")
+
+    print(f"\n  inclusive A_C = {ac[-1]:+.5f} +- {asymmetry.errors(ac_cov_total)[-1]:.5f}"
+          f"   (rho_avg = {unfold.GetRhoAvg():.3f})")
+    print(f"  discarding the off-diagonal covariance would give "
+          f"+- {asymmetry.errors(naive)[-1]:.5f} instead")
 
     plots.truth_vs_unfolded(h_truth, h_unfolded, plotdir, args.era, tau, n_gen_mtt)
+    plots.asymmetry_vs_mtt(ac, asymmetry.errors(ac_cov_stat),
+                           asymmetry.errors(ac_cov_total),
+                           gen_edges, plotdir, args.era)
     if args.tau is None:
         plots.lcurve(l_curve, best_index, tau, plotdir)
     plots.response_matrix(h_matrix, plotdir, args.era)
@@ -184,10 +238,21 @@ def main():
     h_cov_stat.Write("h_cov_stat")
     if args.tau is None:
         l_curve.Write("lcurve")
+    ROOT.TNamed("asymmetry", json.dumps({
+        "labels": asymmetry.labels(gen_edges),
+        "A_C": ac.tolist(),
+        "stat": asymmetry.errors(ac_cov_stat).tolist(),
+        "total": asymmetry.errors(ac_cov_total).tolist(),
+        "cov_stat": ac_cov_stat.tolist(),
+        "cov_total": ac_cov_total.tolist(),
+        "per_source": {k: v.tolist() for k, v in shifts.items()},
+    })).Write()
     ROOT.TNamed("provenance", json.dumps({
         **cfgmod.provenance(cfg, "unfold.py"),
         "era": args.era, "tag": args.tag, "tau": tau,
         "systematics": added,
+        "A_C_inclusive": float(ac[-1]),
+        "A_C_inclusive_total_err": float(asymmetry.errors(ac_cov_total)[-1]),
         "rho_avg": unfold.GetRhoAvg(),
         "chi2A": unfold.GetChi2A(),
         "tunfold_version": str(ROOT.TUnfold.GetTUnfoldVersion()),
