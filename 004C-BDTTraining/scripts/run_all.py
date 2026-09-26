@@ -12,6 +12,13 @@ This script orchestrates the BDT parquet-extraction workflow:
 5. Trains the qqbar-vs-non-qqbar XGBoost classifier per era from a pinned parquet
    extraction run's outputs (--trainBDT --parquetHash <hash>)
 
+...and the scoring workflow, which writes the trained model's output back onto
+the 004B ROOT files as a `BDTScore` branch so downstream chapters can cut on it:
+6. Builds a per-file task list (--generateScoreProcessListJSON)
+7. Runs the scoring (--applyBDT, or --applyWriteBashScript to emit a script)
+8. Scans the result and writes bdtScore_{tag}_{era}_datasets.json
+   (--generateScoreDatasetJSON)
+
 Usage:
     python scripts/run_all.py [--force] [--tag TAG_NAME]
 
@@ -23,6 +30,9 @@ Options:
     --writeBashScript: Create a bash script instead of running directly
     --generateDatasetJSON: Create dataset JSON from parquet outputs
     --trainBDT: Train the BDT per era (requires --parquetHash)
+    --generateScoreProcessListJSON: Build the per-file scoring task list
+    --applyBDT: Write BDTScore onto the 004B ROOT files
+    --generateScoreDatasetJSON: Dataset JSON for the bdtScore stage
 """
 
 import argparse
@@ -105,6 +115,24 @@ def main():
                             '(its outputs/{tag}/{hash}/ directory, containing Parquet_{tag}_{era}_datasets.json '
                             'per era). Required by --trainBDT. Deliberately decoupled from config.yaml\'s own '
                             'hash so that tuning training_config.yaml never forces parquet re-extraction.')
+    parser.add_argument('--generateScoreProcessListJSON', action='store_true',
+                        help='Build the per-file task list for applyBDT.py '
+                             '(requires --parquetHash and --trainingHash)')
+    parser.add_argument('--applyBDT', action='store_true',
+                        help='Write BDTScore onto the 004B ROOT files')
+    parser.add_argument('--applyWriteBashScript', action='store_true',
+                        help='With --applyBDT, write a bash script instead of running')
+    parser.add_argument('--generateScoreDatasetJSON', action='store_true',
+                        help='Scan the bdtScore stage and write its dataset JSON')
+    parser.add_argument('--trainingHash', type=str, default=None,
+                        help='Training-config hash pinning WHICH model to score '
+                             'with. Required by the scoring stages; run '
+                             '--trainBDT --printHash to see it.')
+    parser.add_argument('--modelFile', type=str, default='bdt_model.pkl',
+                        help="Which saved model to apply: 'bdt_model.pkl' (all "
+                             "features, the default) or 'bdt_model_reduced.pkl'")
+    parser.add_argument('--scoreBranch', type=str, default='BDTScore',
+                        help='Name of the branch to write (default: BDTScore)')
     parser.add_argument('--trainWriteBashScript', action='store_true',
                        help='[4] Write a bash script with the per-era trainBDT.py commands instead of '
                             'running them directly (mirrors --writeBashScript for extraction).')
@@ -124,6 +152,9 @@ def main():
     print(f"  --filter: {args.filter}")
     print(f"  --printHash: {args.printHash}")
     print(f"  --trainBDT: {args.trainBDT}")
+    print(f"  --generateScoreProcessListJSON: {args.generateScoreProcessListJSON}")
+    print(f"  --applyBDT: {args.applyBDT}")
+    print(f"  --generateScoreDatasetJSON: {args.generateScoreDatasetJSON}")
     print(f"  --parquetHash: {args.parquetHash}")
     print(f"  --trainWriteBashScript: {args.trainWriteBashScript}")
 
@@ -436,6 +467,220 @@ def main():
             print(f"\nBash script written to: {bash_script_path}")
 
         print(f"\nTraining hash for this run: {training_hash}")
+
+    # ---------------------------------------------------------------------
+    # Scoring: write the trained model's output back onto the 004B ROOT files.
+    #
+    # The stage directory is keyed by the TRAINING hash, because that is what
+    # determines the score. parquetHash, the 004C config hash and the model file
+    # are recorded in bdtScore_manifest.json next to the output, so a score can
+    # always be traced back to the model that produced it.
+    # ---------------------------------------------------------------------
+    score_stages = (args.generateScoreProcessListJSON or args.applyBDT
+                    or args.generateScoreDatasetJSON)
+    if score_stages:
+        if not args.parquetHash or not args.trainingHash:
+            print("Error: the scoring stages require both --parquetHash and "
+                  "--trainingHash.")
+            return 1
+        parquet_run_dir = outputs_base / args.parquetHash
+        if not parquet_run_dir.exists():
+            print(f"Error: --parquetHash {args.parquetHash} not found under "
+                  f"{outputs_base}.")
+            return 1
+
+    def model_path_for(era):
+        return (outputs_base / args.parquetHash / era / 'bdt'
+                / args.trainingHash / args.modelFile)
+
+    def score_output_dir(era, DataMC, group, dataset):
+        return os.path.join(storageBase, "bdtScore", args.tag,
+                            args.trainingHash, era, DataMC, group, dataset)
+
+    # --generateScoreProcessListJSON
+    if args.generateScoreProcessListJSON:
+        print("\nGenerating process list JSON for applyBDT.py...")
+        total_tasks = 0
+        for era in eras:
+            if not matches_filter(args.filter, era):
+                continue
+            print(f"\nProcessing era: {era}")
+
+            model_path = model_path_for(era)
+            if not model_path.exists():
+                print(f"  Warning: no model at {model_path}. Skipping era {era}. "
+                      f"(Has --trainBDT run for --trainingHash {args.trainingHash}?)")
+                continue
+
+            bdtvariables_dataset_json = (output_dir / 'inputs'
+                                         / f'BDTVariables_{era}_datasets.json')
+            if not bdtvariables_dataset_json.exists():
+                print(f"  Warning: {bdtvariables_dataset_json} not found. "
+                      f"Skipping era {era}.")
+                continue
+            with open(bdtvariables_dataset_json) as f:
+                datasetJSON = json.load(f)
+
+            era_tasks, era_skipped = [], 0
+            for DataMC in datasetJSON:
+                if not matches_filter(args.filter, era, DataMC):
+                    continue
+                for group in datasetJSON[DataMC]:
+                    if not matches_filter(args.filter, era, DataMC, group):
+                        continue
+                    for dataset in datasetJSON[DataMC][group]:
+                        if not matches_filter(args.filter, era, DataMC, group, dataset):
+                            continue
+                        outputDir = score_output_dir(era, DataMC, group, dataset)
+                        files = list(datasetJSON[DataMC][group][dataset].keys())
+                        # --sample takes the dataset's first file only. Unlike
+                        # the parquet stage the output keeps the input's own
+                        # filename, so a sample pass and a full pass DO collide
+                        # -- hence the separate directory suffix rather than a
+                        # filename one.
+                        if args.sample:
+                            files = files[:1]
+                            outputDir = outputDir + "_sample"
+                        for path in files:
+                            target = os.path.join(
+                                outputDir,
+                                os.path.basename(path).replace('.root', '_Skim.root'))
+                            if not args.force and os.path.exists(target):
+                                era_skipped += 1
+                                continue
+                            era_tasks.append({
+                                "era": era, "DataMC": DataMC, "group": group,
+                                "dataset": dataset, "file": path,
+                                "outputDir": outputDir,
+                                "modelPath": str(model_path),
+                                "branchName": args.scoreBranch,
+                            })
+
+            era_output_path = (output_dir / era
+                               / f"{args.tag}_{era}_scoreProcessListJSON.json")
+            era_output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(era_output_path, 'w') as f:
+                json.dump(era_tasks, f, indent=2)
+            total_tasks += len(era_tasks)
+            print(f"  Era {era}: {len(era_tasks)} file task(s), "
+                  f"{era_skipped} skipped (output exists).")
+            print(f"  Model: {model_path}")
+        print(f"\nTotal scoring tasks across all eras: {total_tasks}")
+
+    # --applyBDT
+    if args.applyBDT:
+        print("\nApplying the BDT...")
+        apply_script = base_dir / 'scripts' / 'applyBDT.py'
+        if not apply_script.exists():
+            print(f"Error: Script not found: {apply_script}")
+            return 1
+
+        # applyBDT.py drives NanoAODTools' PostProcessor, so the framework has
+        # to be importable. Checked here rather than left to fail inside every
+        # worker process.
+        probe = subprocess.run(
+            [sys.executable, '-c',
+             'import PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor'],
+            capture_output=True, text=True)
+        if probe.returncode != 0:
+            print("Error: PhysicsTools.NanoAODTools is not importable. Source the "
+                  "framework environment first:\n"
+                  f"    source {base_dir.parent / 'standalone' / 'env_standalone.sh'}")
+            return 1
+
+        bash_script_path = base_dir / 'scripts' / f"apply_all_{args.tag}.sh"
+        bash_lines = ["#!/bin/bash\n"]
+
+        for era in eras:
+            if not matches_filter(args.filter, era):
+                continue
+            process_list_json = (output_dir / era
+                                 / f"{args.tag}_{era}_scoreProcessListJSON.json")
+            if not process_list_json.exists():
+                print(f"  Warning: {process_list_json} not found. Skipping era "
+                      f"{era}. (Has --generateScoreProcessListJSON been run?)")
+                continue
+
+            # Provenance next to the output, so a scored file can always be
+            # traced to the model that produced it.
+            manifest_dir = output_dir / era
+            manifest_dir.mkdir(parents=True, exist_ok=True)
+            with open(manifest_dir / 'bdtScore_manifest.json', 'w') as f:
+                json.dump({
+                    **utils.create_output_metadata(config_hash, 'run_all.py --applyBDT'),
+                    "era": era,
+                    "tag": args.tag,
+                    "parquetHash": args.parquetHash,
+                    "trainingHash": args.trainingHash,
+                    "modelFile": args.modelFile,
+                    "modelPath": str(model_path_for(era)),
+                    "branchName": args.scoreBranch,
+                    "stage": "bdtScore",
+                    "stagePath": str(Path(storageBase) / "bdtScore" / args.tag
+                                     / args.trainingHash / era),
+                    "sample": bool(args.sample),
+                }, f, indent=2)
+
+            log_dir = output_dir / era
+            cmd = (
+                f"python3 {apply_script} "
+                f"--processListJSON {process_list_json} "
+                f"--workers {args.workers} "
+                f"{'--force ' if args.force else ''}"
+                f"--filter {era}"
+                f"{' 2>&1 | tee -a ' + str(log_dir / f'{args.tag}_{era}_applyBDT.log')}"
+            )
+            if args.applyWriteBashScript:
+                bash_lines.append(f"mkdir -p {log_dir}\n")
+                bash_lines.append(cmd + "\n")
+                print(f"  Queued scoring command for era {era}")
+            else:
+                print(f"  Running: {cmd}")
+                # bash -o pipefail, NOT a bare shell: the command ends in
+                # `| tee`, and a plain pipeline returns tee's exit status, so a
+                # worker that crashed outright would be reported as success.
+                # That is exactly what happened the first time this ran.
+                result = subprocess.run(["bash", "-o", "pipefail", "-c", cmd])
+                if result.returncode != 0:
+                    print(f"Error applying BDT for era {era} "
+                          f"(see {log_dir / f'{args.tag}_{era}_applyBDT.log'}).")
+                    return 1
+                print(f"  Successfully scored era {era}")
+
+        if args.applyWriteBashScript:
+            with open(bash_script_path, 'w') as f:
+                f.writelines(bash_lines)
+            os.chmod(bash_script_path, 0o755)
+            print(f"\nBash script written to: {bash_script_path}")
+
+    # --generateScoreDatasetJSON
+    if args.generateScoreDatasetJSON:
+        print("\nGenerating dataset JSON by scanning the bdtScore stage...")
+        generate_dataset_json_script = base_dir / 'scripts' / 'generateDatasetJSON.py'
+        for era in eras:
+            if not matches_filter(args.filter, era):
+                continue
+            suffix = "_sample" if args.sample else ""
+            directory = (Path(storageBase) / "bdtScore" / args.tag
+                         / args.trainingHash / era)
+            outputFileName = f"bdtScore_{args.tag}_{era}{suffix}_datasets.json"
+            outputDirectory = output_dir / era
+            outputDirectory.mkdir(parents=True, exist_ok=True)
+            cmd = [
+                sys.executable, str(generate_dataset_json_script),
+                '--directory', str(directory),
+                '--outputDir', str(outputDirectory),
+                '--outputFileName', outputFileName,
+                '--era', era,
+            ]
+            print(f"  Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Error generating bdtScore dataset JSON for {era}:\n"
+                      f"{result.stderr}")
+                return 1
+            print(f"  Wrote {outputDirectory / outputFileName}")
+
 
 if __name__ == '__main__':
     sys.exit(main())

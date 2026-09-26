@@ -62,12 +62,18 @@ CHAPTER="$REPO/004C-BDTTraining"
 # --- argument parsing -------------------------------------------------------
 TAG=""; ERA=""; BDTV_TAG=""; BDTV_HASH=""
 SAMPLE=false; WORKERS=8; TRAIN=false; FORCE=false
+APPLY=false; TRAINING_HASH_ARG=""
 
 usage() {
     cat <<EOF
 Usage: $0 --tag TAG --era ERA --BDTVariablesHash HASH
           [--BDTVariablesTag BDTV_TAG] [--sample] [--workers N]
-          [--trainBDT] [--force]
+          [--trainBDT] [--applyBDT [--trainingHash HASH]] [--force]
+
+--applyBDT:     after (or instead of) training, write the model's score onto
+                the 004B ROOT files as a BDTScore branch, into the bdtScore
+                stage. Needs a trained model: pass --trainingHash to pin which
+                one, or run --trainBDT in the same invocation and it is reused.
 EOF
     exit 1
 }
@@ -81,6 +87,8 @@ while [[ $# -gt 0 ]]; do
         --sample) SAMPLE=true; shift ;;
         --workers) WORKERS="$2"; shift 2 ;;
         --trainBDT) TRAIN=true; shift ;;
+        --applyBDT) APPLY=true; shift ;;
+        --trainingHash) TRAINING_HASH_ARG="$2"; shift 2 ;;
         --force) FORCE=true; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -108,7 +116,7 @@ mkdir -p "$LOGDIR"
 STATUS_FILE="$LOGDIR/STATUS.txt"
 {
     echo "STARTED $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "TAG=$TAG ERA=$ERA BDTVARIABLES_TAG=$BDTV_TAG BDTVARIABLES_HASH=$BDTV_HASH SAMPLE=$SAMPLE WORKERS=$WORKERS TRAIN=$TRAIN FORCE=$FORCE"
+    echo "TAG=$TAG ERA=$ERA BDTVARIABLES_TAG=$BDTV_TAG BDTVARIABLES_HASH=$BDTV_HASH SAMPLE=$SAMPLE WORKERS=$WORKERS TRAIN=$TRAIN APPLY=$APPLY FORCE=$FORCE"
 } > "$STATUS_FILE"
 
 TELEGRAM_PY="/home/mukund/miniconda3/bin/python3"
@@ -365,6 +373,65 @@ if $TRAIN; then
     fi
 else
     log "Skipping BDT training (pass --trainBDT to run it)."
+fi
+
+################################################################################
+# [6] Write the score onto the 004B files (optional)
+################################################################################
+# Non-fatal for the same reason as [5]: the parquet is already on disk and
+# mapped by this point, and a scoring failure should not mark the extraction
+# run FAILED. It does record WARNING=scoring_failed in STATUS.txt, so a run
+# that was asked to score and did not is never silent.
+if $APPLY; then
+    SCORE_HASH="$TRAINING_HASH_ARG"
+    if [[ -z "$SCORE_HASH" ]]; then
+        SCORE_HASH="${TRAINING_HASH:-}"
+    fi
+    if [[ -z "$SCORE_HASH" ]]; then
+        log "WARNING: --applyBDT needs a training hash. Pass --trainingHash, or"
+        log "         run --trainBDT in the same invocation so it can be reused."
+        echo "WARNING=scoring_no_training_hash" >> "$STATUS_FILE"
+        notify "[6] WARNING: --applyBDT skipped, no training hash."
+    else
+        log "=== [6] applyBDT: $ERA (parquetHash=$PARQUET_HASH trainingHash=$SCORE_HASH) ==="
+        SCORE_OK=true
+        python3 scripts/run_all.py --tag "$TAG" --parquetHash "$PARQUET_HASH" \
+            --trainingHash "$SCORE_HASH" --generateScoreProcessListJSON \
+            "${SAMPLE_FLAG[@]}" "${FORCE_FLAG[@]}" \
+            --filter "$ERA" 2>&1 | tee -a "$LOGDIR/004C_scoring.log" || SCORE_OK=false
+        if $SCORE_OK; then
+            python3 scripts/run_all.py --tag "$TAG" --parquetHash "$PARQUET_HASH" \
+                --trainingHash "$SCORE_HASH" --applyBDT --workers "$WORKERS" \
+                "${SAMPLE_FLAG[@]}" "${FORCE_FLAG[@]}" \
+                --filter "$ERA" 2>&1 | tee -a "$LOGDIR/004C_scoring.log" || SCORE_OK=false
+        fi
+        if $SCORE_OK; then
+            python3 scripts/run_all.py --tag "$TAG" --parquetHash "$PARQUET_HASH" \
+                --trainingHash "$SCORE_HASH" --generateScoreDatasetJSON \
+                "${SAMPLE_FLAG[@]}" \
+                --filter "$ERA" 2>&1 | tee -a "$LOGDIR/004C_scoring.log" || SCORE_OK=false
+        fi
+        if $SCORE_OK; then
+            SCORE_DIR="$STORAGE/bdtScore/$TAG/$SCORE_HASH/$ERA"
+            N_SCORED="$(find "$SCORE_DIR" -name '*.root' 2>/dev/null | wc -l)"
+            SCORE_JSON="$CHAPTER/outputs/$TAG/$PARQUET_HASH/$ERA/bdtScore_${TAG}_${ERA}${JSON_SUFFIX}_datasets.json"
+            log "bdtScore stage: $SCORE_DIR ($N_SCORED files)"
+            {
+                echo "TRAINING_HASH_USED=$SCORE_HASH"
+                echo "SCORE_STAGE_DIR=$SCORE_DIR"
+                echo "SCORE_FILES=$N_SCORED"
+                echo "SCORE_DATASET_JSON=$SCORE_JSON"
+            } >> "$STATUS_FILE"
+            notify "[6] scoring done: $N_SCORED files in $SCORE_DIR"
+        else
+            log "WARNING: scoring failed -- the parquet output is unaffected."
+            log "         See $LOGDIR/004C_scoring.log."
+            echo "WARNING=scoring_failed" >> "$STATUS_FILE"
+            notify "[6] WARNING: scoring failed. See $LOGDIR"
+        fi
+    fi
+else
+    log "Skipping BDT scoring (pass --applyBDT to run it)."
 fi
 
 log "=== DONE ($RUN_LABEL). Parquet output: $PARQUET_OUT_DIR ==="

@@ -1,4 +1,4 @@
-# 004C-BDTTraining — Parquet Extraction & BDT Training
+# 004C-BDTTraining — Parquet Extraction, BDT Training & Scoring
 
 Takes the `BDTVariables` ROOT files from 004B-BDTVariables, extracts the BDT feature
 branches plus the `y` training target into parquet files (one, or more if a
@@ -82,12 +82,55 @@ only `y in {1,2}`. That was wrong for this measurement: it discarded every
 events still exist at inference time, so the classifier was being applied to a
 population it had never seen. The target is qqbar vs everything else.
 
+### Scoring (`scripts/applyBDT.py`, run via `run_all.py --applyBDT`)
+
+Writes the trained model's output back onto the 004B ROOT files as a `BDTScore`
+branch, so downstream chapters (005-Unfolding, 006-Results) can cut on a score
+instead of re-running the classifier. `predict_proba[:, 1]` is P(qqbar), the
+same convention `trainBDT.py` uses.
+
+Output goes to a new stage, **`bdtScore`**, keyed by the **training** hash —
+that being what determines the score:
+
+```
+{STORAGE}/bdtScore/{tag}/{trainingHash}/{era}/{DataMC}/{group}/{dataset}/
+```
+
+Three points worth knowing:
+
+- **It runs through NanoAODTools' `PostProcessor`**, like 004A and 004B, not an
+  uproot copy. That keeps the full NanoAOD structure — the `Runs` tree in
+  particular, whose `genEventCount`/`genEventSumw` every downstream
+  normalisation depends on. An uproot copy of `Events` alone would silently
+  drop it.
+- **Each file is scored in one batch**, in `BDTScoreModule.beginFile`, and
+  `analyze()` only looks the value up by `event._entry`. A `predict_proba` call
+  on a single row costs about a millisecond, so a per-event loop over an
+  8.6M-event era would take hours instead of minutes.
+- **The feature list comes from the model file**, not from `config.yaml`. A
+  score computed with the columns in a different order, or missing a feature the
+  model was trained on, is silently wrong rather than an error — so a file
+  lacking any trained feature is fatal, and an event with a non-finite feature
+  gets `BDTScore = -1` (outside `predict_proba`'s [0, 1] range, so `> x` cuts
+  reject it) rather than an imputed guess.
+
+`--modelFile` chooses between `bdt_model.pkl` (all features, the default) and
+`bdt_model_reduced.pkl`. `--scoreBranch` renames the branch.
+
+`bdtScore_manifest.json` is written next to the chapter's per-era outputs,
+recording the parquet hash, training hash, model file and stage path, so a
+scored file can always be traced back to the model that produced it.
+
 ## Outputs
 
 - Parquet files: `{STORAGE}/BDTParquet/{tag}/{config_hash}/{era}/{DataMC}/{group}/{dataset}/{dataset}_part{N}.parquet`
 - `Parquet_{tag}_{era}_datasets.json` (via `--generateDatasetJSON`) — same
   nested `DataMC -> group -> dataset -> {filepath: row_count}` shape as the
   other chapters' dataset JSONs.
+- Scored ROOT files: `{STORAGE}/bdtScore/{tag}/{trainingHash}/{era}/{DataMC}/{group}/{dataset}/*_Skim.root`
+  — the 004B file with a `BDTScore` branch added and everything else untouched.
+- `bdtScore_{tag}_{era}_datasets.json` (via `--generateScoreDatasetJSON`) — the
+  dataset map 005/006 read.
 - Training artifacts, per era:
   `outputs/{tag}/{parquetHash}/{era}/bdt/{training_hash}/` — model
   (`bdt_model.pkl`, a `joblib`-pickled `{'model', 'imputer', 'features'}`
@@ -146,6 +189,17 @@ for a given extraction hash:
 
 ```
 run_all.py --trainBDT --parquetHash <extraction-hash>
+```
+
+### Scoring
+
+Needs the NanoAODTools framework importable (`source standalone/env_standalone.sh`);
+`--applyBDT` checks that up front rather than letting every worker fail.
+
+```
+run_all.py --generateScoreProcessListJSON --parquetHash <hash> --trainingHash <hash>
+run_all.py --applyBDT                     --parquetHash <hash> --trainingHash <hash> --workers 12
+run_all.py --generateScoreDatasetJSON     --parquetHash <hash> --trainingHash <hash>
 ```
 
 `--filter <era>` scopes to specific eras (training's dataset selection
