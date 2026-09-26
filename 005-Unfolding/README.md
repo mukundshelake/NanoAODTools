@@ -9,11 +9,16 @@ A_C = (N₊ − N₋) / (N₊ + N₋)      with  Δ|y| = |y_t| − |y_t̄|,  N�
 
 ## Campaign
 
-Input is **`earlySeptember_corrected`** / 004B hash **`1022d663f7d9`**, **UL2016preVFP only**.
+Input is **`earlySeptember_corrected`** / 004C **training** hash
+**`386b4160d6fa`**, **UL2016preVFP only**.
 
 ```
-{STORAGE}/BDTVariables/earlySeptember_corrected/1022d663f7d9/{era}/{DataMC}/{group}/{sample}
+{STORAGE}/bdtScore/earlySeptember_corrected/386b4160d6fa/{era}/{DataMC}/{group}/{sample}
 ```
+
+That is 004C's `bdtScore` stage — the 004B files with a `BDTScore` branch added.
+`InputHash` is therefore the *training* hash, which is what that stage is keyed
+by, not 004B's `1022d663f7d9`.
 
 The chapter previously read `BDTScore/midNov` off `/mnt/disk1/skimmed_Run2`, the
 older pre-hash pipeline. That was a mistake worth recording, because the
@@ -39,8 +44,27 @@ Two naming traps in this campaign:
 
 `ttbar_mass` is **computed** from the two fitted tops rather than read — this
 campaign has no such branch, and computing it keeps reco and gen m_tt on the
-same footing. `BDTScore` does not exist yet either (004C trained a model but
-nothing scored ROOT files), so `selection.bdt_cut` must stay `null`.
+same footing.
+
+**`selection.bdt_cut` is `null`, and that is a measured conclusion.** With the
+acceptance correction in place a BDT cut is strictly counterproductive:
+
+| bdt_cut | signal | bkg/sig | A_C | total err |
+|---|---|---|---|---|
+| **null** | 193,675 | 22.0% | +0.00395 | **0.00204** |
+| 0.3 | 157,310 | 22.8% | +0.00395 | 0.00214 |
+| 0.4 | 120,998 | 23.4% | +0.00395 | 0.00228 |
+| 0.5 | 75,831 | 23.2% | +0.00395 | 0.00266 |
+
+A_C does not move and the uncertainty rises monotonically, because we unfold to
+the **full generated spectrum**, so the parton-level answer is the same whatever
+reco subset we keep — the cut only removes events. A scan on the gen asymmetry
+of *selected* events does show A_C rising 2.5× with the cut, and that rise is
+exactly what the acceptance correction undoes. Nor does the cut help the
+background: 004C separates qqbar from gg t̄t, not signal from background.
+
+A cut would pay off only if the measurement were *defined* in the BDT-selected
+phase space, which is not a quantity theory predicts.
 
 Other eras are deliberately out of scope: postVFP stops at 004A, UL2017's 004A
 was built on the **uncorrected** 003 chain and must not be combined with
@@ -246,9 +270,6 @@ These are tracked as issues; none of them is hidden in the code.
 - **The closure test is trivial (#38).** Pseudo-data and response matrix come
   from the same events, so the pulls are identically zero and nothing is tested
   beyond wiring.
-- **The BDT cut cannot be applied** — no stage has scored ROOT files for this
-  campaign, so `selection.bdt_cut` stays `null`. #37 asks for the measurement's
-  BDT cut; that is the one part of it still outstanding.
 - **Reconstruction dilution (#40).** D ≈ 0.41 here, so σ(A_C) is amplified
   ~2.4×. Still the dominant limitation, but half the problem it looked like on
   midNov. A study of widening the hadronic-W light-jet permutation set

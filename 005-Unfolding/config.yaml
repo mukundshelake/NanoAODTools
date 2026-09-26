@@ -18,13 +18,13 @@ STORAGE:
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles"
 
-# Input is 004B-BDTVariables' output. 004C has trained a model for this
-# campaign but has not scored ROOT files with it, so there is no BDTScore
-# branch yet -- see selection.bdt_cut below.
+# Input is 004C's bdtScore stage: the 004B files with a BDTScore branch added.
+# InputHash is therefore 004C's TRAINING hash, which is what that stage is keyed
+# by, not 004B's 1022d663f7d9.
 #   {STORAGE}/{InputStage}/{InputTag}/{InputHash}/{era}/{DataMC}/{group}/{sample}
-InputStage: BDTVariables
+InputStage: bdtScore
 InputTag: earlySeptember_corrected
-InputHash: 1022d663f7d9
+InputHash: 386b4160d6fa
 
 # UL2016preVFP only, by decision. The other eras are incomplete: postVFP stops
 # at 004A, UL2017's 004A was built on the UNCORRECTED 003 chain, UL2018 has no
@@ -99,10 +99,30 @@ selection:
   # QCD contamination is included (issue #37). null = no region cut.
   abcd_region: 0
 
-  # BDT score cut. null = no cut, which is also the only option today: 004C has
-  # trained a model for this campaign (AUC 0.7013) but no stage has scored ROOT
-  # files, so there is no BDTScore branch to cut on. extract.py treats it as
-  # optional and records whether it was found.
+  # BDT score cut. null, and that is a measured conclusion rather than a
+  # placeholder: with the acceptance correction in place the cut is strictly
+  # counterproductive.
+  #
+  #   bdt_cut   signal      bkg   bkg/sig      A_C     total err   data-like
+  #     null   193,675   42,608    22.0%   +0.00395    0.00204      0.00880
+  #      0.3   157,310   35,917    22.8%   +0.00395    0.00214      0.00918
+  #      0.4   120,998   28,357    23.4%   +0.00395    0.00228      0.00980
+  #      0.5    75,831   17,590    23.2%   +0.00395    0.00266      0.01140
+  #
+  # A_C does not move, and the uncertainty rises monotonically. The reason is
+  # that we unfold to the FULL generated spectrum (the inefficiency column of
+  # #31/#36), so the parton-level answer is the same whatever reco subset we
+  # keep -- the cut only removes events. A scan on the gen asymmetry of
+  # SELECTED events does show A_C rising 2.5x with the cut, which is what the
+  # classifier is for, but that rise is precisely what the acceptance
+  # correction undoes.
+  #
+  # Nor does it help the background: the 004C classifier separates qqbar from
+  # gg ttbar, not signal from background, so bkg/signal is flat-to-slightly-
+  # worse across the scan.
+  #
+  # A cut would only pay off if the measurement were DEFINED in the
+  # BDT-selected phase space, which is not a quantity theory predicts.
   bdt_cut: null
 
 # ---------------------------------------------------------------------------
