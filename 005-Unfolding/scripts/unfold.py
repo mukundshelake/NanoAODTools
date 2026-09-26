@@ -42,7 +42,7 @@ from tunfold_env import ROOT, load_tunfold  # noqa: E402
 
 
 def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
-               sources=(), quiet=False):
+               sources=(), quiet=False, backgrounds=()):
     """Unfold one (matrix, measured) pair and return everything downstream needs.
 
     Factored out of main() so validate.py exercises the *same* code path the
@@ -68,6 +68,15 @@ def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
             f"SetInput failed (status={status}) -- the measured histogram binning "
             "does not match the response matrix Y axis"
         )
+
+    # Fakes and physics backgrounds are removed from the measured spectrum
+    # here rather than given a gen bin, so their normalisation uncertainty
+    # propagates into the unfolded covariance (issue #36).
+    for name, hist, scale, scale_error in backgrounds:
+        unfold.SubtractBackground(hist, name, scale, scale_error)
+        if not quiet:
+            print(f"  [bkg]  {name}: {hist.Integral():,.1f} events "
+                  f"(scale {scale:g} +- {scale_error:g})")
 
     added = []
     if f_resp is not None and sources:
@@ -149,6 +158,11 @@ def main():
     parser.add_argument("--config", default=None)
     parser.add_argument("--inputs", default=None, help="override unfolding_inputs.root")
     parser.add_argument("--outdir", default=None)
+    parser.add_argument("--fakes-error", type=float, default=0.0,
+                        help="fractional uncertainty on the fake subtraction, "
+                             "passed to SubtractBackground. 0 treats the MC "
+                             "fake prediction as exact; raise it once the fake "
+                             "composition is understood (issue #36)")
     parser.add_argument("--tau", type=float, default=None,
                         help="fixed regularisation strength; default is an L-curve scan. "
                              "With ~12 gen bins the problem is barely ill-posed, so "
@@ -171,17 +185,36 @@ def main():
         raise SystemExit(f"cannot open {inputs} -- run scripts/build_inputs.py first")
 
     h_data = f_in.Get("h_reco_measured")
-    h_truth = f_in.Get("h_gen_truth")
+    # With an inefficiency column in the matrix the unfolded vector estimates
+    # the FULL generated spectrum, so comparing it against the spectrum of
+    # selected events would be comparing two different quantities -- and would
+    # show pulls of ~120 that mean nothing. Prefer h_gen_generated when the
+    # acceptance was applied (issues #31, #36).
+    h_truth = f_in.Get("h_gen_generated")
+    truth_label = "all generated"
+    if not h_truth:
+        h_truth = f_in.Get("h_gen_truth")
+        truth_label = "SELECTED events only -- no acceptance applied"
     h_matrix = f_in.Get("response_matrix_nominal")
-    for obj, name in [(h_data, "h_reco_measured"), (h_truth, "h_gen_truth"),
+    for obj, name in [(h_data, "h_reco_measured"), (h_truth, "truth"),
                       (h_matrix, "response_matrix_nominal")]:
         if not obj:
             raise SystemExit(f"'{name}' not found in {inputs}")
         obj.SetDirectory(0)
 
-    print("\nSystematics:")
+    backgrounds = []
+    h_fakes = f_in.Get("h_fakes")
+    if h_fakes:
+        h_fakes.SetDirectory(0)
+        backgrounds.append(("fakes", h_fakes, 1.0, args.fakes_error))
+    else:
+        print("\n  NOTE: no h_fakes in the input file; fakes are not being "
+              "subtracted (issue #36).")
+
+    print("\nBackgrounds and systematics:")
     result = run_unfold(h_matrix, h_data, n_gen_bins, tau=args.tau,
-                        f_resp=f_in, sources=cfg["systematics"])
+                        f_resp=f_in, sources=cfg["systematics"],
+                        backgrounds=backgrounds)
     unfold = result["unfold"]
     added = result["systematics"]
     tau, best_index, l_curve = result["tau"], result["best_index"], result["l_curve"]
@@ -198,6 +231,10 @@ def main():
     h_unfolded = result["h_unfolded"]
     for i in range(1, n_gen_bins + 1):
         h_unfolded.GetXaxis().SetBinLabel(i, h_truth.GetXaxis().GetBinLabel(i))
+    if truth_label.startswith("SELECTED"):
+        print("\n  NOTE: no acceptance was applied, so 'truth' below is the gen "
+              "spectrum of\n  selected events and the result is NOT a "
+              "parton-level A_C (issue #31).")
 
     h_cov_total, h_cov_stat = result["h_cov_total"], result["h_cov_stat"]
 
@@ -205,7 +242,7 @@ def main():
     # statistical covariance only; GetEmatrixTotal includes systematics and so
     # under-sizes the pull. Both are written so #38 can use the right one.
     print(f"\n{'=' * 72}")
-    print("Unfolded vs truth per gen bin:")
+    print(f"Unfolded vs truth per gen bin   [truth = {truth_label}]:")
     print(f"  {'Bin':<4} {'Label':<26} {'Unfolded':>12} {'Err':>10} {'Truth':>12} {'Pull':>7}")
     print(f"  {'-' * 72}")
     for i in range(n_gen_bins):

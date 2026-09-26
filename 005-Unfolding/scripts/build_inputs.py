@@ -73,24 +73,108 @@ def fill_th1(h, bins, weights, label):
         h.FillN(len(values), values, w)
 
 
-def fill_th2(h, gen_bins, reco_bins, weights):
-    # TODO(#36): unclassified events on either axis are all dumped into that
-    # axis' underflow, so m_tt-out-of-range, both-forward and both-central
-    # events become one indistinguishable pile that TUnfold then treats as a
-    # single extra degree of freedom. Fakes belong in SubtractBackground, and
-    # the gen inefficiency needs its own column.
-    g = np.where(gen_bins >= 0, gen_bins + 0.5, -0.5).astype(np.float64)
-    r = np.where(reco_bins >= 0, reco_bins + 0.5, -0.5).astype(np.float64)
-    w = weights.astype(np.float64)
+def fill_response(h, gen_bins, reco_bins, weights):
+    """Fill the response matrix with hits and the inefficiency column only.
+
+    TUnfold's conventions for a (gen on X, reco on Y) matrix:
+
+      A[i][j]  i,j both valid   a hit: generated in gen bin i, reconstructed
+                                in reco bin j.
+      A[i][0]  reco underflow   generated in gen bin i but NOT reconstructed.
+                                This is the INEFFICIENCY, and TUnfold uses the
+                                column total to normalise P(reco j | gen i).
+                                Getting it right is what makes the unfolded
+                                result an estimate of N_generated rather than
+                                of N_generated x efficiency.
+      A[0][j]  gen underflow    reconstructed but generated outside the gen
+                                range -- i.e. fakes. TUnfold *unfolds* the gen
+                                underflow, so putting a heterogeneous pile
+                                there hands it one extra free parameter to
+                                absorb m_tt-out-of-range, both-forward and
+                                both-central events at once (issue #36).
+
+    So fakes are deliberately NOT filled here. They are collected separately by
+    make_fakes() and removed with TUnfoldSys::SubtractBackground, which is both
+    the correct treatment and the one that propagates their uncertainty.
+    """
+    gen_ok = gen_bins >= 0
+    reco_ok = reco_bins >= 0
+    keep = gen_ok          # fakes are handled by make_fakes(), not here
+
+    g = (gen_bins[keep] + 0.5).astype(np.float64)
+    r = np.where(reco_ok[keep], reco_bins[keep] + 0.5, -0.5).astype(np.float64)
+    w = weights[keep].astype(np.float64)
     selection.assert_no_nan_reaches_histogram(w, w, "response matrix")
-    h.FillN(len(g), g, r, w, 1)
+    if len(g):
+        h.FillN(len(g), g, r, w, 1)
+
+    return {
+        "hits": int((gen_ok & reco_ok).sum()),
+        "misses": int((gen_ok & ~reco_ok).sum()),
+        "fakes": int((~gen_ok & reco_ok).sum()),
+        "neither": int((~gen_ok & ~reco_ok).sum()),
+    }
+
+
+def make_fakes(name, gen_bins, reco_bins, weights, reco_edges):
+    """Reco-level spectrum of events with no valid gen bin.
+
+    Subtracted from the measured spectrum rather than given a gen bin, per the
+    TUnfold documentation's treatment of background (issue #36).
+    """
+    h = make_th1(name, "Fakes (reco valid, gen out of range);Bin;Events", reco_edges)
+    fakes = (gen_bins < 0) & (reco_bins >= 0)
+    fill_th1(h, np.where(fakes, reco_bins, -1), weights, name)
+    return h
+
+
+def add_inefficiency(h, generated, scale, gen_edges, negative_tolerance=1e-6):
+    """Top up the reco-underflow column so each gen column totals what was
+    GENERATED in that bin -- including events that never entered the skim.
+
+    The parquet holds only events that passed the 002 preselection, so the
+    misses already in the matrix cover just the ~4.5% that were selected and
+    then failed reconstruction. `generated` comes from the lxplus gen scan
+    (issue #31) and supplies the rest.
+
+    The added weight carries the gen scan's own statistical error. Those are
+    sign-only weights, so per event Var(w) = 1 and the Poisson error on a bin
+    is sqrt(N_raw); with a 0.405% negative-weight fraction, N_raw is the signed
+    sum to better than a percent, which is far inside any use this is put to.
+    """
+    n_gen = binning.n_unrolled_bins(gen_edges)
+    n_reco = h.GetNbinsY()
+    report = []
+    for i in range(n_gen):
+        column = sum(h.GetBinContent(i + 1, r) for r in range(0, n_reco + 2))
+        target = generated[i] * scale
+        missing = target - column
+        if missing < -abs(target) * negative_tolerance:
+            raise ValueError(
+                f"gen bin {i}: the selected yield ({column:,.1f}) exceeds the "
+                f"generated yield ({target:,.1f}). The acceptance histogram and "
+                "the parquet are inconsistent -- wrong era, wrong dataset, or a "
+                "different weight convention."
+            )
+        missing = max(missing, 0.0)
+        current = h.GetBinContent(i + 1, 0)
+        current_error = h.GetBinError(i + 1, 0)
+        # sign weights: Var = N_raw ~ signed sum, so error ~ sqrt(N) * scale
+        added_error = np.sqrt(max(missing / scale, 0.0)) * scale
+        h.SetBinContent(i + 1, 0, current + missing)
+        h.SetBinError(i + 1, 0, np.sqrt(current_error ** 2 + added_error ** 2))
+        report.append((i, column, target, missing, column / target if target else np.nan))
+    return report
 
 
 def zero_bin_errors(h):
-    # TODO(#36): this loops 1..GetNbinsX() and so never reaches the underflow
-    # bins, which is exactly where the fakes and misses live.
-    for gx in range(1, h.GetNbinsX() + 1):
-        for ry in range(1, h.GetNbinsY() + 1):
+    """Zero every bin error INCLUDING under/overflow.
+
+    The old version looped 1..GetNbinsX(), so it never reached the underflow --
+    which is exactly where the misses and the inefficiency live (issue #36).
+    """
+    for gx in range(0, h.GetNbinsX() + 2):
+        for ry in range(0, h.GetNbinsY() + 2):
             h.SetBinError(gx, ry, 0.0)
 
 
@@ -118,19 +202,56 @@ def classify_events(df, cfg, mask):
     return reco_bin, gen_bin
 
 
-def report_categories(reco_bin, gen_bin, weights):
+def report_categories(df, cfg, mask, reco_bin, gen_bin, weights):
+    """Category breakdown, separating m_tt out-of-range from unclassified.
+
+    The old report merged them, so the 0.78% of reco and 0.92% of gen events
+    falling outside [300, 1200) were indistinguishable from events the
+    rapidity classification could not place (issue #36).
+    """
+    scheme, y0 = cfgmod.scheme(cfg), cfgmod.y0(cfg)
+    gen_edges, reco_edges = cfgmod.gen_mtt_edges(cfg), cfgmod.reco_mtt_edges(cfg)
+
+    def split(y_top, y_antitop, mtt, edges, extra=None):
+        plus, minus = binning.classify(y_top, y_antitop, scheme=scheme, y0=y0)
+        classified = plus | minus
+        in_range = np.isfinite(mtt) & (mtt >= edges[0]) & (mtt < edges[-1])
+        base = extra if extra is not None else np.ones(len(mtt), dtype=bool)
+        return (base & ~classified, base & classified & ~in_range, ~base)
+
+    reco_unclass, reco_oor, reco_cut = split(
+        df["yt_lab"].values, df["ytbar_lab"].values, df["mtt_reco"].values,
+        reco_edges, extra=mask)
+    gen_unclass, gen_oor, _ = split(
+        df["gen_yt"].values, df["gen_ytbar"].values, df["mtt_gen"].values, gen_edges)
+
+    total = len(reco_bin)
     hits = (gen_bin >= 0) & (reco_bin >= 0)
     misses = (gen_bin >= 0) & (reco_bin < 0)
     fakes = (gen_bin < 0) & (reco_bin >= 0)
     neither = (gen_bin < 0) & (reco_bin < 0)
-    total = len(reco_bin)
+
     print("\n  response matrix categories (raw / weighted):")
     for name, m in [("hits", hits), ("misses", misses),
                     ("fakes", fakes), ("neither", neither)]:
         print(f"    {name:<10} {m.sum():>10,} ({m.sum() / total:6.2%})"
               f"   {weights[m].sum():>14,.1f}")
+
+    print("\n  why events fail each axis:")
+    for name, m in [("reco: failed selection", reco_cut),
+                    ("reco: m_tt out of range", reco_oor),
+                    ("reco: unclassified N+/N-", reco_unclass),
+                    ("gen:  m_tt out of range", gen_oor),
+                    ("gen:  unclassified N+/N-", gen_unclass)]:
+        print(f"    {name:<26} {m.sum():>10,} ({m.sum() / total:6.2%})")
+
     return dict(hits=int(hits.sum()), misses=int(misses.sum()),
-                fakes=int(fakes.sum()), neither=int(neither.sum()))
+                fakes=int(fakes.sum()), neither=int(neither.sum()),
+                reco_failed_selection=int(reco_cut.sum()),
+                reco_mtt_out_of_range=int(reco_oor.sum()),
+                reco_unclassified=int(reco_unclass.sum()),
+                gen_mtt_out_of_range=int(gen_oor.sum()),
+                gen_unclassified=int(gen_unclass.sum()))
 
 
 def load_acceptance(path, cfg):
@@ -178,7 +299,11 @@ def main():
     reco_bin, gen_bin = classify_events(df, cfg, mask)
     scale = cfgmod.lumi_scale(cfg, args.era, cfg["Signal"])
     w_nominal = df["weight_nominal"].values * scale
-    categories = report_categories(reco_bin, gen_bin, w_nominal)
+    categories = report_categories(df, cfg, mask, reco_bin, gen_bin, w_nominal)
+
+    generated, outside_binning, acc_meta = (None, 0.0, {})
+    if args.acceptance:
+        generated, outside_binning, acc_meta = load_acceptance(args.acceptance, cfg)
 
     fout = ROOT.TFile(str(out_path), "RECREATE")
 
@@ -198,12 +323,14 @@ def main():
     h_gen.Write()
 
     # --- response matrix, nominal + systematics ---
-    in_matrix = (reco_bin >= 0) | (gen_bin >= 0)
     h_matrix = make_th2("response_matrix_nominal",
                         "Nominal response matrix;Gen bin;Reco bin",
                         gen_edges, reco_edges, with_errors=True)
-    fill_th2(h_matrix, gen_bin[in_matrix], reco_bin[in_matrix], w_nominal[in_matrix])
-    h_matrix.Write()
+    fill_response(h_matrix, gen_bin, reco_bin, w_nominal)
+
+    # Fakes are subtracted from the measured spectrum, not given a gen bin.
+    h_fakes = make_fakes("h_fakes", gen_bin, reco_bin, w_nominal, reco_edges)
+    h_fakes.Write()
 
     for source in cfg["systematics"]:
         for direction in ("Up", "Down"):
@@ -215,35 +342,41 @@ def main():
                          f"{source} {direction};Gen bin;Reco bin",
                          gen_edges, reco_edges, with_errors=False)
             w = df[column].values * scale
-            fill_th2(h, gen_bin[in_matrix], reco_bin[in_matrix], w[in_matrix])
+            fill_response(h, gen_bin, reco_bin, w)
+            if generated is not None:
+                add_inefficiency(h, generated, scale, gen_edges)
             zero_bin_errors(h)
             h.Write()
 
-    # --- acceptance (issue #31) ---
-    if args.acceptance:
-        generated, outside, meta = load_acceptance(args.acceptance, cfg)
+    # --- inefficiency column from the gen scan (issues #31, #36) ---
+    if generated is not None:
+        rows = add_inefficiency(h_matrix, generated, scale, gen_edges)
         h_all = make_th1("h_gen_generated",
                          "Gen unrolled, ALL generated events;Bin;Events", gen_edges)
         for i, value in enumerate(generated):
             h_all.SetBinContent(i + 1, value * scale)
+            h_all.SetBinError(i + 1, np.sqrt(max(value, 0.0)) * scale)
         h_all.Write()
-        selected = np.array([h_gen.GetBinContent(i + 1)
-                             for i in range(binning.n_unrolled_bins(gen_edges))])
-        print(f"\n  acceptance from {os.path.basename(args.acceptance)} "
-              f"({meta.get('dataset', '?')}):")
-        for label, sel, gen_all in zip(binning.labels(gen_edges), selected, generated * scale):
-            eff = sel / gen_all if gen_all else float("nan")
-            print(f"    {label:<24} eff = {eff:6.3%}")
-        print(f"    outside the gen binning: {outside * scale:,.1f}")
+
+        print(f"\n  inefficiency column from {os.path.basename(args.acceptance)}")
+        print(f"  ({acc_meta.get('dataset', '?')})")
+        print(f"    {'bin':<24} {'selected':>12} {'generated':>14} {'efficiency':>11}")
+        for i, column, target, _, eff in rows:
+            print(f"    {binning.labels(gen_edges)[i]:<24} {column:>12,.1f} "
+                  f"{target:>14,.1f} {eff:>11.3%}")
+        print(f"    {'outside the gen binning':<24} {'':>12} "
+              f"{outside_binning * scale:>14,.1f}")
     else:
-        print("\n  NO ACCEPTANCE INPUT (issue #31): the gen spectrum written here is "
-              "of\n  SELECTED events only. Unfolding it yields N_gen(i) x eff(i), "
-              "not N_gen(i),\n  and therefore NOT a parton-level A_C.")
+        print("\n  NO ACCEPTANCE INPUT (issue #31): the response matrix has no "
+              "inefficiency\n  column, so unfolding yields N_gen(i) x eff(i), "
+              "not N_gen(i), and the result\n  is NOT a parton-level A_C.")
+
+    h_matrix.Write()
 
     # Read the summary numbers out BEFORE closing: the histograms are owned by
     # the TFile, so touching them after Close() is a use-after-free.
     stats = (h_reco.GetEntries(), h_reco.Integral(),
-             h_gen.GetEntries(), h_gen.Integral())
+             h_gen.GetEntries(), h_gen.Integral(), h_fakes.Integral())
 
     meta = ROOT.TNamed("provenance", json.dumps({
         **cfgmod.provenance(cfg, "build_inputs.py"),
@@ -257,6 +390,8 @@ def main():
 
     print(f"\n  reco histogram : {stats[0]:,.0f} entries, {stats[1]:,.1f} weighted")
     print(f"  gen  histogram : {stats[2]:,.0f} entries, {stats[3]:,.1f} weighted")
+    print(f"  fakes          : {stats[4]:,.1f} weighted "
+          f"({stats[4] / stats[1]:.2%} of the measured spectrum)")
     print(f"\nWrote {out_path}")
 
 

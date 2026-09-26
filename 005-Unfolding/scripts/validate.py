@@ -72,12 +72,19 @@ def prepare(cfg, era, tag):
 
 
 def build(gen_bin, reco_bin, weights, gen_edges, reco_edges, subset=None,
-          data_like=False):
+          data_like=False, generated=None, scale=1.0, fraction=1.0):
     """Measured histogram, truth histogram and response matrix for a subset.
 
     data_like replaces the MC statistical errors with Poisson errors on the
     expected yield, so a toy study measures coverage for a real dataset rather
     than for the MC's much larger effective sample.
+
+    `generated` is the gen-scan spectrum (issue #31). When supplied, the matrix
+    gets a real inefficiency column and the truth histogram becomes the FULL
+    generated spectrum -- so the suite tests the configuration that actually
+    ships rather than a matrix without acceptance. `fraction` scales it for a
+    subset: a random half of the events corresponds to half the generated
+    sample.
     """
     if subset is None:
         subset = np.ones(len(weights), dtype=bool)
@@ -92,9 +99,19 @@ def build(gen_bin, reco_bin, weights, gen_edges, reco_edges, subset=None,
 
     h_matrix = bi.make_th2(_uid("h_matrix"), ";Gen bin;Reco bin",
                            gen_edges, reco_edges, with_errors=True)
-    in_matrix = subset & ((reco_bin >= 0) | (gen_bin >= 0))
-    bi.fill_th2(h_matrix, gen_bin[in_matrix], reco_bin[in_matrix], weights[in_matrix])
+    inside = np.where(subset, gen_bin, -1)
+    bi.fill_response(h_matrix, inside, np.where(subset, reco_bin, -1), weights)
     h_matrix.SetDirectory(0)
+
+    if generated is not None:
+        bi.add_inefficiency(h_matrix, np.asarray(generated) * fraction,
+                            scale, gen_edges)
+        # truth is then the full generated spectrum, not the selected one
+        h_truth = bi.make_th1(_uid("h_truth_gen"), ";Bin;Events", gen_edges)
+        h_truth.SetDirectory(0)
+        for i, value in enumerate(np.asarray(generated) * fraction):
+            h_truth.SetBinContent(i + 1, value * scale)
+            h_truth.SetBinError(i + 1, np.sqrt(max(value * fraction, 0.0)) * scale)
 
     if data_like:
         for i in range(1, h_data.GetNbinsX() + 1):
@@ -119,7 +136,8 @@ def chi2_against(x, truth, cov):
 # 1. split closure
 # ---------------------------------------------------------------------------
 
-def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=12345):
+def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0,
+                       acceptance=None, scale=1.0, seed=12345):
     _, reco_bin, gen_bin, weights, _ = data
     rng = np.random.default_rng(seed)
     half_a = rng.random(len(weights)) < 0.5
@@ -128,8 +146,11 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=1234
 
     # Response from A, pseudo-data and truth from B. Disjoint by construction,
     # which is the whole point -- the old test used the same events for both.
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges, half_a)
-    h_data, h_truth, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges, half_b)
+    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                           half_a, generated=acceptance, scale=scale, fraction=0.5)
+    h_data, h_truth, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                               half_b, generated=acceptance, scale=scale,
+                               fraction=0.5)
 
     result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
     x, cov = result["x"], result["cov_stat"]
@@ -147,7 +168,12 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=1234
     print(f"  events: half A {half_a.sum():,}  half B {half_b.sum():,}")
     print(f"  per-bin pulls (stat cov): "
           f"{np.array2string(pulls, precision=2, floatmode='fixed')}")
-    print(f"  chi2 / ndf = {chi2:.2f} / {n_gen} = {chi2 / n_gen:.2f}")
+    print(f"  spectrum chi2 / ndf = {chi2:.2f} / {n_gen} = {chi2 / n_gen:.2f}")
+    if acceptance is not None:
+        print("    (the response matrix is built from half the MC, so its own "
+              "statistical\n     error is doubled and not propagated here; with a "
+              "~4% efficiency that\n     inflates the spectrum chi2. A_C is the "
+              "quantity judged below.)")
     print(f"  A_C  unfolded {ac_unf[-1]:+.5f} +- {sigma:.5f}   "
           f"truth(B) {ac_truth[-1]:+.5f}   deviation {deviation:+.2f} sigma")
     ok = abs(deviation) < 3.0
@@ -162,6 +188,7 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=1234
 # ---------------------------------------------------------------------------
 
 def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
+                acceptance=None, scale=1.0,
                 injections=(-0.05, -0.02, 0.0, 0.02, 0.05)):
     _, reco_bin, gen_bin, weights, _ = data
     n_gen = binning.n_unrolled_bins(gen_edges)
@@ -170,19 +197,31 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     # The nominal response matrix stays fixed: it is the MC prior, and the
     # question is whether unfolding data drawn from a *different* truth with it
     # returns that different truth or drags the answer back toward the prior.
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges)
+    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                           generated=acceptance, scale=scale)
 
     # sign of delta|y| at gen level, from the unrolled bin index
     gen_sign = np.zeros(len(weights))
     valid = gen_bin >= 0
     gen_sign[valid] = np.where(gen_bin[valid] < n_mtt, +1.0, -1.0)
 
+    # The injection is a change to the underlying TRUTH, so the generated
+    # spectrum must be reweighted by the same factor as the events. Leaving the
+    # acceptance vector fixed compares a reweighted measurement against an
+    # unreweighted truth -- which is what made an earlier version of this test
+    # report slope 0.497 while the unfolding was in fact tracking the injection
+    # correctly.
+    bin_sign = np.where(np.arange(n_gen) < n_mtt, +1.0, -1.0)
+
     rows = []
     print(f"  {'injected':>10} {'truth A_C':>11} {'unfolded':>11} {'+- stat':>10} "
           f"{'residual':>10}")
     for eps in injections:
         w = weights * (1.0 + eps * gen_sign)
-        h_data, h_truth, _ = build(gen_bin, reco_bin, w, gen_edges, reco_edges)
+        injected_gen = (None if acceptance is None
+                        else np.asarray(acceptance) * (1.0 + eps * bin_sign))
+        h_data, h_truth, _ = build(gen_bin, reco_bin, w, gen_edges, reco_edges,
+                                   generated=injected_gen, scale=scale)
         result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
         ac_unf, ac_cov = asymmetry.propagate(result["x"], result["cov_stat"], gen_edges)
         ac_truth, _ = asymmetry.jacobian(_vector(h_truth, n_gen), gen_edges)
@@ -232,7 +271,8 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
 # 3. toy pseudo-experiments
 # ---------------------------------------------------------------------------
 
-def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0, n_toys=300, seed=987):
+def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0,
+              acceptance=None, scale=1.0, n_toys=300, seed=987):
     _, reco_bin, gen_bin, weights, _ = data
     n_gen = binning.n_unrolled_bins(gen_edges)
     rng = np.random.default_rng(seed)
@@ -240,7 +280,8 @@ def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0, n_toys=300, seed=9
     # data_like=True so the toys probe coverage at the statistics a real
     # dataset would have, not at the MC's ~19x larger effective sample.
     h_data, h_truth, h_matrix = build(gen_bin, reco_bin, weights,
-                                      gen_edges, reco_edges, data_like=True)
+                                      gen_edges, reco_edges, data_like=True,
+                                      generated=acceptance, scale=scale)
     n_reco = h_data.GetNbinsX()
     expectation = np.array([h_data.GetBinContent(i + 1) for i in range(n_reco)])
     ac_truth, _ = asymmetry.jacobian(_vector(h_truth, n_gen), gen_edges)
@@ -295,7 +336,8 @@ def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0, n_toys=300, seed=9
 # 4. fold-back
 # ---------------------------------------------------------------------------
 
-def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=12345):
+def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0,
+                  acceptance=None, scale=1.0, seed=12345):
     """A . x_unfolded against the measured spectrum.
 
     Uses DISJOINT halves, like the split closure. Folding back a result that
@@ -309,8 +351,10 @@ def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=12345):
     rng = np.random.default_rng(seed)
     half_a = rng.random(len(weights)) < 0.5
 
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges, half_a)
-    h_data, _, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges, ~half_a)
+    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                           half_a, generated=acceptance, scale=scale, fraction=0.5)
+    h_data, _, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                         ~half_a, generated=acceptance, scale=scale, fraction=0.5)
     result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
 
     folded = result["unfold"].GetFoldedOutput(_uid("folded"))
@@ -337,10 +381,12 @@ def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0, seed=12345):
 # 5. conditioning
 # ---------------------------------------------------------------------------
 
-def test_conditioning(cfg, era, data, gen_edges, reco_edges, tau=0.0):
+def test_conditioning(cfg, era, data, gen_edges, reco_edges, tau=0.0,
+                      acceptance=None, scale=1.0):
     _, reco_bin, gen_bin, weights, _ = data
     n_gen = binning.n_unrolled_bins(gen_edges)
-    h_data, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges)
+    h_data, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                                generated=acceptance, scale=scale)
     result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
 
     n_reco = h_matrix.GetNbinsY()
@@ -387,6 +433,10 @@ def main():
     parser.add_argument("--tag", default="Dump")
     parser.add_argument("--config", default=None)
     parser.add_argument("--toys", type=int, default=300)
+    parser.add_argument("--acceptance", default=None,
+                        help="gen_acceptance npz; when given, the suite tests "
+                             "the matrix WITH its inefficiency column, i.e. the "
+                             "configuration that actually ships")
     parser.add_argument("--tau", type=float, default=0.0,
                         help="fixed regularisation strength for every test. "
                              "Default 0 because that is what the L-curve picks "
@@ -408,13 +458,18 @@ def main():
     print(f"config hash {cfg['config_hash']}   scheme {cfgmod.scheme(cfg)}   "
           f"tau {args.tau}")
     data = prepare(cfg, args.era, args.tag)
-    print(f"loaded {len(data[3]):,} events\n")
+    acceptance, _, _ = (bi.load_acceptance(args.acceptance, cfg)
+                        if args.acceptance else (None, 0.0, {}))
+    scale = cfgmod.lumi_scale(cfg, args.era, cfg["Signal"])
+    acc_note = ("yes" if acceptance is not None
+                else "NO -- matrix has no inefficiency column")
+    print(f"loaded {len(data[3]):,} events   acceptance: {acc_note}\n")
 
     chosen = args.only or list(TESTS)
     results = {}
     for name in chosen:
         print(f"{'=' * 72}\n{name}\n{'-' * 72}")
-        kwargs = {"tau": args.tau}
+        kwargs = {"tau": args.tau, "acceptance": acceptance, "scale": scale}
         if name == "toys":
             kwargs["n_toys"] = args.toys
         results[name] = TESTS[name](cfg, args.era, data, gen_edges,
