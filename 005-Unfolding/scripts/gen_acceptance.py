@@ -162,6 +162,21 @@ def lhe_weight_sign(arrays, available, n):
     return np.ones(n, dtype=np.float64)
 
 
+def build_url(redirector, lfn):
+    """Join a redirector to an LFN the way xrootd requires.
+
+    xrootd needs `root://host//store/...` -- a DOUBLE slash between the
+    redirector and an absolute path. Concatenating a slash-stripped redirector
+    straight onto the LFN yields `root://host/store/...`, and every open then
+    fails with "[3010] Opening relative path 'store/mc/...' is disallowed".
+    Local validation never caught this because it passes an empty redirector
+    and absolute local paths.
+    """
+    if not redirector:
+        return lfn
+    return redirector.rstrip("/") + "/" + lfn
+
+
 def cache_name(lfn):
     """Stable per-file cache key; LFNs are too long and slashy to use directly."""
     return hashlib.sha256(lfn.encode()).hexdigest()[:16] + ".npz"
@@ -182,7 +197,7 @@ def scan_file(lfn, redirector, cache_dir, retries=3, warnings=None):
         with np.load(cache_path, allow_pickle=False) as data:
             return {k: data[k] for k in data.files}, True
 
-    url = redirector.rstrip("/") + lfn
+    url = build_url(redirector, lfn)
     last_error = None
     for attempt in range(retries):
         try:
@@ -207,7 +222,9 @@ def scan_file(lfn, redirector, cache_dir, retries=3, warnings=None):
                     )
 
                 hist, hist_dy = binning.new_fine()
-                by_channel = {c: binning.new_fine() for c in CHANNEL_ORDER}
+                # list(), not the bare tuple: the merge path accumulates with
+                # `by_channel[c][0] += ...`, which needs item assignment.
+                by_channel = {c: list(binning.new_fine()) for c in CHANNEL_ORDER}
                 n_total = 0
                 n_no_top = 0
                 sum_w = 0.0
@@ -376,7 +393,7 @@ def do_merge(args):
     cache_dir = outdir_for(args.era, args.outdir) / "cache"
 
     hist, hist_dy = binning.new_fine()
-    by_channel = {c: binning.new_fine() for c in CHANNEL_ORDER}
+    by_channel = {c: list(binning.new_fine()) for c in CHANNEL_ORDER}
     totals = np.zeros(3, dtype=np.float64)
     counters = np.zeros(4, dtype=np.float64)
 
