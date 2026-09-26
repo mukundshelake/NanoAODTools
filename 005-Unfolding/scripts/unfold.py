@@ -41,6 +41,72 @@ import plots  # noqa: E402
 from tunfold_env import ROOT, load_tunfold  # noqa: E402
 
 
+def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
+               sources=(), quiet=False):
+    """Unfold one (matrix, measured) pair and return everything downstream needs.
+
+    Factored out of main() so validate.py exercises the *same* code path the
+    measurement uses. A validation suite that reimplements the unfolding tests
+    a copy of the code rather than the code (issue #38).
+
+    Returns a dict with the unfolded vector, both covariances, the live TUnfold
+    object (for GetRhoItotal / GetDeltaSysSource / GetFoldedOutput) and the
+    scan diagnostics.
+    """
+    # TODO(#35): kRegModeCurvature smooths across the N+/N- boundary.
+    unfold = ROOT.TUnfoldDensity(
+        h_matrix,
+        ROOT.TUnfold.kHistMapOutputHoriz,
+        ROOT.TUnfold.kRegModeCurvature,
+        ROOT.TUnfold.kEConstraintArea,
+        ROOT.TUnfoldDensity.kDensityModeBinWidth,
+    )
+
+    status = unfold.SetInput(h_data)
+    if status >= 10000:
+        raise RuntimeError(
+            f"SetInput failed (status={status}) -- the measured histogram binning "
+            "does not match the response matrix Y axis"
+        )
+
+    added = []
+    if f_resp is not None and sources:
+        added = add_systematics(unfold, f_resp, list(sources), quiet=quiet)
+
+    l_curve, best_index = ROOT.TGraph(), 0
+    if tau is not None:
+        unfold.DoUnfold(tau)
+    else:
+        best_index = unfold.ScanLcurve(100, 0.0, 0.0, l_curve,
+                                       ROOT.TSpline3(), ROOT.TSpline3())
+        tau = unfold.GetTau()
+
+    out = unfold.GetOutput("h_unfolded")
+    out.SetDirectory(0)
+    cov_total_h = unfold.GetEmatrixTotal("h_cov_total")
+    cov_total_h.SetDirectory(0)
+    cov_stat_h = unfold.GetEmatrixInput("h_cov_stat")
+    cov_stat_h.SetDirectory(0)
+
+    return {
+        "unfold": unfold,
+        "h_unfolded": out,
+        "h_cov_stat": cov_stat_h,
+        "h_cov_total": cov_total_h,
+        "x": np.array([out.GetBinContent(i + 1) for i in range(n_gen_bins)]),
+        "cov_stat": th2_to_matrix(cov_stat_h, n_gen_bins),
+        "cov_total": th2_to_matrix(cov_total_h, n_gen_bins),
+        "tau": tau,
+        "best_index": best_index,
+        "l_curve": l_curve,
+        "status": status,
+        "systematics": added,
+        "rho_avg": unfold.GetRhoAvg(),
+        "chi2A": unfold.GetChi2A(),
+        "chi2L": unfold.GetChi2L(),
+    }
+
+
 def th2_to_matrix(hist, n):
     """TUnfold covariance TH2 -> numpy matrix over the n physical bins."""
     out = np.empty((n, n), dtype=np.float64)
@@ -50,14 +116,15 @@ def th2_to_matrix(hist, n):
     return out
 
 
-def add_systematics(unfold, f_resp, sources):
+def add_systematics(unfold, f_resp, sources, quiet=False):
     """Register each response-matrix variation as a TUnfoldSys shift."""
     added = []
     for source in sources:
         h_up = f_resp.Get(f"response_matrix_{source}Up")
         h_down = f_resp.Get(f"response_matrix_{source}Down")
         if not h_up or not h_down:
-            print(f"  [skip] {source}: variation histograms not in the input file")
+            if not quiet:
+                print(f"  [skip] {source}: variation histograms not in the input file")
             continue
         h_up.SetDirectory(0)
         h_down.SetDirectory(0)
@@ -70,7 +137,8 @@ def add_systematics(unfold, f_resp, sources):
         unfold.AddSysError(shift, source, ROOT.TUnfold.kHistMapOutputHoriz,
                            ROOT.TUnfoldSys.kSysErrModeShift)
         added.append(source)
-        print(f"  [ok]   {source}")
+        if not quiet:
+            print(f"  [ok]   {source}")
     return added
 
 
@@ -111,51 +179,27 @@ def main():
             raise SystemExit(f"'{name}' not found in {inputs}")
         obj.SetDirectory(0)
 
-    # TODO(#35): see the module docstring.
-    unfold = ROOT.TUnfoldDensity(
-        h_matrix,
-        ROOT.TUnfold.kHistMapOutputHoriz,
-        ROOT.TUnfold.kRegModeCurvature,
-        ROOT.TUnfold.kEConstraintArea,
-        ROOT.TUnfoldDensity.kDensityModeBinWidth,
-    )
-
-    status = unfold.SetInput(h_data)
-    print(f"SetInput status: {status}")
-    if status >= 10000:
-        raise SystemExit(
-            f"SetInput failed (status={status}) -- the measured histogram binning "
-            "does not match the response matrix Y axis"
-        )
-
     print("\nSystematics:")
-    added = add_systematics(unfold, f_in, list(cfg["systematics"]))
-
+    result = run_unfold(h_matrix, h_data, n_gen_bins, tau=args.tau,
+                        f_resp=f_in, sources=cfg["systematics"])
+    unfold = result["unfold"]
+    added = result["systematics"]
+    tau, best_index, l_curve = result["tau"], result["best_index"], result["l_curve"]
+    print(f"SetInput status: {result['status']}")
     if args.tau is not None:
-        unfold.DoUnfold(args.tau)
-        tau, best_index, l_curve = args.tau, 0, ROOT.TGraph()
-        print(f"\nFixed tau = {tau:.8f}")
+        print(f"Fixed tau = {tau:.8f}")
     else:
-        print("\nScanning L-curve...")
-        l_curve = ROOT.TGraph()
-        best_index = unfold.ScanLcurve(100, 0.0, 0.0, l_curve,
-                                       ROOT.TSpline3(), ROOT.TSpline3())
-        tau = unfold.GetTau()
         print(f"  best scan point : {best_index}")
         print(f"  optimal tau     : {tau:.8f}")
-    print(f"  chi2(A)         : {unfold.GetChi2A():.4f}")
-    print(f"  chi2(L)         : {unfold.GetChi2L():.4f}")
-    print(f"  rho avg         : {unfold.GetRhoAvg():.4f}")
+    print(f"  chi2(A)         : {result['chi2A']:.4f}")
+    print(f"  chi2(L)         : {result['chi2L']:.4f}")
+    print(f"  rho avg         : {result['rho_avg']:.4f}")
 
-    h_unfolded = unfold.GetOutput("h_unfolded")
-    h_unfolded.SetDirectory(0)
+    h_unfolded = result["h_unfolded"]
     for i in range(1, n_gen_bins + 1):
         h_unfolded.GetXaxis().SetBinLabel(i, h_truth.GetXaxis().GetBinLabel(i))
 
-    h_cov_total = unfold.GetEmatrixTotal("h_cov_total")
-    h_cov_total.SetDirectory(0)
-    h_cov_stat = unfold.GetEmatrixInput("h_cov_stat")
-    h_cov_stat.SetDirectory(0)
+    h_cov_total, h_cov_stat = result["h_cov_total"], result["h_cov_stat"]
 
     # TODO(#38): for a closure test on the same MC the pull should use the
     # statistical covariance only; GetEmatrixTotal includes systematics and so
@@ -174,9 +218,7 @@ def main():
               f"{truth:>12,.1f} {pull:>7.3f}")
 
     # --- A_C from the unfolded vector (issue #39) ---
-    x = np.array([h_unfolded.GetBinContent(i + 1) for i in range(n_gen_bins)])
-    cov_stat = th2_to_matrix(h_cov_stat, n_gen_bins)
-    cov_total = th2_to_matrix(h_cov_total, n_gen_bins)
+    x, cov_stat, cov_total = result["x"], result["cov_stat"], result["cov_total"]
 
     ac, ac_cov_stat = asymmetry.propagate(x, cov_stat, gen_edges)
     _, ac_cov_total = asymmetry.propagate(x, cov_total, gen_edges)
