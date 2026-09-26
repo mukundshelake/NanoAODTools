@@ -113,12 +113,20 @@ def build(gen_bin, reco_bin, weights, gen_edges, reco_edges, subset=None,
             h_truth.SetBinContent(i + 1, value * scale)
             h_truth.SetBinError(i + 1, np.sqrt(max(value * fraction, 0.0)) * scale)
 
+    # Fakes, so the suite unfolds the same way the measurement does. Without
+    # this the measured spectrum carries ~0.5% of events the matrix knows
+    # nothing about, which showed up as a consistent 0.6% excess in the
+    # unfolded yield and a linearity slope of 0.994 rather than 1.
+    h_fakes = bi.make_fakes(_uid("h_fakes"), np.where(subset, gen_bin, -1),
+                            np.where(subset, reco_bin, -1), weights, reco_edges)
+    h_fakes.SetDirectory(0)
+
     if data_like:
         for i in range(1, h_data.GetNbinsX() + 1):
             content = h_data.GetBinContent(i)
             h_data.SetBinError(i, np.sqrt(max(content, 0.0)))
 
-    return h_data, h_truth, h_matrix
+    return h_data, h_truth, h_matrix, h_fakes
 
 
 def _vector(hist, n):
@@ -146,13 +154,14 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0,
 
     # Response from A, pseudo-data and truth from B. Disjoint by construction,
     # which is the whole point -- the old test used the same events for both.
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                           half_a, generated=acceptance, scale=scale, fraction=0.5)
-    h_data, h_truth, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                               half_b, generated=acceptance, scale=scale,
-                               fraction=0.5)
+    _, _, h_matrix, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                              half_a, generated=acceptance, scale=scale, fraction=0.5)
+    h_data, h_truth, _, h_fakes = build(gen_bin, reco_bin, weights, gen_edges,
+                                       reco_edges, half_b, generated=acceptance,
+                                       scale=scale, fraction=0.5)
 
-    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
+    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True,
+                            backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
     x, cov = result["x"], result["cov_stat"]
     truth = _vector(h_truth, n_gen)
 
@@ -170,9 +179,8 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0,
           f"{np.array2string(pulls, precision=2, floatmode='fixed')}")
     print(f"  spectrum chi2 / ndf = {chi2:.2f} / {n_gen} = {chi2 / n_gen:.2f}")
     if acceptance is not None:
-        print("    (the response matrix is built from half the MC, so its own "
-              "statistical\n     error is doubled and not propagated here; with a "
-              "~4% efficiency that\n     inflates the spectrum chi2. A_C is the "
+        print("    (the response matrix's own statistical error is not propagated "
+              "here, so a\n     value somewhat above 1 is expected. A_C is the "
               "quantity judged below.)")
     print(f"  A_C  unfolded {ac_unf[-1]:+.5f} +- {sigma:.5f}   "
           f"truth(B) {ac_truth[-1]:+.5f}   deviation {deviation:+.2f} sigma")
@@ -197,8 +205,8 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     # The nominal response matrix stays fixed: it is the MC prior, and the
     # question is whether unfolding data drawn from a *different* truth with it
     # returns that different truth or drags the answer back toward the prior.
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                           generated=acceptance, scale=scale)
+    _, _, h_matrix, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                              generated=acceptance, scale=scale)
 
     # sign of delta|y| at gen level, from the unrolled bin index
     gen_sign = np.zeros(len(weights))
@@ -220,9 +228,11 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
         w = weights * (1.0 + eps * gen_sign)
         injected_gen = (None if acceptance is None
                         else np.asarray(acceptance) * (1.0 + eps * bin_sign))
-        h_data, h_truth, _ = build(gen_bin, reco_bin, w, gen_edges, reco_edges,
-                                   generated=injected_gen, scale=scale)
-        result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
+        h_data, h_truth, _, h_fakes = build(gen_bin, reco_bin, w, gen_edges,
+                                           reco_edges, generated=injected_gen,
+                                           scale=scale)
+        result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True,
+                                backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
         ac_unf, ac_cov = asymmetry.propagate(result["x"], result["cov_stat"], gen_edges)
         ac_truth, _ = asymmetry.jacobian(_vector(h_truth, n_gen), gen_edges)
         sigma = asymmetry.errors(ac_cov)[-1]
@@ -240,15 +250,24 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     print(f"  -> {'PASS' if ok else 'FAIL'}: slope within 5% of unity "
           f"({'no' if ok else 'SIGNIFICANT'} regularisation bias)")
 
-    # At tau = 0 this test cannot really fail: plain inversion has no prior to
-    # pull toward. Re-run at a deliberately strong tau to show the test does
-    # detect regularisation bias, so a future tau > 0 is genuinely checked.
+    # At tau = 0 this test cannot fail: plain inversion has no prior to pull
+    # toward. Probe with the OLD 'unrolled' curvature at a strong tau, which is
+    # exactly the pathology #35 fixed -- it smooths across the N+/N- boundary,
+    # i.e. across the difference A_C is made of. If this probe ever comes back
+    # at ~1, the test has stopped being able to see regularisation bias.
     probe_tau = 1e-3
+    probe_mode = "unrolled"
     probe = []
     for eps in (injections[0], injections[-1]):
         w = weights * (1.0 + eps * gen_sign)
-        h_data, h_truth, _ = build(gen_bin, reco_bin, w, gen_edges, reco_edges)
-        r = unf.run_unfold(h_matrix, h_data, n_gen, tau=probe_tau, quiet=True)
+        injected_gen = (None if acceptance is None
+                        else np.asarray(acceptance) * (1.0 + eps * bin_sign))
+        h_data, h_truth, _, h_fakes = build(gen_bin, reco_bin, w, gen_edges,
+                                           reco_edges, generated=injected_gen,
+                                           scale=scale)
+        r = unf.run_unfold(h_matrix, h_data, n_gen, tau=probe_tau, quiet=True,
+                           regularisation=probe_mode,
+                           backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
         ac_unf, _ = asymmetry.propagate(r["x"], r["cov_stat"], gen_edges)
         ac_truth, _ = asymmetry.jacobian(_vector(h_truth, n_gen), gen_edges)
         probe.append((ac_truth[-1], ac_unf[-1]))
@@ -257,13 +276,14 @@ def test_stress(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     verdict = ("test has teeth" if abs(probe_slope - 1) > 0.01
                else "STILL ~1 -- this test may not be sensitive to "
                     "regularisation at all")
-    print(f"  sensitivity check at tau = {probe_tau:g}: "
-          f"slope {probe_slope:.5f}  ({verdict})")
+    print(f"  sensitivity check, '{probe_mode}' regularisation at tau = "
+          f"{probe_tau:g}: slope {probe_slope:.5f}\n      ({verdict})")
 
     return {"rows": [list(map(float, r)) for r in rows],
             "slope": float(slope), "intercept": float(intercept),
             "max_residual": float(np.abs(residuals).max()),
-            "probe_tau": probe_tau, "probe_slope": float(probe_slope),
+            "probe_tau": probe_tau, "probe_mode": probe_mode,
+            "probe_slope": float(probe_slope),
             "pass": bool(ok)}
 
 
@@ -279,9 +299,10 @@ def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0,
 
     # data_like=True so the toys probe coverage at the statistics a real
     # dataset would have, not at the MC's ~19x larger effective sample.
-    h_data, h_truth, h_matrix = build(gen_bin, reco_bin, weights,
-                                      gen_edges, reco_edges, data_like=True,
-                                      generated=acceptance, scale=scale)
+    h_data, h_truth, h_matrix, h_fakes = build(gen_bin, reco_bin, weights,
+                                               gen_edges, reco_edges,
+                                               data_like=True,
+                                               generated=acceptance, scale=scale)
     n_reco = h_data.GetNbinsX()
     expectation = np.array([h_data.GetBinContent(i + 1) for i in range(n_reco)])
     ac_truth, _ = asymmetry.jacobian(_vector(h_truth, n_gen), gen_edges)
@@ -295,7 +316,8 @@ def test_toys(cfg, era, data, gen_edges, reco_edges, tau=0.0,
             h_toy.SetBinContent(i + 1, thrown[i])
             h_toy.SetBinError(i + 1, np.sqrt(max(thrown[i], 1.0)))
         try:
-            result = unf.run_unfold(h_matrix, h_toy, n_gen, tau=tau, quiet=True)
+            result = unf.run_unfold(h_matrix, h_toy, n_gen, tau=tau, quiet=True,
+                                    backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
         except RuntimeError:
             failures += 1
             continue
@@ -351,24 +373,33 @@ def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     rng = np.random.default_rng(seed)
     half_a = rng.random(len(weights)) < 0.5
 
-    _, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                           half_a, generated=acceptance, scale=scale, fraction=0.5)
-    h_data, _, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                         ~half_a, generated=acceptance, scale=scale, fraction=0.5)
-    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
+    _, _, h_matrix, _ = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                              half_a, generated=acceptance, scale=scale, fraction=0.5)
+    h_data, _, _, h_fakes = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
+                                  ~half_a, generated=acceptance, scale=scale,
+                                  fraction=0.5)
+    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True,
+                            backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
 
     folded = result["unfold"].GetFoldedOutput(_uid("folded"))
     folded.SetDirectory(0)
 
+    # GetFoldedOutput returns A . x, which does not include the subtracted
+    # background. Compare it against what was actually unfolded -- the measured
+    # spectrum MINUS the fakes -- or the comparison is inconsistent by the size
+    # of the subtraction (chi2/ndf 20.8 instead of 1.2).
     chi2, used = 0.0, 0
     for i in range(1, h_data.GetNbinsX() + 1):
         error = h_data.GetBinError(i)
         if error > 0:
-            chi2 += ((h_data.GetBinContent(i) - folded.GetBinContent(i)) / error) ** 2
+            measured = h_data.GetBinContent(i) - h_fakes.GetBinContent(i)
+            chi2 += ((measured - folded.GetBinContent(i)) / error) ** 2
             used += 1
     ndf = max(used - n_gen, 1)
     print(f"  reco bins used {used}, gen bins {n_gen}, ndf {ndf}")
     print(f"  chi2 / ndf = {chi2:.2f} / {ndf} = {chi2 / ndf:.3f}")
+    print(f"  (compared against measured - fakes, which is what was unfolded;"
+          f"\n   TUnfold's own chi2A = {result['chi2A']:.2f})")
     print(f"  note: the response matrix's own statistical uncertainty is not in "
           f"this chi2,\n        so a value somewhat above 1 is expected here.")
     ok = chi2 / ndf < 3.0
@@ -385,9 +416,11 @@ def test_conditioning(cfg, era, data, gen_edges, reco_edges, tau=0.0,
                       acceptance=None, scale=1.0):
     _, reco_bin, gen_bin, weights, _ = data
     n_gen = binning.n_unrolled_bins(gen_edges)
-    h_data, _, h_matrix = build(gen_bin, reco_bin, weights, gen_edges, reco_edges,
-                                generated=acceptance, scale=scale)
-    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True)
+    h_data, _, h_matrix, h_fakes = build(gen_bin, reco_bin, weights, gen_edges,
+                                         reco_edges, generated=acceptance,
+                                         scale=scale)
+    result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True,
+                            backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
 
     n_reco = h_matrix.GetNbinsY()
     A = np.array([[h_matrix.GetBinContent(g + 1, r + 1) for g in range(n_gen)]

@@ -12,16 +12,6 @@ vendored TUnfold, with the binning read from config.yaml instead of retyped.
 Two known physics problems are deliberately left marked rather than
 half-addressed here, because each is its own issue:
 
-  TODO(#35) kRegModeCurvature runs over consecutive unrolled bin indices, so it
-            penalises curvature between the highest-m_tt N+ bin and the
-            lowest-m_tt N- bin -- two physically unrelated bins, either side of
-            the boundary the whole measurement rests on. The fix is to build
-            the binning with TUnfoldBinning, or to use kRegModeNone plus
-            explicit per-block RegularizeCurvature calls. kDensityModeBinWidth
-            is also a no-op on a unit-width unrolled axis, and kEConstraintArea
-            fixes the normalisation, which is a choice that needs justifying
-            against kEConstraintNone.
-
 (#39 is done: A_C is extracted below, with its uncertainty propagated through
 the full covariance by scripts/asymmetry.py.)
 """
@@ -41,8 +31,53 @@ import plots  # noqa: E402
 from tunfold_env import ROOT, load_tunfold  # noqa: E402
 
 
+REGULARISATION_MODES = ("blocks", "unrolled", "none")
+
+
+def setup_regularisation(unfold, mode, n_mtt, quiet=False):
+    """Add curvature conditions that respect the N+/N- boundary (issue #35).
+
+    The unrolled gen axis is
+
+        [ N+(300-450) ... N+(1050-1200) | N-(300-450) ... N-(1050-1200) ]
+
+    so TUnfold's built-in kRegModeCurvature, which runs over consecutive bin
+    indices, penalises curvature across bins 6 and 7 -- the highest-m_tt N+ bin
+    against the lowest-m_tt N- bin. Those are physically unrelated, and worse,
+    the difference across that boundary is precisely what A_C measures. It
+    imposes a smoothness prior on the observable itself.
+
+    "blocks" therefore builds the conditions per block with RegularizeBins, so
+    curvature runs along m_tt WITHIN each delta|y| sign and never across the
+    boundary. Bin numbers here are histogram bin numbers (0 = underflow), so
+    the N+ block is 1..n_mtt and the N- block is n_mtt+1..2*n_mtt.
+
+    "unrolled" reproduces the old behaviour for comparison. "none" is plain
+    inversion, which is what the L-curve selects anyway (tau = 0) given that
+    with 12 gen bins the problem is barely ill-posed.
+    """
+    if mode == "none":
+        return {"mode": mode, "conditions": 0, "skipped": 0}
+    if mode == "unrolled":
+        skipped = unfold.RegularizeBins(1, 1, 2 * n_mtt, ROOT.TUnfold.kRegModeCurvature)
+        expected = 2 * n_mtt - 2
+    elif mode == "blocks":
+        skipped = unfold.RegularizeBins(1, 1, n_mtt, ROOT.TUnfold.kRegModeCurvature)
+        skipped += unfold.RegularizeBins(n_mtt + 1, 1, n_mtt,
+                                         ROOT.TUnfold.kRegModeCurvature)
+        expected = 2 * (n_mtt - 2)
+    else:
+        raise ValueError(f"unknown regularisation mode {mode!r}; "
+                         f"expected one of {REGULARISATION_MODES}")
+    if not quiet:
+        print(f"  regularisation '{mode}': {expected - skipped} curvature "
+              f"conditions added, {skipped} skipped")
+    return {"mode": mode, "conditions": expected - skipped, "skipped": int(skipped)}
+
+
 def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
-               sources=(), quiet=False, backgrounds=()):
+               sources=(), quiet=False, backgrounds=(),
+               regularisation="blocks", constraint="area"):
     """Unfold one (matrix, measured) pair and return everything downstream needs.
 
     Factored out of main() so validate.py exercises the *same* code path the
@@ -53,13 +88,20 @@ def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
     object (for GetRhoItotal / GetDeltaSysSource / GetFoldedOutput) and the
     scan diagnostics.
     """
-    # TODO(#35): kRegModeCurvature smooths across the N+/N- boundary.
+    # kRegModeNone here: the conditions are added explicitly below so they
+    # respect the N+/N- boundary (issue #35).
+    #
+    # kDensityModeNone, not kDensityModeBinWidth: the unrolled axis is 0..N with
+    # unit-wide bins, so a bin-width density correction is a no-op. Saying
+    # "None" states that honestly instead of implying a correction is happening.
+    constraint_flag = (ROOT.TUnfold.kEConstraintArea if constraint == "area"
+                       else ROOT.TUnfold.kEConstraintNone)
     unfold = ROOT.TUnfoldDensity(
         h_matrix,
         ROOT.TUnfold.kHistMapOutputHoriz,
-        ROOT.TUnfold.kRegModeCurvature,
-        ROOT.TUnfold.kEConstraintArea,
-        ROOT.TUnfoldDensity.kDensityModeBinWidth,
+        ROOT.TUnfold.kRegModeNone,
+        constraint_flag,
+        ROOT.TUnfoldDensity.kDensityModeNone,
     )
 
     status = unfold.SetInput(h_data)
@@ -77,6 +119,9 @@ def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
         if not quiet:
             print(f"  [bkg]  {name}: {hist.Integral():,.1f} events "
                   f"(scale {scale:g} +- {scale_error:g})")
+
+    n_mtt = n_gen_bins // 2
+    reg = setup_regularisation(unfold, regularisation, n_mtt, quiet=quiet)
 
     added = []
     if f_resp is not None and sources:
@@ -110,6 +155,8 @@ def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
         "l_curve": l_curve,
         "status": status,
         "systematics": added,
+        "regularisation": reg,
+        "constraint": constraint,
         "rho_avg": unfold.GetRhoAvg(),
         "chi2A": unfold.GetChi2A(),
         "chi2L": unfold.GetChi2L(),
@@ -158,6 +205,15 @@ def main():
     parser.add_argument("--config", default=None)
     parser.add_argument("--inputs", default=None, help="override unfolding_inputs.root")
     parser.add_argument("--outdir", default=None)
+    parser.add_argument("--regularisation", default="blocks",
+                        choices=REGULARISATION_MODES,
+                        help="'blocks' keeps curvature within each delta|y| sign "
+                             "(default); 'unrolled' is the old behaviour that "
+                             "smooths across the N+/N- boundary; 'none' is plain "
+                             "inversion (issue #35)")
+    parser.add_argument("--constraint", default="area", choices=("area", "none"),
+                        help="kEConstraintArea fixes the total normalisation. "
+                             "Cross-check against 'none' (issue #35)")
     parser.add_argument("--fakes-error", type=float, default=0.0,
                         help="fractional uncertainty on the fake subtraction, "
                              "passed to SubtractBackground. 0 treats the MC "
@@ -214,7 +270,9 @@ def main():
     print("\nBackgrounds and systematics:")
     result = run_unfold(h_matrix, h_data, n_gen_bins, tau=args.tau,
                         f_resp=f_in, sources=cfg["systematics"],
-                        backgrounds=backgrounds)
+                        backgrounds=backgrounds,
+                        regularisation=args.regularisation,
+                        constraint=args.constraint)
     unfold = result["unfold"]
     added = result["systematics"]
     tau, best_index, l_curve = result["tau"], result["best_index"], result["l_curve"]
@@ -329,9 +387,13 @@ def main():
     ROOT.TNamed("provenance", json.dumps({
         **cfgmod.provenance(cfg, "unfold.py"),
         "era": args.era, "tag": args.tag, "tau": tau,
+        "regularisation": result["regularisation"],
+        "constraint": args.constraint,
         "systematics": added,
         "A_C_inclusive": float(ac[-1]),
         "A_C_inclusive_total_err": float(asymmetry.errors(ac_cov_total)[-1]),
+        "regularisation": reg,
+        "constraint": constraint,
         "rho_avg": unfold.GetRhoAvg(),
         "chi2A": unfold.GetChi2A(),
         "tunfold_version": str(ROOT.TUnfold.GetTUnfoldVersion()),
