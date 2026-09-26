@@ -59,12 +59,17 @@ import kinematics  # noqa: E402
 
 # Reco kinematics every mode needs.
 RECO_BRANCHES = [
-    "ttbar_mass", "Pgof", "Chi2", "chi2_status", "BDTScore",
-    "yt", "ytbar",
-    "Top_lep_pt", "Top_lep_eta", "Top_lep_mass",
-    "Top_had_pt", "Top_had_eta", "Top_had_mass",
+    "Pgof", "Chi2", "chi2_status",
+    "Top_lep_pt", "Top_lep_eta", "Top_lep_phi", "Top_lep_mass",
+    "Top_had_pt", "Top_had_eta", "Top_had_phi", "Top_had_mass",
     "Muon_charge", "Muon_pt", "Muon_eta", "Muon_tightId", "Muon_pfRelIso04_all",
 ]
+
+# Present in the old midNov trees, absent from this campaign's 004B output.
+# m_tt is recomputed from the two fitted tops rather than read; yt/ytbar were
+# the ttbar rest-frame rapidities that nothing downstream used (#43); BDTScore
+# needs a 004C scoring stage that has not run.
+OPTIONAL_BRANCHES = ["BDTScore", "ttbar_mass", "yt", "ytbar"]
 
 GEN_BRANCHES = [
     "GenPart_pdgId", "GenPart_statusFlags",
@@ -86,6 +91,16 @@ SKIPPED_FILES = {}
 # Background samples that contributed no events at all.
 EMPTY_SAMPLES = []
 
+# Samples the config knows about that have no input directory in this campaign.
+MISSING_INPUT = []
+
+
+def variation_branches(spec):
+    """The extra branches one systematic entry needs, whichever form it uses."""
+    if "absolute" in spec:
+        return [spec["absolute"]]
+    return [spec["up"], spec["down"]]
+
 
 def weight_branches(cfg, is_mc):
     """Every weight branch this mode needs, nominal plus variations."""
@@ -103,8 +118,8 @@ def weight_branches(cfg, is_mc):
     variations = []
     for spec in cfg["systematics"].values():
         if spec["nominal"] in names:
-            variations += [spec["up"], spec["down"]]
-    return names, variations
+            variations += variation_branches(spec)
+    return names, sorted(set(variations))
 
 
 def build_weights(arrays, cfg, is_mc, n_events):
@@ -116,22 +131,27 @@ def build_weights(arrays, cfg, is_mc, n_events):
 
     columns = {b: np.asarray(arrays[b], dtype=np.float64) for b in names}
 
-    def product(substitute_from=None, substitute_to=None):
+    def product(substitute_from=None, replacement=None):
         # Recomputed as a product rather than divided out, so a zero weight in
         # any single source cannot produce inf/nan in the variations.
-        values = [
-            np.asarray(arrays[substitute_to], dtype=np.float64)
-            if b == substitute_from else columns[b]
-            for b in names
-        ]
+        values = [replacement if b == substitute_from else columns[b] for b in names]
         return np.prod(values, axis=0)
 
     out = {"weight_nominal": product()}
     for source, spec in cfg["systematics"].items():
-        if spec["nominal"] not in names:
+        nominal = spec["nominal"]
+        if nominal not in names:
             continue
-        out[f"weight_{source}Up"] = product(spec["nominal"], spec["up"])
-        out[f"weight_{source}Down"] = product(spec["nominal"], spec["down"])
+        if "absolute" in spec:
+            # The branch holds an absolute uncertainty on the nominal weight,
+            # not a varied weight, so the variation is nominal +- unc.
+            unc = np.asarray(arrays[spec["absolute"]], dtype=np.float64)
+            up, down = columns[nominal] + unc, columns[nominal] - unc
+        else:
+            up = np.asarray(arrays[spec["up"]], dtype=np.float64)
+            down = np.asarray(arrays[spec["down"]], dtype=np.float64)
+        out[f"weight_{source}Up"] = product(nominal, up)
+        out[f"weight_{source}Down"] = product(nominal, down)
     return out
 
 
@@ -164,6 +184,7 @@ def process_file(path, cfg, era, mode, with_pdf=False):
     nominal, variations = weight_branches(cfg, is_mc)
 
     needed = RECO_BRANCHES + nominal + variations + (GEN_BRANCHES if is_signal else [])
+    optional = [b for b in OPTIONAL_BRANCHES if b in tree.keys()]
     missing = check_branches(tree, needed, path, fatal=is_signal)
     if missing:
         return {"skipped": os.path.basename(path),
@@ -179,7 +200,7 @@ def process_file(path, cfg, era, mode, with_pdf=False):
     if with_pdf and is_signal and PDF_BRANCH[0] in tree.keys():
         theory.append(PDF_BRANCH[0])
 
-    arrays = tree.arrays(needed + theory)
+    arrays = tree.arrays(needed + optional + theory)
     n = len(arrays)
 
     # --- the analysis-selected muon (issue #33) ---
@@ -196,21 +217,37 @@ def process_file(path, cfg, era, mode, with_pdf=False):
                                 arrays["Top_had_mass"])
     yt_lab, ytbar_lab = kinematics.assign_top_antitop(y_lep, y_had, charge)
 
+    # m_tt from the two fitted tops. Computed rather than read: this campaign's
+    # 004B output has no ttbar_mass branch, and computing it keeps the reco and
+    # gen masses on exactly the same footing (both via invariant_mass).
+    mtt = kinematics.invariant_mass(
+        (arrays["Top_lep_pt"], arrays["Top_lep_eta"],
+         arrays["Top_lep_phi"], arrays["Top_lep_mass"]),
+        (arrays["Top_had_pt"], arrays["Top_had_eta"],
+         arrays["Top_had_phi"], arrays["Top_had_mass"]),
+    )
+
     result = {
-        "mtt_reco": np.asarray(arrays["ttbar_mass"], dtype=np.float64),
+        "mtt_reco": mtt,
         "Pgof": np.asarray(arrays["Pgof"], dtype=np.float64),
         "Chi2": np.asarray(arrays["Chi2"], dtype=np.float64),
         "chi2_status": np.asarray(arrays["chi2_status"], dtype=np.int32),
-        "bdt_score": np.asarray(arrays["BDTScore"], dtype=np.float64),
         "muon_charge": charge.astype(np.int8),
         "has_selected_muon": has_muon,
         "yt_lab": yt_lab,
         "ytbar_lab": ytbar_lab,
-        # ttbar rest-frame, antisymmetric -- NOT the analysis observable.
-        "yt_cm": np.asarray(arrays["yt"], dtype=np.float64),
-        "ytbar_cm": np.asarray(arrays["ytbar"], dtype=np.float64),
         **build_weights(arrays, cfg, is_mc, n),
     }
+    if "BDTScore" in optional:
+        result["bdt_score"] = np.asarray(arrays["BDTScore"], dtype=np.float64)
+    if "ttbar_mass" in optional:
+        # Keep the stored value alongside ours when both exist, so the two can
+        # be compared rather than silently diverging.
+        result["mtt_reco_stored"] = np.asarray(arrays["ttbar_mass"], dtype=np.float64)
+    for name, alias in (("yt", "yt_cm"), ("ytbar", "ytbar_cm")):
+        if name in optional:
+            # ttbar rest-frame, antisymmetric -- NOT the analysis observable.
+            result[alias] = np.asarray(arrays[name], dtype=np.float64)
 
     for branch in theory:
         size = dict([PDF_BRANCH], **THEORY_BRANCHES)[branch]
@@ -248,11 +285,15 @@ def process_file(path, cfg, era, mode, with_pdf=False):
     return ak.Array(result)
 
 
-def run_one(cfg, era, mode, sample, datamc, out_path, with_pdf):
-    input_dir = cfgmod.input_dir(cfg, era, datamc, sample)
+def run_one(cfg, era, mode, sample, datamc, group, out_path, with_pdf):
+    input_dir = cfgmod.input_dir(cfg, era, datamc, group, sample)
     files = sorted(glob.glob(str(input_dir / "*.root")))
     if not files:
-        raise RuntimeError(f"no ROOT files under {input_dir}")
+        if mode == "signal":
+            raise RuntimeError(f"no ROOT files under {input_dir}")
+        print(f"  {sample:<34} {'-':>10}  no input at {input_dir}")
+        MISSING_INPUT.append(sample)
+        return 0
 
     chunks, total, skipped = [], 0, []
     for path in files:
@@ -310,18 +351,24 @@ def main():
 
     if args.mode == "signal":
         run_one(cfg, args.era, "signal", cfg["Signal"], "MC_mu",
+                cfgmod.sample_group(cfg, args.era, cfg["Signal"]),
                 outdir / "signal.parquet", args.pdf_weights)
 
     elif args.mode == "background":
         samples = [args.sample] if args.sample else cfgmod.background_samples(cfg, args.era)
         for sample in samples:
             run_one(cfg, args.era, "background", sample, "MC_mu",
+                    cfgmod.sample_group(cfg, args.era, sample),
                     outdir / f"background_{sample}.parquet", args.pdf_weights)
 
     else:
         for run in cfg["Data"]:
-            run_one(cfg, args.era, "data", run, "Data_mu",
+            run_one(cfg, args.era, "data", run, "Data_mu", cfg["DataGroup"],
                     outdir / f"data_{run}.parquet", False)
+
+    if MISSING_INPUT:
+        print(f"\n  {len(MISSING_INPUT)} sample(s) in the config have no input "
+              f"directory in this campaign: {', '.join(MISSING_INPUT)}")
 
     if EMPTY_SAMPLES:
         print(f"\n  {len(EMPTY_SAMPLES)} sample(s) contributed no events: "

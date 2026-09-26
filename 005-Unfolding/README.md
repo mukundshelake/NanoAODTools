@@ -7,6 +7,45 @@ spectrum in (m_tt, N±), and unfolds to the gen level to extract A_C.
 A_C = (N₊ − N₋) / (N₊ + N₋)      with  Δ|y| = |y_t| − |y_t̄|,  N₊ = N(Δ|y| > 0)
 ```
 
+## Campaign
+
+Input is **`earlySeptember_corrected`** / 004B hash **`1022d663f7d9`**, **UL2016preVFP only**.
+
+```
+{STORAGE}/BDTVariables/earlySeptember_corrected/1022d663f7d9/{era}/{DataMC}/{group}/{sample}
+```
+
+The chapter previously read `BDTScore/midNov` off `/mnt/disk1/skimmed_Run2`, the
+older pre-hash pipeline. That was a mistake worth recording, because the
+difference is not cosmetic — the reconstruction there is materially worse:
+
+| | midNov | earlySeptember_corrected |
+|---|---|---|
+| dilution D | 0.213 | **0.407** |
+| charge assignment | 85.1% | 83.5% |
+| median ΔR(Top_lep, gen) | 0.704 | **0.541** |
+| σ(A_C) inclusive, closure | 0.00352 | **0.00170** |
+| response matrix condition number | 90.6 | **11.8** |
+
+Two naming traps in this campaign:
+
+- **Weight branches are lowercase-initial** — `lheWeightSign`, `muonIDWeight`,
+  `bTagWeight`, `muonHLTWeight`. midNov used `LHEWeightSign`, `MuonIDWeight`,
+  `bTaggingWeight`, `MuonHLTWeight`. Do not mix them; probing for the wrong
+  spelling silently finds nothing.
+- **`muonHLTWeightStat`/`Syst` and `muonIsoWeightStat`/`Syst` are absolute
+  uncertainties** (~0.07%), not varied weights like `muonIDWeightUp`. The
+  config's `systematics` block has a separate `absolute:` form for them.
+
+`ttbar_mass` is **computed** from the two fitted tops rather than read — this
+campaign has no such branch, and computing it keeps reco and gen m_tt on the
+same footing. `BDTScore` does not exist yet either (004C trained a model but
+nothing scored ROOT files), so `selection.bdt_cut` must stay `null`.
+
+Other eras are deliberately out of scope: postVFP stops at 004A, UL2017's 004A
+was built on the **uncorrected** 003 chain and must not be combined with
+preVFP, and UL2018 has no 004A.
+
 ## Environment
 
 **`latestcoffea`** is the only environment that can run this chapter end to end
@@ -147,9 +186,13 @@ These are tracked as issues; none of them is hidden in the code.
   from the same events, so the pulls are identically zero and nothing is tested
   beyond wiring.
 - **Backgrounds and data are extracted but not used (#37).**
-- **Missing scale-factor branches upstream (#44).** 428,538 background events
-  sit in files lacking `LHEWeightSign`/`bTaggingWeight`/`MuonHLT/IDWeight`;
-  `WJetsToLNu_0J` loses 100% of its events. Those files are skipped and the loss
-  is written to `skipped_files_background.json`, never silently defaulted.
-- **Reconstruction dilution (#40).** D ≈ 0.21, so σ(A_C) is amplified ~4.7×.
-  This, not the unfolding, is what limits the measurement.
+- **#44 (missing scale-factor branches) does not affect this campaign.** All 24
+  present MC samples extracted with zero skipped files. It was a midNov problem.
+- **Reconstruction dilution (#40).** D ≈ 0.41 here, so σ(A_C) is amplified
+  ~2.4×. Still the dominant limitation, but half the problem it looked like on
+  midNov. A study of widening the hadronic-W light-jet permutation set
+  (`004A-Reconstruction/scripts/studies/lightjet_permutation_gain.py`) puts the
+  remaining gain at 1.3–1.4×, not the 2.6× midNov suggested.
+- **The split-closure pull is not unit-calibrated.** Over 8 splits its deviation
+  was mean −0.13σ (no bias) with spread 1.54 rather than 1.0, so some variance
+  from splitting the MC between matrix and pseudo-data is still unpropagated.

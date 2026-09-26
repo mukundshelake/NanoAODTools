@@ -392,8 +392,6 @@ def main():
         "systematics": added,
         "A_C_inclusive": float(ac[-1]),
         "A_C_inclusive_total_err": float(asymmetry.errors(ac_cov_total)[-1]),
-        "regularisation": reg,
-        "constraint": constraint,
         "rho_avg": unfold.GetRhoAvg(),
         "chi2A": unfold.GetChi2A(),
         "tunfold_version": str(ROOT.TUnfold.GetTUnfoldVersion()),

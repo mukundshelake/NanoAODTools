@@ -48,9 +48,24 @@ def storage_root(cfg):
     )
 
 
-def input_dir(cfg, era, datamc, sample):
-    """Directory of BDTScore ROOT files for one sample."""
-    return storage_root(cfg) / "BDTScore" / cfg["InputTag"] / era / datamc / sample
+def input_dir(cfg, era, datamc, group, sample):
+    """Input ROOT directory for one sample.
+
+        {STORAGE}/{InputStage}/{InputTag}/{InputHash}/{era}/{DataMC}/{group}/{sample}
+
+    The group level and the input hash are both part of the new (hash-versioned)
+    pipeline layout; the old midNov generation had neither.
+    """
+    return (storage_root(cfg) / cfg["InputStage"] / cfg["InputTag"]
+            / cfg["InputHash"] / era / datamc / group / sample)
+
+
+def sample_group(cfg, era, sample):
+    """Which MC group a sample belongs to, from NgenandXsec."""
+    for group, samples in cfg["NgenandXsec"][era]["MC_mu"].items():
+        if sample in samples:
+            return group
+    raise KeyError(f"no group for {sample!r} in era {era}")
 
 
 def output_dir(cfg, era, tag, create=True):

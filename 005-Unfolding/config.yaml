@@ -9,14 +9,26 @@
 # cut drifting between response_matrix.py and make_histograms.py (issue #32) is
 # what the old four-script layout cost.
 
+# Same root every other chapter uses. 005 previously pointed at
+# /mnt/disk1/skimmed_Run2, which holds the OLD pre-hash pipeline (tags midNov,
+# lateOctober, ...). That generation's reconstruction is materially worse:
+# measured dilution D = 0.213 there against 0.407 here.
 STORAGE:
-  cms2:      "/mnt/disk1/skimmed_Run2"
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
   localhost: "/nfs/disk3/mukund/DataFiles"
   lxplus:    "/eos/user/m/mshelake/DataFiles"
 
-# BDTScore campaign this chapter consumes (004C output).
-InputTag: midNov
+# Input is 004B-BDTVariables' output. 004C has trained a model for this
+# campaign but has not scored ROOT files with it, so there is no BDTScore
+# branch yet -- see selection.bdt_cut below.
+#   {STORAGE}/{InputStage}/{InputTag}/{InputHash}/{era}/{DataMC}/{group}/{sample}
+InputStage: BDTVariables
+InputTag: earlySeptember_corrected
+InputHash: 1022d663f7d9
 
+# UL2016preVFP only, by decision. The other eras are incomplete: postVFP stops
+# at 004A, UL2017's 004A was built on the UNCORRECTED 003 chain, UL2018 has no
+# 004A at all.
 Eras: [UL2016preVFP]
 
 # ---------------------------------------------------------------------------
@@ -25,18 +37,16 @@ Eras: [UL2016preVFP]
 # ---------------------------------------------------------------------------
 Signal: ttbar_SemiLeptonic
 
-# NOTE(#37): these directory names are what exists under {STORAGE}/BDTScore/
-# {InputTag}/{era}/Data_mu/, and they do NOT match the Data_mu keys in
-# 004B-BDTVariables/config.yaml (which has Run2016C_mu where disk has
-# Run2016C_HIPM_mu, and no Run2016B_ver1_mu at all). Reconcile before using
-# data; luminosity bookkeeping depends on getting this list right.
+# These match 004B-BDTVariables/config.yaml exactly. (The _HIPM_ names and
+# Run2016B_ver1_mu that a note here previously warned about were a midNov
+# artifact; this campaign is consistent with the config.)
+DataGroup: SingleMuon
 Data:
-  - Run2016B_ver1_mu
   - Run2016B_ver2_mu
-  - Run2016C_HIPM_mu
-  - Run2016D_HIPM_mu
-  - Run2016E_HIPM_mu
-  - Run2016F_HIPM_mu
+  - Run2016C_mu
+  - Run2016D_mu
+  - Run2016E_mu
+  - Run2016F_mu
 
 # ---------------------------------------------------------------------------
 # Binning. Consumed by scripts/binning.py, which is the single implementation
@@ -81,7 +91,10 @@ selection:
   mtt_reco_max: 3000.0
   abs_y_max: 5.0
 
-  # BDT score cut. null = no cut. 004C targets qqbar-vs-non-qqbar.
+  # BDT score cut. null = no cut, which is also the only option today: 004C has
+  # trained a model for this campaign (AUC 0.7013) but no stage has scored ROOT
+  # files, so there is no BDTScore branch to cut on. extract.py treats it as
+  # optional and records whether it was found.
   bdt_cut: null
 
 # ---------------------------------------------------------------------------
@@ -91,18 +104,45 @@ selection:
 # real data already contains intrinsically, so it must NEVER appear in the Data
 # list. Same rule as 004B's weightList and 003-III's config.
 # ---------------------------------------------------------------------------
+# Branch names in this campaign are lowercase-initial (lheWeightSign,
+# muonIDWeight, bTagWeight, ...). The old midNov pipeline used capitalised
+# names; do not mix them.
+#
+# L1PreFiringWeight_Nom corrects simulation for a trigger inefficiency that real
+# data already contains intrinsically, so it must NEVER appear in the Data list.
+# It *is* present in the Data_mu trees, so the empty list below is load-bearing
+# and is enforced by assertion in extract.py.
+#
+# topPtWeight is available and deliberately NOT applied: it is a modelling
+# reweighting of the ttbar spectrum, which belongs in the systematics rather
+# than the nominal weight.
 weights:
-  MC:   [LHEWeightSign, puWeight, bTaggingWeight, MuonHLTWeight, MuonIDWeight, L1PreFiringWeight_Nom]
+  MC:
+    - lheWeightSign
+    - puWeight
+    - bTagWeight
+    - muonIDWeight
+    - muonIsoWeight
+    - muonHLTWeight
+    - L1PreFiringWeight_Nom
   Data: []
 
-# Systematic variations, as (nominal branch -> up/down branches). A source with
-# no up/down pair here is applied nominally and carries no uncertainty --
-# MuonHLTWeight is currently in that position (issue #43).
+# Two forms of variation:
+#   up/down   the branch holds a fully varied weight (replaces the nominal)
+#   absolute  the branch holds an absolute uncertainty on the nominal, so the
+#             variation is nominal +- that value. muonHLT and muonIso ship
+#             their stat and syst components this way (mean ~0.0007, i.e.
+#             ~0.07%), NOT as varied weights -- which is how the "MuonHLTWeight
+#             has no up/down variation" gap in #43 gets closed.
 systematics:
-  pileup:    {nominal: puWeight,               up: puWeightUp,              down: puWeightDown}
-  btag:      {nominal: bTaggingWeight,         up: bTaggingWeightUp,        down: bTaggingWeightDown}
-  muonID:    {nominal: MuonIDWeight,           up: MuonIDWeightUp,          down: MuonIDWeightDown}
-  prefiring: {nominal: L1PreFiringWeight_Nom,  up: L1PreFiringWeight_Up,    down: L1PreFiringWeight_Dn}
+  pileup:      {nominal: puWeight,              up: puWeightUp,        down: puWeightDown}
+  btag:        {nominal: bTagWeight,            up: bTagWeightUp,      down: bTagWeightDown}
+  muonID:      {nominal: muonIDWeight,          up: muonIDWeightUp,    down: muonIDWeightDown}
+  prefiring:   {nominal: L1PreFiringWeight_Nom, up: L1PreFiringWeight_Up, down: L1PreFiringWeight_Dn}
+  muonHLTStat: {nominal: muonHLTWeight,         absolute: muonHLTWeightStat}
+  muonHLTSyst: {nominal: muonHLTWeight,         absolute: muonHLTWeightSyst}
+  muonIsoStat: {nominal: muonIsoWeight,         absolute: muonIsoWeightStat}
+  muonIsoSyst: {nominal: muonIsoWeight,         absolute: muonIsoWeightSyst}
 
 # ---------------------------------------------------------------------------
 # Normalisation.

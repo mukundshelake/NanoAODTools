@@ -162,7 +162,17 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0,
 
     result = unf.run_unfold(h_matrix, h_data, n_gen, tau=tau, quiet=True,
                             backgrounds=[("fakes", h_fakes, 1.0, 0.0)])
-    x, cov = result["x"], result["cov_stat"]
+    # cov_TOTAL here, not cov_stat. The matrix is built from half the MC, so its
+    # own statistical error is an independent and large source of scatter in this
+    # test, and GetEmatrixTotal is what carries it (via GetEmatrixSysUncorr).
+    # Using data-stat only understates the uncertainty by ~2.2x: over 8 seeds the
+    # deviations had mean -0.18 sigma (no bias) but spread 2.18 sigma, and 2 of 8
+    # crossed 3 sigma by chance alone.
+    #
+    # This is the OPPOSITE of the right choice for a same-events closure, where
+    # matrix and data share their fluctuations and #38 correctly asks for
+    # stat-only.
+    x, cov = result["x"], result["cov_total"]
     truth = _vector(h_truth, n_gen)
 
     pulls = np.where(np.sqrt(np.diag(cov)) > 0,
@@ -186,6 +196,12 @@ def test_split_closure(cfg, era, data, gen_edges, reco_edges, tau=0.0,
           f"truth(B) {ac_truth[-1]:+.5f}   deviation {deviation:+.2f} sigma")
     ok = abs(deviation) < 3.0
     print(f"  -> {'PASS' if ok else 'FAIL'}: A_C recovered within 3 sigma")
+    print("    NOTE: this pull is not unit-calibrated. Repeated over 8 splits of\n"
+          "    earlySeptember_corrected it came out mean -0.13 sigma (so no bias)\n"
+          "    but with spread 1.54, not 1.0 -- some variance from splitting the MC\n"
+          "    between matrix and pseudo-data is still not propagated. Read the 3\n"
+          "    sigma bar as roughly 2 sigma effective, and judge a single split on\n"
+          "    the sign and size of the shift rather than on the pull alone.")
     return {"chi2": chi2, "ndf": n_gen, "pulls": pulls.tolist(),
             "A_C_unfolded": ac_unf[-1], "A_C_truth": ac_truth[-1],
             "deviation_sigma": deviation, "pass": bool(ok)}
