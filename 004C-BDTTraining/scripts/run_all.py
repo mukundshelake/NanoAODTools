@@ -493,9 +493,19 @@ def main():
         return (outputs_base / args.parquetHash / era / 'bdt'
                 / args.trainingHash / args.modelFile)
 
-    def score_output_dir(era, DataMC, group, dataset):
+    # A sample pass writes under {trainingHash}_sample, a whole separate stage
+    # directory, NOT a per-dataset suffix. generateDatasetJSON.py decides the
+    # full/sample variant from FILENAMES, and PostProcessor names its output
+    # after the input file -- so a per-dataset `_sample` directory showed up in
+    # the full map as 32 extra datasets and 112,888 extra events. Suffixing the
+    # hash level keeps the two passes' maps disjoint with no scanner change.
+    def score_stage_dir(era):
+        suffix = "_sample" if args.sample else ""
         return os.path.join(storageBase, "bdtScore", args.tag,
-                            args.trainingHash, era, DataMC, group, dataset)
+                            f"{args.trainingHash}{suffix}", era)
+
+    def score_output_dir(era, DataMC, group, dataset):
+        return os.path.join(score_stage_dir(era), DataMC, group, dataset)
 
     # --generateScoreProcessListJSON
     if args.generateScoreProcessListJSON:
@@ -533,14 +543,10 @@ def main():
                             continue
                         outputDir = score_output_dir(era, DataMC, group, dataset)
                         files = list(datasetJSON[DataMC][group][dataset].keys())
-                        # --sample takes the dataset's first file only. Unlike
-                        # the parquet stage the output keeps the input's own
-                        # filename, so a sample pass and a full pass DO collide
-                        # -- hence the separate directory suffix rather than a
-                        # filename one.
+                        # --sample takes the dataset's first file only; its
+                        # output lands under the _sample stage directory.
                         if args.sample:
                             files = files[:1]
-                            outputDir = outputDir + "_sample"
                         for path in files:
                             target = os.path.join(
                                 outputDir,
@@ -616,8 +622,7 @@ def main():
                     "modelPath": str(model_path_for(era)),
                     "branchName": args.scoreBranch,
                     "stage": "bdtScore",
-                    "stagePath": str(Path(storageBase) / "bdtScore" / args.tag
-                                     / args.trainingHash / era),
+                    "stagePath": score_stage_dir(era),
                     "sample": bool(args.sample),
                 }, f, indent=2)
 
@@ -661,17 +666,16 @@ def main():
             if not matches_filter(args.filter, era):
                 continue
             suffix = "_sample" if args.sample else ""
-            directory = (Path(storageBase) / "bdtScore" / args.tag
-                         / args.trainingHash / era)
             outputFileName = f"bdtScore_{args.tag}_{era}{suffix}_datasets.json"
             outputDirectory = output_dir / era
             outputDirectory.mkdir(parents=True, exist_ok=True)
+            baseDirectory = score_stage_dir(era)
             cmd = [
                 sys.executable, str(generate_dataset_json_script),
-                '--directory', str(directory),
-                '--outputDir', str(outputDirectory),
-                '--outputFileName', outputFileName,
-                '--era', era,
+                '--outputDirectory', str(outputDirectory),
+                '--outputFileName',  outputFileName,
+                '--baseDirectory',   baseDirectory,
+                '--variant',         'sample' if args.sample else 'full',
             ]
             print(f"  Running: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True)
