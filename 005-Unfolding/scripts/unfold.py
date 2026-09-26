@@ -212,6 +212,12 @@ def main():
     parser.add_argument("--config", default=None)
     parser.add_argument("--inputs", default=None, help="override unfolding_inputs.root")
     parser.add_argument("--outdir", default=None)
+    parser.add_argument("--unblind", action="store_true",
+                        help="unfold the REAL DATA spectrum instead of the MC "
+                             "closure one. Off by default deliberately: "
+                             "extracting A_C from data is an unblinding step "
+                             "and should be a conscious decision, not the "
+                             "result of running the default command.")
     parser.add_argument("--regularisation", default="blocks",
                         choices=REGULARISATION_MODES,
                         help="'blocks' keeps curvature within each delta|y| sign "
@@ -247,7 +253,12 @@ def main():
     if not f_in or f_in.IsZombie():
         raise SystemExit(f"cannot open {inputs} -- run scripts/build_inputs.py first")
 
-    h_data = f_in.Get("h_reco_measured")
+    h_data = f_in.Get("h_data_measured" if args.unblind else "h_reco_measured")
+    if args.unblind and not h_data:
+        raise SystemExit("--unblind given but h_data_measured is not in the "
+                         "input file; run build_inputs.py after extracting data")
+    if args.unblind:
+        print("\n  *** UNBLINDED: unfolding real data ***")
     # With an inefficiency column in the matrix the unfolded vector estimates
     # the FULL generated spectrum, so comparing it against the spectrum of
     # selected events would be comparing two different quantities -- and would
@@ -273,6 +284,30 @@ def main():
     else:
         print("\n  NOTE: no h_fakes in the input file; fakes are not being "
               "subtracted (issue #36).")
+
+    # Physics backgrounds are subtracted ONLY when unfolding real data. The
+    # blinded pseudo-data is pure ttbar signal, so subtracting them there would
+    # remove events that were never in it. Fakes are different: they are part of
+    # the signal MC and are subtracted in both cases.
+    unc = cfg.get("background_uncertainty", {})
+    if not args.unblind:
+        print("  [bkg]  physics backgrounds NOT subtracted: the closure "
+              "pseudo-data is pure signal")
+    if args.unblind:
+        for key in f_in.GetListOfKeys():
+            name = key.GetName()
+            if not name.startswith("h_bkg_"):
+                continue
+            group = name[len("h_bkg_"):]
+            hist = f_in.Get(name)
+            hist.SetDirectory(0)
+            backgrounds.append((group, hist, 1.0,
+                                float(unc.get(group, unc.get("default", 0.0)))))
+        h_qcd = f_in.Get("h_qcd_data_driven")
+        if h_qcd:
+            h_qcd.SetDirectory(0)
+            backgrounds.append(("QCD", h_qcd, 1.0,
+                                float(cfg["qcd"].get("uncertainty", 0.0))))
 
     print("\nBackgrounds and systematics:")
     result = run_unfold(h_matrix, h_data, n_gen_bins, tau=args.tau,
@@ -418,6 +453,8 @@ def main():
     ROOT.TNamed("provenance", json.dumps({
         **cfgmod.provenance(cfg, "unfold.py"),
         "era": args.era, "tag": args.tag, "tau": tau,
+        "unblinded": bool(args.unblind),
+        "backgrounds_subtracted": [b[0] for b in backgrounds],
         "regularisation": result["regularisation"],
         "constraint": args.constraint,
         "systematics": added,

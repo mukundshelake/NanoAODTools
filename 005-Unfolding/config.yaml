@@ -91,6 +91,14 @@ selection:
   mtt_reco_max: 3000.0
   abs_y_max: 5.0
 
+  # ABCD region. 0 = A = the nominal signal region (tight isolation, high
+  # mT(W)); 1 = B (loose iso, high mTW), 2 = C, 3 = D. The 002 preselection
+  # keeps iso <= 0.2 while the ABCD split is at 0.06, so the skim contains all
+  # four regions and 005 must pick one. Without this cut only ~56% of ttbar and
+  # ~48% of data events belong in the measurement, and essentially all of the
+  # QCD contamination is included (issue #37). null = no region cut.
+  abcd_region: 0
+
   # BDT score cut. null = no cut, which is also the only option today: 004C has
   # trained a model for this campaign (AUC 0.7013) but no stage has scored ROOT
   # files, so there is no BDTScore branch to cut on. extract.py treats it as
@@ -143,6 +151,45 @@ systematics:
   muonHLTSyst: {nominal: muonHLTWeight,         absolute: muonHLTWeightSyst}
   muonIsoStat: {nominal: muonIsoWeight,         absolute: muonIsoWeightStat}
   muonIsoSyst: {nominal: muonIsoWeight,         absolute: muonIsoWeightSyst}
+
+# ---------------------------------------------------------------------------
+# QCD estimate.
+#
+# The QCD MC is tiny and unreliable in this selection (a few hundred events
+# across the whole spectrum). 003-ObjectSelectionII computes a data-driven
+# transfer factor R = N_qcd_C / N_qcd_D binned in (SelMuon_pt, |SelMuon_eta|),
+# and the QCD estimate in region A is
+#
+#     N_qcd_A(x) = R * [ data_B(x) - non-QCD MC_B(x) ]
+#
+# taken per event from region B, which shares region A's high-mT(W) requirement
+# and so has the right shape (see 003-III's README).
+#
+# Note this campaign's R has a zero bin at pT > 50, |eta| < 1.2 -- the region-D
+# yield there was floored at zero -- so the QCD estimate vanishes for those
+# events rather than being extrapolated.
+qcd:
+  # "data" uses the transfer-factor template; "mc" uses the QCD MC group.
+  source: data
+  # Relative to the repo root. preVFP's 003-II output is under the TYPO tag.
+  transfer_factor: "003-ObjectSelectionII/outputs/earlySepetember_correted/37f710b13012/{era}/abcdScaleFactor_{era}.root"
+  transfer_factor_hist: ABCD_transferFactor_R
+  # Fractional normalisation uncertainty on the QCD estimate, passed to
+  # SubtractBackground. The transfer factor is statistically limited, so this
+  # is not a token number -- revisit against the report JSON.
+  uncertainty: 0.30
+
+# Fractional normalisation uncertainty on each non-QCD MC background group,
+# passed to TUnfoldSys::SubtractBackground so it propagates into the unfolded
+# covariance rather than being ignored.
+background_uncertainty:
+  default: 0.10
+  SemiLeptonic: 0.05
+  FullyLeptonic: 0.05
+  SingleTop: 0.10
+  WJets: 0.20
+  DrellYan: 0.20
+  Diboson: 0.20
 
 # ---------------------------------------------------------------------------
 # Normalisation.

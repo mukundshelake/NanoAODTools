@@ -80,6 +80,15 @@ def reco_mask(df, cfg, report=True):
          (np.abs(yt) < sel["abs_y_max"]) & (np.abs(ytbar) < sel["abs_y_max"]))
     step(f"m_tt < {sel['mtt_reco_max']} GeV", mtt < sel["mtt_reco_max"])
 
+    if sel.get("abcd_region") is not None:
+        if "abcd_region" not in df:
+            raise KeyError(
+                "config selection.abcd_region is set but the input has no "
+                "abcd_region column; re-extract with scripts/extract.py"
+            )
+        step(f"ABCD region == {sel['abcd_region']}",
+             df["abcd_region"].values == sel["abcd_region"])
+
     if sel.get("bdt_cut") is not None:
         if "bdt_score" not in df:
             raise KeyError(

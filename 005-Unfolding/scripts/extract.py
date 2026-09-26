@@ -59,7 +59,8 @@ import kinematics  # noqa: E402
 
 # Reco kinematics every mode needs.
 RECO_BRANCHES = [
-    "Pgof", "Chi2", "chi2_status",
+    "Pgof", "Chi2", "chi2_status", "ABCD_region",
+    "SelMuon_pt", "SelMuon_eta", "SelMuon_charge",
     "Top_lep_pt", "Top_lep_eta", "Top_lep_phi", "Top_lep_mass",
     "Top_had_pt", "Top_had_eta", "Top_had_phi", "Top_had_mass",
     "Muon_charge", "Muon_pt", "Muon_eta", "Muon_tightId", "Muon_pfRelIso04_all",
@@ -90,6 +91,9 @@ SKIPPED_FILES = {}
 
 # Background samples that contributed no events at all.
 EMPTY_SAMPLES = []
+
+# Files where the reapplied muon selection disagreed with SelMuon_charge.
+SELMUON_DISAGREEMENT = []
 
 # Samples the config knows about that have no input directory in this campaign.
 MISSING_INPUT = []
@@ -211,6 +215,17 @@ def process_file(path, cfg, era, mode, with_pdf=False):
     charge = ak.to_numpy(ak.fill_none(ak.firsts(arrays["Muon_charge"][index]), 0))
     charge = np.where(has_muon, charge, 0)
 
+    # This campaign carries the SelMuon_* scalars that midNov had dropped, so
+    # the reapplied selection can be checked against them directly rather than
+    # trusted. Verified 100.0000% agreement on 356,479 events (issue #33); a
+    # mismatch here means the selection has drifted from 003-I's.
+    reference = ak.to_numpy(arrays["SelMuon_charge"]).astype(int)
+    usable = has_muon & (ak.to_numpy(arrays["SelMuon_pt"]) > 0)
+    if usable.any():
+        agreement = (charge[usable] == reference[usable]).mean()
+        if agreement < 0.999:
+            SELMUON_DISAGREEMENT.append((os.path.basename(path), float(agreement)))
+
     y_lep = kinematics.rapidity(arrays["Top_lep_pt"], arrays["Top_lep_eta"],
                                 arrays["Top_lep_mass"])
     y_had = kinematics.rapidity(arrays["Top_had_pt"], arrays["Top_had_eta"],
@@ -234,6 +249,10 @@ def process_file(path, cfg, era, mode, with_pdf=False):
         "chi2_status": np.asarray(arrays["chi2_status"], dtype=np.int32),
         "muon_charge": charge.astype(np.int8),
         "has_selected_muon": has_muon,
+        "abcd_region": np.asarray(arrays["ABCD_region"], dtype=np.int8),
+        # needed to look up the ABCD transfer factor R(pT, |eta|)
+        "muon_pt": np.asarray(arrays["SelMuon_pt"], dtype=np.float64),
+        "muon_eta": np.asarray(arrays["SelMuon_eta"], dtype=np.float64),
         "yt_lab": yt_lab,
         "ytbar_lab": ytbar_lab,
         **build_weights(arrays, cfg, is_mc, n),
@@ -365,6 +384,11 @@ def main():
         for run in cfg["Data"]:
             run_one(cfg, args.era, "data", run, "Data_mu", cfg["DataGroup"],
                     outdir / f"data_{run}.parquet", False)
+
+    if SELMUON_DISAGREEMENT:
+        print(f"\n  !! the reapplied muon selection disagreed with SelMuon_charge "
+              f"in {len(SELMUON_DISAGREEMENT)} file(s); worst "
+              f"{min(a for _, a in SELMUON_DISAGREEMENT):.4%}")
 
     if MISSING_INPUT:
         print(f"\n  {len(MISSING_INPUT)} sample(s) in the config have no input "

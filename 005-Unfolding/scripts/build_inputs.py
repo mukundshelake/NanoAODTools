@@ -254,6 +254,152 @@ def report_categories(df, cfg, mask, reco_bin, gen_bin, weights):
                 gen_unclassified=int(gen_unclass.sum()))
 
 
+def reco_bins_for(df, cfg, mask):
+    """Unrolled reco bin index for an arbitrary parquet (data or background)."""
+    scheme, y0 = cfgmod.scheme(cfg), cfgmod.y0(cfg)
+    plus, minus = binning.classify(df["yt_lab"].values, df["ytbar_lab"].values,
+                                   scheme=scheme, y0=y0)
+    bins = binning.unrolled_bin(df["mtt_reco"].values, plus, minus,
+                               cfgmod.reco_mtt_edges(cfg))
+    return np.where(mask, bins, binning.UNCLASSIFIED)
+
+
+def load_parquets(paths):
+    """Concatenate several parquets, skipping any that do not exist."""
+    frames = [pd.read_parquet(p) for p in paths if p.exists()]
+    if not frames:
+        return None
+    return pd.concat(frames, ignore_index=True)
+
+
+def build_data_histogram(cfg, era, outdir, reco_edges):
+    """Measured spectrum from real data (issue #37)."""
+    paths = [outdir / f"data_{run}.parquet" for run in cfg["Data"]]
+    df = load_parquets(paths)
+    if df is None:
+        return None, None
+    mask, report = selection.reco_mask(df, cfg)
+    bins = reco_bins_for(df, cfg, mask)
+    h = make_th1("h_data_measured", "Data;Bin;Events", reco_edges)
+    # Data weights are exactly 1, so Poisson errors follow from the counts.
+    fill_th1(h, bins, np.ones(len(df)), "h_data_measured")
+    for i in range(1, h.GetNbinsX() + 1):
+        h.SetBinError(i, np.sqrt(max(h.GetBinContent(i), 0.0)))
+    print("\n  data selection:")
+    print(report)
+    return h, df
+
+
+def transfer_factor_lookup(cfg, era):
+    """R(pT, |eta|) from 003-ObjectSelectionII, as a callable on numpy arrays."""
+    path = (cfgmod.CHAPTER.parent
+            / cfg["qcd"]["transfer_factor"].format(era=era))
+    if not path.exists():
+        raise SystemExit(f"ABCD transfer factor not found at {path}")
+    f = ROOT.TFile.Open(str(path))
+    hist = f.Get(cfg["qcd"]["transfer_factor_hist"])
+    if not hist:
+        raise SystemExit(f"{cfg['qcd']['transfer_factor_hist']} not in {path}")
+    hist.SetDirectory(0)
+    f.Close()
+
+    x_edges = np.array([hist.GetXaxis().GetBinLowEdge(i)
+                        for i in range(1, hist.GetNbinsX() + 2)])
+    y_edges = np.array([hist.GetYaxis().GetBinLowEdge(i)
+                        for i in range(1, hist.GetNbinsY() + 2)])
+    table = np.array([[hist.GetBinContent(i, j)
+                       for j in range(1, hist.GetNbinsY() + 1)]
+                      for i in range(1, hist.GetNbinsX() + 1)])
+
+    def lookup(pt, eta):
+        i = np.clip(np.searchsorted(x_edges, pt, side="right") - 1,
+                    0, len(x_edges) - 2)
+        j = np.clip(np.searchsorted(y_edges, np.abs(eta), side="right") - 1,
+                    0, len(y_edges) - 2)
+        return table[i, j]
+
+    return lookup, table, path
+
+
+def build_qcd_from_data(cfg, era, outdir, reco_edges, samples):
+    """Data-driven QCD estimate: R * (region-B data - region-B non-QCD MC).
+
+    Region B shares region A's high-mT(W) requirement, so it has the right
+    shape; R transfers the normalisation from the C/D ratio. See
+    003-ObjectSelectionII's README for the derivation of R (issue #37).
+    """
+    lookup, table, path = transfer_factor_lookup(cfg, era)
+    region_b = dict(cfg["selection"])
+    region_b["abcd_region"] = 1
+    cfg_b = dict(cfg, selection=region_b)
+
+    h = make_th1("h_qcd_data_driven",
+                 "QCD from the ABCD transfer factor;Bin;Events", reco_edges)
+
+    def add(df, scale, sign):
+        if df is None or not len(df):
+            return 0.0
+        mask, _ = selection.reco_mask(df, cfg_b, report=True)
+        bins = reco_bins_for(df, cfg_b, mask)
+        weight = (sign * lookup(df["muon_pt"].values, df["muon_eta"].values)
+                  * df["weight_nominal"].values * scale)
+        fill_th1(h, bins, weight, "h_qcd_data_driven")
+        return weight[bins >= 0].sum()
+
+    data_b = add(load_parquets([outdir / f"data_{r}.parquet" for r in cfg["Data"]]),
+                 1.0, +1.0)
+    mc_b = 0.0
+    for sample in samples:
+        if cfgmod.sample_group(cfg, era, sample) == "QCD":
+            continue   # the thing being estimated must not subtract itself
+        mc_b += add(load_parquets([outdir / f"background_{sample}.parquet"]),
+                    cfgmod.lumi_scale(cfg, era, sample), -1.0)
+    signal_b = add(load_parquets([outdir / "signal.parquet"]),
+                   cfgmod.lumi_scale(cfg, era, cfg["Signal"]), -1.0)
+
+    # max(data - bkg, 0) per bin, as 003-II does per (pt, eta) bin
+    floored = 0
+    for i in range(1, h.GetNbinsX() + 1):
+        if h.GetBinContent(i) < 0:
+            floored += 1
+            h.SetBinContent(i, 0.0)
+            h.SetBinError(i, 0.0)
+
+    print(f"\n  QCD from data (R from {path.name}):")
+    print(f"    R table (pT x |eta|): "
+          f"{np.array2string(table, precision=3, floatmode='fixed')}")
+    print(f"    region-B R-weighted   data {data_b:>12,.1f}")
+    print(f"                      non-QCD MC {abs(mc_b) + abs(signal_b):>12,.1f}   "
+          f"(of which ttbar signal {abs(signal_b):,.1f})")
+    print(f"    QCD estimate in region A  {h.Integral():>12,.1f}"
+          f"   ({floored} bin(s) floored at zero)")
+    if (table == 0).any():
+        print(f"    NOTE: {int((table == 0).sum())} of {table.size} R bins are "
+              f"zero, so QCD is estimated as zero for events there.")
+    return h
+
+
+def build_backgrounds(cfg, era, outdir, reco_edges, samples):
+    """One histogram per MC background group, lumi-scaled, region A."""
+    groups = {}
+    for sample in samples:
+        group = cfgmod.sample_group(cfg, era, sample)
+        if group == "QCD" and cfg["qcd"]["source"] == "data":
+            continue
+        df = load_parquets([outdir / f"background_{sample}.parquet"])
+        if df is None or not len(df):
+            continue
+        mask, _ = selection.reco_mask(df, cfg)
+        bins = reco_bins_for(df, cfg, mask)
+        if group not in groups:
+            groups[group] = make_th1(f"h_bkg_{group}", f"{group};Bin;Events",
+                                     reco_edges)
+        fill_th1(groups[group], bins,
+                 df["weight_nominal"].values * cfgmod.lumi_scale(cfg, era, sample),
+                 f"h_bkg_{group}")
+    return groups
+
+
 def load_acceptance(path, cfg):
     """Project a gen_acceptance.py scan onto the analysis gen binning (issue #31)."""
     with np.load(path, allow_pickle=False) as data:
@@ -360,7 +506,10 @@ def main():
 
         print(f"\n  inefficiency column from {os.path.basename(args.acceptance)}")
         print(f"  ({acc_meta.get('dataset', '?')})")
-        print(f"    {'bin':<24} {'selected':>12} {'generated':>14} {'efficiency':>11}")
+        # "in matrix" rather than "efficiency": the column total is every event
+        # with a valid gen bin, hits plus misses, which is what must equal the
+        # generated yield. The region-A reconstruction efficiency is smaller.
+        print(f"    {'bin':<24} {'in matrix':>12} {'generated':>14} {'fraction':>11}")
         for i, column, target, _, eff in rows:
             print(f"    {binning.labels(gen_edges)[i]:<24} {column:>12,.1f} "
                   f"{target:>14,.1f} {eff:>11.3%}")
@@ -373,6 +522,36 @@ def main():
 
     h_matrix.Write()
 
+    # --- data and backgrounds (issue #37) ---
+    samples = cfgmod.background_samples(cfg, args.era)
+    h_data, data_df = build_data_histogram(cfg, args.era, outdir, reco_edges)
+    data_yield = None
+    if h_data is not None:
+        fout.WriteTObject(h_data, "h_data_measured")
+        data_yield = h_data.Integral()
+
+    bkg = build_backgrounds(cfg, args.era, outdir, reco_edges, samples)
+    if cfg["qcd"]["source"] == "data":
+        bkg["QCD"] = build_qcd_from_data(cfg, args.era, outdir, reco_edges, samples)
+    bkg_total = 0.0
+    print("\n  background estimates in region A (weighted):")
+    for group in sorted(bkg):
+        name = ("h_qcd_data_driven" if group == "QCD"
+                and cfg["qcd"]["source"] == "data" else f"h_bkg_{group}")
+        fout.WriteTObject(bkg[group], name)
+        bkg_total += bkg[group].Integral()
+        print(f"    {group:<16} {bkg[group].Integral():>12,.1f}")
+    print(f"    {'total':<16} {bkg_total:>12,.1f}")
+
+    if data_yield is not None:
+        expected = h_reco.Integral()
+        print(f"\n  data / prediction:")
+        print(f"    data                {data_yield:>12,.1f}")
+        print(f"    signal (ttbar)      {expected:>12,.1f}")
+        print(f"    backgrounds         {bkg_total:>12,.1f}")
+        print(f"    prediction          {expected + bkg_total:>12,.1f}")
+        print(f"    data / prediction   {data_yield / (expected + bkg_total):>12.3f}")
+
     # Read the summary numbers out BEFORE closing: the histograms are owned by
     # the TFile, so touching them after Close() is a use-after-free.
     stats = (h_reco.GetEntries(), h_reco.Integral(),
@@ -384,6 +563,9 @@ def main():
         "selection": [list(c) for c in report.cuts],
         "categories": categories,
         "acceptance": args.acceptance or "none",
+        "qcd_source": cfg["qcd"]["source"],
+        "data_yield": data_yield,
+        "background_yields": {g: bkg[g].Integral() for g in bkg},
     }))
     meta.Write()
     fout.Close()

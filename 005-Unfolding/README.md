@@ -84,6 +84,48 @@ tidiness: `Pgof` drifting between the old `response_matrix.py` and
 `make_histograms.py` left 2.09% of the measured spectrum counted as a miss in
 the matrix while still present in the data being unfolded (issue #32).
 
+## ABCD region — easy to miss
+
+The 002 preselection keeps `Muon_pfRelIso04_all <= 0.2` while the ABCD split is
+at 0.06, so **the skim contains all four ABCD regions** and 005 must pick one.
+`ABCD_region` is 0 = A (tight isolation, high mT(W), the nominal signal region),
+1 = B, 2 = C, 3 = D. `config.yaml: selection.abcd_region: 0`.
+
+Without that cut only ~56% of t̄t and ~48% of data events belong in the
+measurement, and essentially all the QCD contamination is included.
+
+## Data and backgrounds
+
+`build_inputs.py` writes, alongside the closure histograms:
+
+| histogram | content |
+|---|---|
+| `h_data_measured` | real data, region A, Poisson errors |
+| `h_bkg_{group}` | each non-QCD MC group, lumi-scaled |
+| `h_qcd_data_driven` | QCD from the ABCD transfer factor |
+
+QCD comes from data by default, not from the QCD MC: `R(pT, |η|)` from
+003-ObjectSelectionII gives `N_qcd_A = R · (data_B − non-QCD MC_B)`. Region B
+shares region A's high-mT(W) requirement so it has the right shape.
+
+Yields on UL2016preVFP:
+
+```
+data                227,499        FullyLeptonic   21,643
+signal (ttbar)      193,675        SingleTop       16,977
+backgrounds          45,850        WJets            3,394
+prediction          239,525        QCD (data)       3,242
+data / prediction     0.950        DrellYan           566
+                                   Diboson             29
+```
+
+**Unfolding real data requires `--unblind`.** The default unfolds the MC closure
+spectrum. Extracting A_C from data is an unblinding step and should be a
+conscious decision rather than the result of running the default command.
+Physics backgrounds are subtracted only in that mode — the closure pseudo-data
+is pure signal, so subtracting them there would remove events that were never in
+it. Fakes are subtracted in both, being part of the signal MC.
+
 ## Workflow
 
 ```bash
@@ -204,9 +246,9 @@ These are tracked as issues; none of them is hidden in the code.
 - **The closure test is trivial (#38).** Pseudo-data and response matrix come
   from the same events, so the pulls are identically zero and nothing is tested
   beyond wiring.
-- **Backgrounds and data are extracted but not used (#37).**
-- **#44 (missing scale-factor branches) does not affect this campaign.** All 24
-  present MC samples extracted with zero skipped files. It was a midNov problem.
+- **The BDT cut cannot be applied** — no stage has scored ROOT files for this
+  campaign, so `selection.bdt_cut` stays `null`. #37 asks for the measurement's
+  BDT cut; that is the one part of it still outstanding.
 - **Reconstruction dilution (#40).** D ≈ 0.41 here, so σ(A_C) is amplified
   ~2.4×. Still the dominant limitation, but half the problem it looked like on
   midNov. A study of widening the hadronic-W light-jet permutation set
