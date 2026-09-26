@@ -416,8 +416,10 @@ def test_foldback(cfg, era, data, gen_edges, reco_edges, tau=0.0,
     print(f"  chi2 / ndf = {chi2:.2f} / {ndf} = {chi2 / ndf:.3f}")
     print(f"  (compared against measured - fakes, which is what was unfolded;"
           f"\n   TUnfold's own chi2A = {result['chi2A']:.2f})")
-    print(f"  note: the response matrix's own statistical uncertainty is not in "
-          f"this chi2,\n        so a value somewhat above 1 is expected here.")
+    print("  note: this chi2 uses the measured histogram's errors only. The "
+          "response\n        matrix's own MC statistical error is comparable in "
+          "size (see #45:\n        0.00119 vs 0.00120 on the inclusive A_C), so a "
+          "value somewhat\n        above 1 is expected.")
     ok = chi2 / ndf < 3.0
     print(f"  -> {'PASS' if ok else 'FAIL'}: folded prediction consistent with input")
     return {"chi2": float(chi2), "ndf": int(ndf), "chi2_per_ndf": float(chi2 / ndf),

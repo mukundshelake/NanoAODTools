@@ -164,6 +164,25 @@ sum genEventSumw / |genWeight| = 131,106,832  ==  configured Ngen 131,106,831
 `scripts/test_config.py` re-checks this, and pins every Ngen/Xsec/Lumi against
 `004B-BDTVariables/config.yaml` so the copies cannot drift.
 
+## Uncertainty breakdown
+
+`unfold.py` reports each component separately rather than as stat/syst:
+
+```
+  m_tt        A_C      data stat  MC stat (A)  systematics  unaccounted    total
+  inclusive  +0.00395    0.00120     0.00119      0.00016      0.00006   0.00170
+```
+
+**The response matrix's MC statistical error is as large as the data
+statistical error**, and roughly 10× the genuine systematics. An earlier version
+printed a single "syst" column computed as `sqrt(total² − stat²)`, which was
+~99% MC statistics — a reader would have concluded the measurement was
+systematics limited when it is limited by the size of the MC sample (#45).
+
+The `unaccounted` column is whatever the listed components do not explain. It
+should stay small; if it grows, a component is missing from the breakdown rather
+than the total being wrong.
+
 ## Known limitations
 
 These are tracked as issues; none of them is hidden in the code.

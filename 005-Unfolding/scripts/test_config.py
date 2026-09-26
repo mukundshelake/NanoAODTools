@@ -98,6 +98,36 @@ def test_every_systematic_nominal_is_actually_applied():
             f"weights.MC {sorted(applied)}")
 
 
+def test_every_systematic_declares_exactly_one_variation_form():
+    """Either up/down varied weights, or an absolute uncertainty -- not both.
+
+    muonHLTWeightStat/Syst and muonIsoWeightStat/Syst hold absolute
+    uncertainties (~0.07%), not varied weights like muonIDWeightUp. Treating
+    one as the other silently produces a nonsense variation.
+    """
+    cfg = cfgmod.load()
+    for source, spec in cfg["systematics"].items():
+        has_updown = "up" in spec and "down" in spec
+        has_absolute = "absolute" in spec
+        assert has_updown != has_absolute, (
+            f"systematic {source!r} must declare either up/down or absolute, "
+            f"not {'both' if has_updown and has_absolute else 'neither'}: {spec}")
+
+
+def test_input_paths_exist():
+    """The configured stage/tag/hash must actually be on disk."""
+    cfg = cfgmod.load()
+    era = cfg["Eras"][0]
+    signal = cfgmod.input_dir(cfg, era, "MC_mu",
+                              cfgmod.sample_group(cfg, era, cfg["Signal"]),
+                              cfg["Signal"])
+    if not signal.parent.parent.exists():
+        print(f"    (skipped: {signal.parent.parent} not mounted)")
+        return
+    assert signal.is_dir(), f"signal input {signal} does not exist"
+    assert any(signal.glob("*.root")), f"no ROOT files under {signal}"
+
+
 def test_signal_ngen_is_the_sum_of_signed_weights():
     """Ngen must be sum(sign(LHEWeight)), not the raw generated count.
 
@@ -114,7 +144,9 @@ def test_signal_ngen_is_the_sum_of_signed_weights():
     cfg = cfgmod.load()
     era = "UL2016preVFP"
     sample = cfg["Signal"]
-    files = sorted(glob.glob(str(cfgmod.input_dir(cfg, era, "MC_mu", sample) / "*.root")))
+    group = cfgmod.sample_group(cfg, era, sample)
+    files = sorted(glob.glob(
+        str(cfgmod.input_dir(cfg, era, "MC_mu", group, sample) / "*.root")))
     if not files:
         print("    (skipped: BDTScore skim not on local disk)")
         return
@@ -129,6 +161,7 @@ def test_signal_ngen_is_the_sum_of_signed_weights():
     with uproot.open(files[0]) as handle:
         weights = handle["Events"].arrays(["LHEWeight_originalXWGTUP"], library="np")
         magnitudes = np.unique(np.abs(weights["LHEWeight_originalXWGTUP"]))
+    magnitudes = magnitudes[magnitudes > 0]
     assert len(magnitudes) == 1, f"|LHEWeight| is not constant: {magnitudes[:5]}"
 
     implied = sumw / magnitudes[0]

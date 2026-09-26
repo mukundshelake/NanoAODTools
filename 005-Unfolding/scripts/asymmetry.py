@@ -123,32 +123,52 @@ def labels(edges):
     return out + ["inclusive"]
 
 
-def format_table(values, cov_stat, cov_total, edges, systematics=None):
-    """Human-readable A_C table with stat and stat+syst uncertainties.
+def format_table(values, components, total_cov, edges, systematics=None):
+    """A_C table with each uncertainty component reported separately.
 
-    `systematics` maps a source name to its A_C shift vector, as produced by
-    propagate_shift().
+    `components` maps a component name to its propagated covariance on the A_C
+    vector, e.g. {"data stat": ..., "MC stat (A)": ..., "systematics": ...}.
+
+    Reporting them separately is the point. An earlier version printed a "syst"
+    column computed as sqrt(total^2 - stat^2), which on UL2016preVFP was ~99%
+    the response matrix's own MONTE CARLO STATISTICAL error rather than any
+    systematic -- the genuine sources summed to ~0.0001 against a "syst" of
+    0.0012. A reader would have concluded the measurement was systematics
+    limited when it was limited by the size of the MC sample (issue #45).
     """
-    stat = errors(cov_stat)
-    total = errors(cov_total)
-    syst = np.sqrt(np.clip(total ** 2 - stat ** 2, 0.0, None))
     names = labels(edges)
+    width = max(max(len(n) for n in names), 10)
+    sigma = {k: errors(v) for k, v in components.items()}
+    total = errors(total_cov)
 
-    width = max(len(n) for n in names)
-    lines = [
-        f"  {'m_tt [GeV]':<{width}} {'A_C':>10} {'stat':>10} {'syst':>10} {'total':>10}",
-        f"  {'-' * (width + 44)}",
-    ]
+    # Whatever the listed components do not account for. Should be small; if it
+    # is not, a component is missing from the breakdown rather than the total
+    # being wrong, and saying so beats quietly folding it into "syst".
+    listed = np.sqrt(sum(s ** 2 for s in sigma.values()))
+    residual = np.sqrt(np.clip(total ** 2 - listed ** 2, 0.0, None))
+
+    header = f"  {'m_tt [GeV]':<{width}} {'A_C':>10}"
+    for name in components:
+        header += f" {name:>13}"
+    header += f" {'unaccounted':>13} {'total':>10}"
+    lines = [header, f"  {'-' * (len(header) - 2)}"]
+
     for i, name in enumerate(names):
         if i == len(names) - 1:
-            lines.append(f"  {'-' * (width + 44)}")
-        lines.append(f"  {name:<{width}} {values[i]:>+10.5f} {stat[i]:>10.5f} "
-                     f"{syst[i]:>10.5f} {total[i]:>10.5f}")
+            lines.append(f"  {'-' * (len(header) - 2)}")
+        row = f"  {name:<{width}} {values[i]:>+10.5f}"
+        for key in components:
+            row += f" {sigma[key][i]:>13.5f}"
+        row += f" {residual[i]:>13.5f} {total[i]:>10.5f}"
+        lines.append(row)
 
     if systematics:
         lines.append("")
-        lines.append(f"  per-source breakdown on the inclusive A_C:")
+        lines.append("  per-source systematic shift on the inclusive A_C:")
         for source, shift in sorted(systematics.items(),
                                     key=lambda kv: -abs(kv[1][-1])):
-            lines.append(f"    {source:<{width}} {shift[-1]:>+10.5f}")
+            lines.append(f"    {source:<{width}} {shift[-1]:>+13.5f}")
+        quad = np.sqrt(sum(v[-1] ** 2 for v in systematics.values()))
+        lines.append(f"    {'(quadrature)':<{width}} {quad:>13.5f}")
+
     return "\n".join(lines)

@@ -182,7 +182,12 @@ def correlation_matrix(h_cov, outdir, era, name="correlation_matrix"):
 
 def asymmetry_vs_mtt(values, stat, total, edges, outdir, era,
                      name="asymmetry_vs_mtt"):
-    """A_C per m_tt bin with stat and stat+syst bands (issue #39).
+    """A_C per m_tt bin with statistical and total bands (issue #39).
+
+    `stat` should be the FULL statistical uncertainty -- data plus the response
+    matrix's own MC statistics -- not data alone. The two are comparable in
+    size, so a data-only inner band makes the outer band look like systematics
+    when systematics are in fact ~10x smaller (issue #45).
 
     `values`, `stat` and `total` carry n_mtt + 1 entries, the last being the
     inclusive asymmetry, which is drawn separately as a band across the full
@@ -252,8 +257,8 @@ def asymmetry_vs_mtt(values, stat, total, edges, outdir, era,
     legend.SetBorderSize(0)
     legend.SetTextSize(0.035)
     legend.AddEntry(points, "A_{C} unfolded", "lep")
-    legend.AddEntry(h_stat, "stat", "f")
-    legend.AddEntry(h_total, "stat #oplus syst", "f")
+    legend.AddEntry(h_stat, "stat (data #oplus MC)", "f")
+    legend.AddEntry(h_total, "total", "f")
     legend.AddEntry(inclusive_line,
                     f"inclusive = {values[-1]:+.4f} #pm {total[-1]:.4f}", "l")
     legend.Draw()

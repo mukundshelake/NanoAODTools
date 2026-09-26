@@ -141,15 +141,22 @@ def run_unfold(h_matrix, h_data, n_gen_bins, tau=None, f_resp=None,
     cov_total_h.SetDirectory(0)
     cov_stat_h = unfold.GetEmatrixInput("h_cov_stat")
     cov_stat_h.SetDirectory(0)
+    # The response matrix's own statistical error. It IS already inside
+    # GetEmatrixTotal (the matrix is booked with Sumw2), but it is not a
+    # systematic and must not be reported as one -- see issue #45.
+    cov_mcstat_h = unfold.GetEmatrixSysUncorr("h_cov_mcstat")
+    cov_mcstat_h.SetDirectory(0)
 
     return {
         "unfold": unfold,
         "h_unfolded": out,
         "h_cov_stat": cov_stat_h,
         "h_cov_total": cov_total_h,
+        "h_cov_mcstat": cov_mcstat_h,
         "x": np.array([out.GetBinContent(i + 1) for i in range(n_gen_bins)]),
         "cov_stat": th2_to_matrix(cov_stat_h, n_gen_bins),
         "cov_total": th2_to_matrix(cov_total_h, n_gen_bins),
+        "cov_mcstat": th2_to_matrix(cov_mcstat_h, n_gen_bins),
         "tau": tau,
         "best_index": best_index,
         "l_curve": l_curve,
@@ -314,9 +321,11 @@ def main():
 
     # --- A_C from the unfolded vector (issue #39) ---
     x, cov_stat, cov_total = result["x"], result["cov_stat"], result["cov_total"]
+    cov_mcstat = result["cov_mcstat"]
 
     ac, ac_cov_stat = asymmetry.propagate(x, cov_stat, gen_edges)
     _, ac_cov_total = asymmetry.propagate(x, cov_total, gen_edges)
+    _, ac_cov_mcstat = asymmetry.propagate(x, cov_mcstat, gen_edges)
 
     # Per-source breakdown: TUnfold gives the shift of the unfolded spectrum
     # for each source, and the induced shift in A_C is J dx to first order.
@@ -329,9 +338,22 @@ def main():
         dx = np.array([h_delta.GetBinContent(i + 1) for i in range(n_gen_bins)])
         shifts[source] = asymmetry.propagate_shift(x, dx, gen_edges)
 
+    # Systematics as a covariance built from the per-source shifts. This is
+    # exact for kSysErrModeShift sources and lets the breakdown be reported
+    # component by component instead of lumping everything that is not data
+    # statistics into a column labelled "syst" (issue #45).
+    ac_cov_syst = np.zeros_like(ac_cov_total)
+    for shift in shifts.values():
+        ac_cov_syst += np.outer(shift, shift)
+
+    components = {
+        "data stat": ac_cov_stat,
+        "MC stat (A)": ac_cov_mcstat,
+        "systematics": ac_cov_syst,
+    }
     print(f"\n{'=' * 72}")
     print("Charge asymmetry from the unfolded spectrum:")
-    print(asymmetry.format_table(ac, ac_cov_stat, ac_cov_total, gen_edges, shifts))
+    print(asymmetry.format_table(ac, components, ac_cov_total, gen_edges, shifts))
 
     # What the correlations are worth: the same numbers with the off-diagonal
     # terms discarded, which is what treating the bins as independent gives.
@@ -358,8 +380,12 @@ def main():
           f"+- {asymmetry.errors(naive)[-1]:.5f} instead")
 
     plots.truth_vs_unfolded(h_truth, h_unfolded, plotdir, args.era, tau, n_gen_mtt)
-    plots.asymmetry_vs_mtt(ac, asymmetry.errors(ac_cov_stat),
-                           asymmetry.errors(ac_cov_total),
+    # Inner band is the full STATISTICAL uncertainty (data + response matrix),
+    # not data alone: the two are the same size here, so a data-only inner band
+    # would look like the outer band was systematics (issue #45).
+    stat_all = np.sqrt(asymmetry.errors(ac_cov_stat) ** 2
+                       + asymmetry.errors(ac_cov_mcstat) ** 2)
+    plots.asymmetry_vs_mtt(ac, stat_all, asymmetry.errors(ac_cov_total),
                            gen_edges, plotdir, args.era)
     if args.tau is None:
         plots.lcurve(l_curve, best_index, tau, plotdir)
@@ -373,14 +399,19 @@ def main():
     h_data.Write("h_reco_measured")
     h_cov_total.Write("h_cov_total")
     h_cov_stat.Write("h_cov_stat")
+    result["h_cov_mcstat"].Write("h_cov_mcstat")
     if args.tau is None:
         l_curve.Write("lcurve")
     ROOT.TNamed("asymmetry", json.dumps({
         "labels": asymmetry.labels(gen_edges),
         "A_C": ac.tolist(),
-        "stat": asymmetry.errors(ac_cov_stat).tolist(),
+        "data_stat": asymmetry.errors(ac_cov_stat).tolist(),
+        "mc_stat": asymmetry.errors(ac_cov_mcstat).tolist(),
+        "systematics": asymmetry.errors(ac_cov_syst).tolist(),
         "total": asymmetry.errors(ac_cov_total).tolist(),
         "cov_stat": ac_cov_stat.tolist(),
+        "cov_mcstat": ac_cov_mcstat.tolist(),
+        "cov_syst": ac_cov_syst.tolist(),
         "cov_total": ac_cov_total.tolist(),
         "per_source": {k: v.tolist() for k, v in shifts.items()},
     })).Write()
