@@ -724,15 +724,15 @@ histDetails:
     variable: "SelMuon_pt"
     ylimits: [0.5, 100000000]  # min, max (null = auto)
   lepEta:
-    bins: 50
-    range: [-2.5, 2.5]
+    bins: 24
+    range: [-2.4, 2.4]
     name: "eta"
     label: "Leading Muon #eta"
     variable: "SelMuon_eta"
     ylimits: [0.5, 100000000]
   lepPhi:
-    bins: 50
-    range: [-3.14, 3.14]
+    bins: 24
+    range: [-3.14159265, 3.14159265]
     name: "phi"
     label: "Leading Muon #phi"
     variable: "SelMuon_phi"
@@ -745,15 +745,15 @@ histDetails:
     variable: "leadingJet_pt"
     ylimits: [0.5, 100000000]
   leadingJetEta:
-    bins: 50
-    range: [-2.5, 2.5]
+    bins: 24
+    range: [-2.4, 2.4]
     name: "leadingJetEta"
     label: "Leading Jet #eta"
     variable: "leadingJet_eta"
     ylimits: [0.5, 100000000]
   leadingJetPhi:
-    bins: 50
-    range: [-3.14, 3.14]
+    bins: 24
+    range: [-3.14159265, 3.14159265]
     name: "leadingJetPhi"
     label: "Leading Jet #phi"
     variable: "leadingJet_phi"
