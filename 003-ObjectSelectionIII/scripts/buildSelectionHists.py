@@ -87,8 +87,8 @@ class WeightLookupProcessor(processor.ProcessorABC):
         # Build total weights by multiplying the individual weights together.
         # branch_arrays stashes each factor's own masked array (keyed by branch
         # name) so the --systematics variants below can reuse them instead of
-        # re-reading -- a variant just divides out one nominal factor and
-        # multiplies in its shifted value.
+        # re-reading -- a variant is the product of every other nominal factor
+        # times its own shifted value.
         total_weights = None
         branch_arrays = {}
         weightList = self.config['weightList']['Data'] if isData else self.config['weightList']['MC']
@@ -120,6 +120,7 @@ class WeightLookupProcessor(processor.ProcessorABC):
                     pt_arr, eta_arr, dtype=np.float64,
                 )
                 total_weights = r_arr if total_weights is None else total_weights * r_arr
+                branch_arrays['__abcdR__'] = r_arr  # so the --systematics variants below keep it
             else:
                 logger.warning("ABCD scale factor evaluator not available for the region-B pass -- "
                                 "run 003-ObjectSelectionII's --computeABCDScaleFactor and pass "
@@ -127,10 +128,10 @@ class WeightLookupProcessor(processor.ProcessorABC):
 
         # Weight-only systematic variations (opt-in, --systematics): for each
         # configured source whose nominal branch actually fed total_weights
-        # above, build an Up/Down variant of total_weights by dividing out
-        # that one factor and multiplying in its shifted value -- everything
-        # else (including the ABCD R-factor above) stays nominal. See
-        # config.yaml's weightSystematics for the source list/types.
+        # above, build an Up/Down variant of total_weights by replacing that
+        # one factor with its shifted value -- everything else (including the
+        # ABCD R-factor above) stays nominal. See config.yaml's
+        # weightSystematics for the source list/types.
         variant_weights = {}
         if self.build_systematics and total_weights is not None:
             for source_name, spec in self.config.get('weightSystematics', {}).items():
@@ -138,7 +139,16 @@ class WeightLookupProcessor(processor.ProcessorABC):
                 if nominal_branch not in branch_arrays:
                     continue  # this source's nominal factor isn't in this DataMC's weightList (or missing)
                 nominal_val = branch_arrays[nominal_branch]
-                base = total_weights / nominal_val  # product of every other nominal factor
+                # Product of every other nominal factor, multiplied up directly
+                # rather than as total_weights / nominal_val: the per-jet floor in
+                # 003-II's bTaggingWeight.py makes bTagWeight exactly 0 for a few
+                # events, and 0/0 turned both bTag variants NaN (issue #47).
+                base = None
+                for other_branch, other_val in branch_arrays.items():
+                    if other_branch != nominal_branch:
+                        base = other_val if base is None else base * other_val
+                if base is None:
+                    base = da.ones_like(nominal_val)
 
                 if spec.get('type') == 'statsyst':
                     stat_branch, syst_branch = spec['stat'], spec['syst']
