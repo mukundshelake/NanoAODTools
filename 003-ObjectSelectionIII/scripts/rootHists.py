@@ -17,10 +17,12 @@ Outputs per era (inside --outputDir/{era}/plots/), named
   - {file_stub}_{histName}.pdf
   - {file_stub}_{histName}.C
   - {file_stub}_rootHists.root  (all TH1F objects)
+  - {file_stub}_groupYields.{png,pdf,json}  (weighted region-A yield per MC group)
 """
 
 import argparse
 import array
+import json
 import math
 import sys
 from pathlib import Path
@@ -29,7 +31,7 @@ import yaml
 import ROOT
 from ROOT import (
     TFile, TCanvas, TH1F, THStack, TLegend, TLatex, TLine,
-    gROOT, gStyle, TPad
+    gROOT, gStyle, TPad, TPie, TBox
 )
 from coffea.util import load
 
@@ -346,6 +348,146 @@ def make_plot(canvas: TCanvas, h_data: TH1F, mc_stack: THStack,
 
 
 # ---------------------------------------------------------------------------
+# Group yield summary (pie chart + JSON)
+# ---------------------------------------------------------------------------
+
+YIELD_HIST = 'nJets'          # summed with under/overflow, so binning never drops events
+
+
+def make_group_yield_summary(mc_coffea: dict, sorted_groups: list, data_coffea: dict,
+                             data_key: str, era: str, lumi: float, mc_mu_plot: dict,
+                             era_out: Path, file_stub: str, qcd_is_template: bool):
+    """Weighted region-A yield per MC group -- the same numbers that make up the
+    Data/MC stack (lumi*xsec/Ngen-scaled, every weightList factor applied, QCD
+    replaced by the data-driven template when it exists). Writes a pie chart
+    ({file_stub}_groupYields.{png,pdf}) and the numbers ({file_stub}_groupYields.json).
+    """
+    yields = {}
+    for group in sorted_groups:
+        bh_mc = mc_coffea[group].get(f"{era}_MC_mu_{group}", {}).get(YIELD_HIST)
+        if bh_mc is None:
+            print(f"    [WARN] '{YIELD_HIST}' missing for {era}/{group}; left out of the yield summary.")
+            continue
+        yields[group] = float(bh_mc.values(flow=True).sum())
+    if not yields:
+        print(f"    [WARN] No MC yields for {era}; skipping the yield summary.")
+        return
+    mc_total = sum(yields.values())
+    bh_data = data_coffea[data_key].get(YIELD_HIST)
+    data_total = float(bh_data.values(flow=True).sum()) if bh_data is not None else None
+
+    ordered = sorted(yields, key=lambda g: -yields[g])  # largest first, for pie and table
+    summary = {
+        'era': era,
+        'lumi_pb': lumi,
+        'region': 'A',
+        'yield_histogram': YIELD_HIST,
+        'qcd_source': 'data-driven ABCD template' if qcd_is_template else 'MC',
+        'groups': [{'group': g,
+                    'label': mc_mu_plot.get(g, {}).get('label', g),
+                    'yield': yields[g],
+                    'fraction': yields[g] / mc_total} for g in ordered],
+        'mc_total': mc_total,
+        'data_total': data_total,
+        'data_over_mc': (data_total / mc_total) if data_total is not None and mc_total > 0 else None,
+    }
+    with open(era_out / f"{file_stub}_groupYields.json", 'w') as f:
+        json.dump(summary, f, indent=2)
+
+    # Pie pad is square in pixels (0.52*1300 ~ 0.90*750) so the pie stays round.
+    canvas = TCanvas("c_yields", "c_yields", 1300, 750)
+    pad_pie = TPad("pad_pie", "", 0.0, 0.0, 0.52, 0.90)
+    pad_tab = TPad("pad_tab", "", 0.53, 0.0, 1.0, 0.90)
+    for pad in (pad_pie, pad_tab):
+        pad.SetFillStyle(0)
+        pad.SetBorderMode(0)
+        pad.Draw()
+
+    canvas.cd()
+    header = TLatex()
+    header.SetNDC()
+    header.SetTextFont(61)
+    header.SetTextSize(0.045)
+    header.DrawLatex(0.03, 0.935, "CMS")
+    header.SetTextFont(52)
+    header.SetTextSize(0.034)
+    header.DrawLatex(0.095, 0.935, "Preliminary")
+    header.SetTextFont(42)
+    header.SetTextAlign(31)
+    header.DrawLatex(0.97, 0.935, f"{lumi / 1000.0:.1f} fb^{{-1}} (13 TeV, {era})")
+
+    pad_pie.cd()
+    pie = TPie("pie_groupYields", "", len(ordered))
+    # No slice labels: the sub-1% groups can't be labelled legibly, and the
+    # table beside the pie already carries colour, yield and share per group.
+    for i, g in enumerate(ordered):
+        pie.SetEntryVal(i, yields[g])
+        pie.SetEntryFillColor(i, mc_mu_plot.get(g, {}).get('color', 1))
+        pie.SetEntryLabel(i, "")
+        pie.SetEntryLineColor(i, ROOT.kBlack)
+    pie.SetLabelFormat("")
+    pie.SetCircle(0.5, 0.5, 0.40)
+    pie.SetAngularOffset(90)
+    pie.Draw("nol <")
+
+    pad_tab.cd()
+    text = TLatex()
+    text.SetNDC()
+    text.SetTextFont(42)
+    text.SetTextSize(0.040)
+    text.DrawLatex(0.04, 0.93, "#mu + jets, region A, weighted")
+    col_y, col_f = 0.72, 0.95
+    text.SetTextFont(62)
+    text.SetTextSize(0.036)
+    text.DrawLatex(0.10, 0.85, "Group")
+    text.SetTextAlign(31)
+    text.DrawLatex(col_y, 0.85, "Events")
+    text.DrawLatex(col_f, 0.85, "Share")
+    text.SetTextFont(42)
+    boxes = []
+    y = 0.79
+    step = 0.065
+    for g in ordered:
+        label = mc_mu_plot.get(g, {}).get('label', g)
+        if g == 'QCD' and qcd_is_template:
+            label += " (data-driven)"
+        box = TBox(0.03, y - 0.018, 0.075, y + 0.022)
+        box.SetFillColor(mc_mu_plot.get(g, {}).get('color', 1))
+        box.SetLineColor(ROOT.kBlack)
+        box.Draw("l")
+        box.Draw()
+        boxes.append(box)
+        text.SetTextAlign(11)
+        text.DrawLatex(0.10, y - 0.012, label)
+        text.SetTextAlign(31)
+        text.DrawLatex(col_y, y - 0.012, f"{yields[g]:,.1f}")
+        text.DrawLatex(col_f, y - 0.012, f"{100 * yields[g] / mc_total:.2f}%")
+        y -= step
+    rule = TLine(0.03, y + 0.025, 0.97, y + 0.025)
+    rule.Draw()
+    y -= 0.01
+    text.SetTextFont(62)
+    text.SetTextAlign(11)
+    text.DrawLatex(0.10, y - 0.012, "MC total")
+    text.SetTextAlign(31)
+    text.DrawLatex(col_y, y - 0.012, f"{mc_total:,.1f}")
+    text.DrawLatex(col_f, y - 0.012, "100%")
+    text.SetTextFont(42)
+    if data_total is not None:
+        y -= step
+        text.SetTextAlign(11)
+        text.DrawLatex(0.10, y - 0.012, "Data")
+        text.SetTextAlign(31)
+        text.DrawLatex(col_y, y - 0.012, f"{data_total:,.0f}")
+        text.DrawLatex(col_f, y - 0.012, f"D/MC {data_total / mc_total:.3f}")
+
+    canvas.SaveAs(str(era_out / f"{file_stub}_groupYields.png"))
+    canvas.SaveAs(str(era_out / f"{file_stub}_groupYields.pdf"))
+    canvas.Close()
+    print(f"  Group yields ({era}): " + ", ".join(f"{g} {100 * yields[g] / mc_total:.2f}%" for g in ordered))
+
+
+# ---------------------------------------------------------------------------
 # Core loop
 # ---------------------------------------------------------------------------
 
@@ -396,11 +538,13 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     # Falls back to plain QCD MC (with a warning) if it hasn't -- keeps this
     # script usable before that step has been run, rather than hard-failing.
     qcd_group = getattr(args, 'qcdGroup', 'QCD')
+    qcd_is_template = False
     if qcd_group in mc_coffea:
         qcd_template_path = get_qcd_template_path(args.input_base, tag, era, sample_suffix=sample_suffix)
         if qcd_template_path.exists():
             qcd_template = load(qcd_template_path)[f"{era}_QCDTemplate"]
             mc_coffea[qcd_group] = {f"{era}_MC_mu_{qcd_group}": qcd_template}
+            qcd_is_template = True
             print(f"  Using data-driven QCD template for '{qcd_group}': {qcd_template_path}")
         else:
             print(f"  [WARN] QCD template not found for {era} ({qcd_template_path}) -- "
@@ -417,6 +561,10 @@ def process_era(era: str, config: dict, output_dir: Path, tag: str, args):
     def stack_order(g):
         return mc_mu_plot.get(g, {}).get('order', mc_mu_plot.get(g, {}).get('stackOrder', 99))
     sorted_groups = sorted(mc_coffea.keys(), key=stack_order)
+
+    make_group_yield_summary(mc_coffea, sorted_groups, data_coffea, data_key, era, lumi,
+                             mc_mu_plot, era_out, file_stub, qcd_is_template)
+    canvas.cd()
 
     # Loop over histograms
     for hist_name, hist_cfg in hist_details.items():
