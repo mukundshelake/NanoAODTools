@@ -738,8 +738,8 @@ histDetails:
     variable: "SelMuon_phi"
     ylimits: [0.5, 100000000]
   leadingJetPt:
-    bins: 50
-    range: [0, 500]
+    bins: 24
+    range: [25, 505]
     name: "leadingJetPt"
     label: "Leading Jet p_{T} [GeV]"
     variable: "leadingJet_pt"
