@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 import subprocess
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from coffea.util import load, save
 
 # Add parent directory to path for imports
@@ -124,7 +125,7 @@ def main():
                             'these for its own output (and vice versa). Must be passed consistently to every '
                             'step of a given run -- build, aggregate, QCD template, and makeplots.')
     parser.add_argument('--workers', type=int, default=15,
-                       help='Number of parallel workers passed to runSelection.py (default: 15)')
+                       help='Number of datasets --buildSelectionHists processes in parallel (default: 15)')
     parser.add_argument('--systematics', action='store_true',
                        help='With --buildSelectionHists: also build weight-only systematic variant '
                             'histograms (config.yaml\'s weightSystematics). --aggregrateGroupHists and '
@@ -309,7 +310,8 @@ def main():
         if not build_selection_hists_script.exists():
             print(f"Error: buildSelectionHists.py script not found at {build_selection_hists_script}")
             sys.exit(1)
-        # Loop over all datasets in the config and run buildSelectionHists.py for each one
+        # Collect one buildSelectionHists.py command per dataset, then run them in parallel below
+        jobs = []
         for era in config['NgenandXsec']:
             if not matches_filter(args.filter, era):
                 continue
@@ -358,8 +360,40 @@ def main():
                             command.append('--sample')
                         if args.systematics:
                             command.append('--systematics')
-                        subprocess.run(command, check=True)
-                        print(f"Finished building selection histograms for {era}/{DataMC}/{group}/{dataset}. Output saved to {outputDirectory / outputFileName}")
+                        log_path = outputDirectory / outputFileName.replace('.coffea', '.log')
+                        jobs.append((f"{era}/{DataMC}/{group}/{dataset}", command, log_path,
+                                     fileSetJSON.stat().st_size))
+
+        # Each dataset is an independent process writing its own output file. Inside one
+        # process dask's threaded scheduler is GIL-bound to ~1 core, so the parallelism has
+        # to come from running several datasets at once. Largest filesets go first so the
+        # slowest datasets don't start last.
+        jobs.sort(key=lambda job: job[3], reverse=True)
+        n_workers = max(1, min(args.workers, len(jobs)))
+        print(f"Running {len(jobs)} buildSelectionHists.py jobs with {n_workers} parallel workers "
+              f"(per-dataset logs next to each output)...", flush=True)
+
+        def run_job(job):
+            label, command, log_path, _ = job
+            with open(log_path, 'w') as log_file:
+                result = subprocess.run(command, stdout=log_file, stderr=subprocess.STDOUT)
+            return label, result.returncode, log_path
+
+        failed = []
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            for future in as_completed([pool.submit(run_job, job) for job in jobs]):
+                label, returncode, log_path = future.result()
+                if returncode == 0:
+                    print(f"Finished building selection histograms for {label} (log: {log_path})", flush=True)
+                else:
+                    failed.append(label)
+                    with open(log_path) as log_file:
+                        tail = ''.join(log_file.readlines()[-20:])
+                    print(f"FAILED (exit {returncode}) building selection histograms for {label}. "
+                          f"Last lines of {log_path}:\n{tail}", flush=True)
+        if failed:
+            print(f"Error: {len(failed)} buildSelectionHists.py job(s) failed: {failed}")
+            sys.exit(1)
     # If --aggregrateGroupHists is set, aggregate histograms from buildSelectionHists.py at the group level (e.g., "SingleTop") and save aggregated histograms to outputs/{tag}/{config_hash}/{era}[...]
     if args.aggregrateGroupHists:
         region_label = REGION_LABELS[args.regionFilter]
