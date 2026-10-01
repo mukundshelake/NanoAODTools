@@ -31,7 +31,6 @@ from coffea.nanoevents import BaseSchema
 from coffea import processor
 from coffea.dataset_tools import (
     apply_to_fileset,
-    max_chunks,
     preprocess,
 )
 from coffea.util import save
@@ -172,7 +171,7 @@ def main():
 
     to_compute = apply_to_fileset(
         processor_instance,
-        max_chunks(dataset_runnable, 300),
+        dataset_runnable,
         schemaclass=BaseSchema,
     )
 
