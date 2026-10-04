@@ -1,0 +1,5 @@
+Source: https://gitlab.cern.ch/akhukhun/roccor (branch Run2.v5)
+Commit: 13c92c0e3970b7779abae0f3e6501183d82d71dd (2020-12-13, "Add v5 correction data and some notes to the README file")
+Fetched 2026-10-04 via lxplus (Kerberos git clone). Files copied: README, RoccoR.cc, RoccoR.h,
+RoccoR2016aUL.txt (UL2016preVFP), RoccoR2016bUL.txt (UL2016postVFP), RoccoR2017UL.txt, RoccoR2018UL.txt.
+The repo's non-UL RoccoR2016/2017/2018.txt were not copied (legacy tables live in ../roccor.Run2.v3).

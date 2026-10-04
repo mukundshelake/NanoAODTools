@@ -5,16 +5,18 @@ import ROOT
 import os
 
 
-def _roccor_dir():
-    """Bundled RoccoR.Run2.v3 sits alongside this framework's own postprocessing/
-    package (python/postprocessing/data/roccor.Run2.v3/) -- located relative to
-    the installed package rather than hardcoded, so this works the same whether
-    NanoAODTools is used standalone (build/lib/python/... symlink) or from a
-    CMSSW checkout."""
+def _roccor_dir(rochester_file=None):
+    """Directory holding RoccoR.cc/.h. The evaluator code is versioned together
+    with its tables (roccor.Run2.v3 = legacy pre-UL, roccor.Run2.v5 = UL), so
+    it is loaded from the directory of the configured rochesterFile. Without a
+    file, falls back to the bundled legacy roccor.Run2.v3 next to this
+    framework's postprocessing/ package."""
+    if rochester_file:
+        return os.path.dirname(os.path.abspath(rochester_file))
     return os.path.join(os.path.dirname(_pp.__file__), "data", "roccor.Run2.v3")
 
 
-def _load_roccor():
+def _load_roccor(roccor_dir):
     """Compile+load RoccoR.cc into ROOT exactly once per process.
 
     Needs `.L RoccoR.cc` (plain Cling interpretation), NOT `.L RoccoR.cc+`
@@ -31,11 +33,15 @@ def _load_roccor():
     in whatever env runs this, not a code change.
     """
     if hasattr(ROOT, "RoccoR"):
+        # One RoccoR class per process: refuse to mix code versions silently.
+        loaded = getattr(_load_roccor, "_dir", None)
+        if loaded and os.path.realpath(loaded) != os.path.realpath(roccor_dir):
+            raise RuntimeError(f"RoccoR already loaded from {loaded}; cannot also load {roccor_dir}")
         return
-    cc_path = os.path.join(_roccor_dir(), "RoccoR.cc")
+    cc_path = os.path.join(roccor_dir, "RoccoR.cc")
     cwd = os.getcwd()
     try:
-        os.chdir(_roccor_dir())  # RoccoR.cc #includes "RoccoR.h" by relative path
+        os.chdir(roccor_dir)  # RoccoR.cc #includes "RoccoR.h" by relative path
         rc = ROOT.gROOT.ProcessLine(f'.L {cc_path}')
     finally:
         os.chdir(cwd)
@@ -45,12 +51,17 @@ def _load_roccor():
             f"Common cause: libboost-headers missing from this environment "
             f"(conda install -c conda-forge libboost-headers)."
         )
+    _load_roccor._dir = roccor_dir
 
 
 class MuonRochesterProducer(Module):
     """
-    Muon Rochester momentum-scale/resolution correction (roccor.Run2.v3),
-    Data and MC both -- see RoccoR.h's kScaleDT/kSpreadMC/kSmearMC.
+    Muon Rochester momentum-scale/resolution correction, Data and MC both --
+    see RoccoR.h's kScaleDT/kSpreadMC/kSmearMC. The table version comes from
+    config (Modules.muonRochester.<era>.rochesterFile): UL samples need the UL
+    tables (roccor.Run2.v5: RoccoR2016aUL/2016bUL/2017UL/2018UL); the legacy
+    roccor.Run2.v3 tables are for the pre-UL reprocessings. RoccoR.cc is
+    loaded from the same directory as the table.
 
     Runs as its own PostProcessor pass (PreSelectionCorrectionModuleList),
     NOT a ModuleList entry: SelectionCuts' muonCut/extraMuonVetoCut reference
@@ -78,7 +89,7 @@ class MuonRochesterProducer(Module):
 
     def __init__(self, rochesterFile, isData, muonBranch="Muon"):
         super().__init__()
-        _load_roccor()
+        _load_roccor(_roccor_dir(rochesterFile))
         self.roc = ROOT.RoccoR(rochesterFile)
         self.isData = isData
         self.muonBranch = muonBranch

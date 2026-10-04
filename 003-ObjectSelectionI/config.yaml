@@ -108,19 +108,21 @@ PreSelectionCorrectionModuleList:
 # ---------------------------------------------------------------------------
 Modules:
   # ---------- MuonRochester (PreSelectionCorrectionModuleList entry, MC and Data) --
-  # roccor.Run2.v3's data file is per calendar year, no preVFP/postVFP split
-  # -- RoccoR2016.txt is the only 2016 table this bundle ships, so it's used
-  # for both. isData is filled in by run_all.py (same pattern as
-  # selectedObjects' is_mc / metXYCorr's isData).
+  # UL tables, roccor.Run2.v5 (gitlab.cern.ch/akhukhun/roccor, branch Run2.v5,
+  # commit 13c92c0, see data/roccor.Run2.v5/PROVENANCE): 2016aUL = HIPM/preVFP,
+  # 2016bUL = postVFP. These replaced the legacy pre-UL roccor.Run2.v3 tables
+  # (one RoccoR2016.txt for both 2016 halves) on 2026-10-04; RoccoR.cc is loaded
+  # from the table's own directory. isData is filled in by run_all.py (same
+  # pattern as selectedObjects' is_mc / metXYCorr's isData).
   muonRochester:
     UL2016preVFP:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v5/RoccoR2016aUL.txt"
     UL2016postVFP:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2016.txt"
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v5/RoccoR2016bUL.txt"
     UL2017:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2017.txt"
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v5/RoccoR2017UL.txt"
     UL2018:
-      rochesterFile: "../python/postprocessing/data/roccor.Run2.v3/RoccoR2018.txt"
+      rochesterFile: "../python/postprocessing/data/roccor.Run2.v5/RoccoR2018UL.txt"
   # ---------- JetVetoMap (PreSelectionCorrectionModuleList entry, MC and Data) --
   # Correction name differs per era (JME POG naming, verified directly
   # against the fetched files -- Summer19UL16_V1 covers both preVFP/postVFP).
