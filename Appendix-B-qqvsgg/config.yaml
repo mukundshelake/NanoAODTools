@@ -1,0 +1,70 @@
+STORAGE:
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
+  localhost: "/nfs/disk3/mukund/DataFiles"
+  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+
+# ---------------------------------------------------------------------------
+# Appendix-B: ML classifier separating qqbar-initiated ttbar from gg/qg-initiated
+# ttbar, built directly on selectionII (003-ObjectSelectionII) skims -- no 004A
+# reconstruction, no 004B variables. Independent of 004C; if it outperforms 004C
+# it is a candidate replacement.
+#
+# This file controls FEATURE EXTRACTION and is hashed into outputs/{tag}/{hash}/.
+# Model/training settings live in training_config.yaml (separately hashed), so
+# retuning a model never forces re-extraction.
+# ---------------------------------------------------------------------------
+
+Eras: [UL2016preVFP, UL2016postVFP, UL2017, UL2018]
+
+# Only these DataMC/group/dataset entries of the selectionII dataset JSON are extracted.
+# Nominal sample only -- never MC_alt.
+TargetDatasets:
+  - "MC_mu/SemiLeptonic/ttbar_SemiLeptonic"
+
+# ABCD_region code to keep (0 = A: tight iso, high mTW -- the signal region).
+Region: 0
+
+# Selected-jet definition. Must reproduce 003-ObjectSelectionI's
+# SelectedObjects._passes_jet_cuts exactly (selectionII keeps the full Jet collection).
+# Checked on extraction: the per-event count must equal sel_nJet / sel_nbjet.
+Jet:
+  pt_min:  25.0
+  eta_max: 2.4
+  jetId:   6
+  puId_pt_max: 50.0   # puId > 0 required below this pT
+# DeepJet medium WP, same as 003-I bTagThreshold.
+BTagThreshold:
+  UL2016preVFP:  0.2598
+  UL2016postVFP: 0.2489
+  UL2017:        0.3040
+  UL2018:        0.2783
+
+# Hadronic jets kept as padded per-jet columns (pT-ordered selected jets).
+NJetsStored: 6
+
+# Top-pair reconstruction used only to build features (chi2, not the 004A fit).
+# b candidates: the two leading b-tagged selected jets. W candidates: every pair
+# of the leading MaxLightJets non-b selected jets. Neutrino pz from the W mass
+# constraint (smaller |pz|; real part if the discriminant is negative).
+TopReco:
+  mTop: 172.5
+  mW:   80.4
+  sigmaTopHad: 35.0
+  sigmaTopLep: 30.0
+  sigmaW:      20.0
+  MaxLightJets: 4
+
+# sqrt(s) [GeV] for the x1/x2 proxies x = (M_T/sqrt s) e^{+-y}.
+SqrtS: 13000.0
+
+# Parallel extraction processes.
+Workers: 15
+
+# Per-object columns obj{i}_{pt,eta,dphi,mass,btag,qgl,isMu,isNu} for set-based networks
+# (train_torch.py): muon, neutrino, then NJets selected jets. Canonical orientation, no charge.
+ObjectArrays:
+  NJets: 10
+
+# rec_* lepton-side/hadron-side columns for the A_C-sensitivity study (scripts/asym/).
+# Charge-asymmetric by design -- never part of a qqbar-classifier feature set.
+AsymmetryColumns: true

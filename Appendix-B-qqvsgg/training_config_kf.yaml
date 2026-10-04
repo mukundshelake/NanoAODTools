@@ -1,0 +1,155 @@
+# preVFP variant of training_config.yaml: input is the 004A reconstruction output, so the
+# kf_* kinematic-fit features exist. Used with --inputStage reconstruction runs only.
+#
+# Training/evaluation settings for Appendix-B (hashed separately from config.yaml;
+# outputs go to outputs/{tag}/{configHash}/{era}/training/{trainingHash}/).
+#
+# Task: qqbar-initiated ttbar (y=1, prodType 1) vs everything else (gg 0, qg 2).
+# Only qqbar / qg / gg occur in ttbar_SemiLeptonic (checked on UL2018: no qq, no
+# qbar-qbar, every qqbar pair same flavour), so prodType -1 is dropped as a guard only.
+
+# Deterministic split on event % 10 (the 'fold' column): reproducible, and lets a
+# score be applied later to any event without leaking training events.
+Split:
+  test:  [0, 1, 2]      # 30%: every number reported
+  val:   [3]            # 10%: early stopping, model selection, permutation importance
+  train: [4, 5, 6, 7, 8, 9]
+
+# Training is unweighted (single nominal sample; ~0.4% negative genWeight). Class
+# imbalance (~5.4% qqbar) is handled with per-class weights normalised to equal sums.
+
+FeatureSets:
+  # Kinematics only: no charge, no signed rapidity, no qgl.
+  reco: &reco
+    - n_jets
+    - n_bjets
+    - mu_pt
+    - mu_abseta
+    - met_pt
+    - nu_complex
+    - nu_abspz
+    - ht
+    - centrality
+    - sys_m
+    - sys_pt
+    - sys_absy
+    - sys_abspz
+    - sys_xmax
+    - sys_xmin
+    - sphericity
+    - aplanarity
+    - log_chi2
+    - m_thad
+    - m_tlep
+    - m_whad
+    - tt_m
+    - tt_pt
+    - tt_absy
+    - tt_abspz
+    - tt_xmax
+    - tt_xmin
+    - top_absy_max
+    - top_absy_min
+    - top_absdy
+    - top_pt_max
+    - top_pt_min
+    - abs_cos_theta_star
+    - cos_phi_ld
+    - c_kk
+    - extra_ht
+    - extra1_pt
+    - extra1_abseta
+    - jet0_pt
+    - jet0_abseta
+    - jet0_btag
+    - jet1_pt
+    - jet1_abseta
+    - jet1_btag
+    - jet2_pt
+    - jet2_abseta
+    - jet2_btag
+    - jet3_pt
+    - jet3_abseta
+    - jet3_btag
+    - jet4_pt
+    - jet4_abseta
+    - jet4_btag
+    - jet5_pt
+    - jet5_abseta
+    - jet5_btag
+  # + quark/gluon likelihood. Jet_qgl is known to be mis-modelled in data, so its gain
+  # is reported separately and must be validated on data before it is used.
+  reco_qgl:
+    - *reco
+    - extra1_qgl
+    - wjets_qgl_min
+  # + 004A kinematic-fit tt system (does a better tt reconstruction help?)
+  reco_kf:
+    - *reco
+    - kf_tt_m
+    - kf_tt_pt
+    - kf_tt_absy
+    - kf_tt_abspz
+    - kf_tt_xmax
+    - kf_tt_xmin
+    - kf_top_absy_max
+    - kf_top_absy_min
+    - kf_top_absdy
+    - kf_top_pt_max
+    - kf_top_pt_min
+    - kf_abs_cos_theta_star
+    - kf_log_chi2
+    - kf_pgof
+  # Truth ttbar kinematics: how much the tt system alone could ever tell (reference only).
+  gen_oracle:
+    - gen_tt_m
+    - gen_tt_pt
+    - gen_tt_absy
+
+# Which (model, featureSet) pairs to train.
+Runs:
+  - {model: xgb, features: reco}
+  - {model: xgb, features: reco_kf}
+  - {model: xgb, features: gen_oracle}
+
+Models:
+  xgb:
+    # Small grid scored on val AUC, each point early-stopped on val; the winner is
+    # the final model (it already saw the full train split).
+    grid:
+      max_depth:     [4, 6, 8]
+      learning_rate: [0.1]
+    fixed:
+      n_estimators: 3000
+      early_stopping_rounds: 50
+      subsample: 0.8
+      colsample_bytree: 0.8
+      min_child_weight: 10
+      reg_lambda: 1.0
+      tree_method: hist
+      max_bin: 256
+      n_jobs: 20
+      eval_metric: auc
+      random_state: 42
+  mlp:
+    # sklearn MLP (no torch in latestcoffea). Inputs: QuantileTransformer -> N(0,1),
+    # missing jets (NaN) -> 0 after the transform; n_jets carries the multiplicity.
+    max_train_rows: 3000000
+    hidden_layer_sizes: [256, 128, 64]
+    activation: relu
+    alpha: 1.0e-5
+    batch_size: 2048
+    learning_rate_init: 1.0e-3
+    max_iter: 40
+    early_stopping: true
+    validation_fraction: 0.1
+    n_iter_no_change: 5
+    random_state: 42
+
+Evaluation:
+  # Keep the top-X fraction of events by score -> qqbar purity / efficiency table.
+  keep_fractions: [1.0, 0.5, 0.3, 0.2, 0.1, 0.05, 0.02]
+  mtt_bins: [300, 450, 600, 800, 1000, 1500]
+  permutation_rows: 300000
+  # --sample: rows kept per split
+  sample_rows: 200000

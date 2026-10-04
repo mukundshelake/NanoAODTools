@@ -1,0 +1,42 @@
+# Gen-level N+/N- vs m_tt and asymmetry-injection templates (scripts/asymInjection/).
+# Hashed separately -> outputs/{tag}/injection/{injectionHash}/{era}/.
+#
+# Built from the selectionII skims directly (not from this chapter's feature parquet) with
+# 003-ObjectSelectionIII's weights and normalisation, so the histograms are in the same units
+# as earlySeptember_corrected/aaf38cf077ed and can be combined with them.
+
+Eras: [UL2018]
+
+SelectionII:
+  tag:  earlySeptember_corrected
+  hash: 37f710b13012
+
+Datasets:
+  - "MC_mu/SemiLeptonic/ttbar_SemiLeptonic"
+
+Region: 0   # ABCD region A
+
+# Same as 003-ObjectSelectionIII config.yaml weightList.MC and its Lumi*Xsec/Ngen scaling
+# (values copied from that config; checked against the aggregated region-A yield).
+WeightList: [muonIDWeight, muonHLTWeight, muonIsoWeight, bTagWeight, puWeight,
+             L1PreFiringWeight_Nom, lheWeightSign, topPtWeight]
+Normalisation:
+  UL2018:
+    Lumi: 59222.7416
+    ttbar_SemiLeptonic: {Xsec: 366.3, Ngen: 476408000}
+# 003-III aggregated region-A sum for the closure check (UL2018 MC_mu SemiLeptonic, aaf38cf077ed).
+ReferenceYield:
+  UL2018: 657242.1309964815
+
+# Gen m_tt binnings [GeV]. Both keep under/overflow. Fine grid: any coarser binning whose
+# edges sit on the 25 GeV grid can be built by summing; templates are normalised per fine bin.
+Binning:
+  mttGen005: [300, 450, 600, 750, 900, 1050, 1200]   # 005-Unfolding binning.gen_mtt_edges
+  mttGenFine: {start: 300, stop: 3000, step: 25}
+
+# Unit templates: each pair (dN+, dN-) shifts the inclusive gen A_C by exactly UnitDeltaAC
+# and leaves N+ + N- unchanged in every fine m_tt bin.
+UnitDeltaAC: 0.01
+Models: [uniform, qqbar, mttRising]
+
+Workers: 15
