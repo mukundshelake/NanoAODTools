@@ -1,0 +1,4 @@
+# HitFit resolutions for UL2016postVFP, derived by 004A-Reconstruction/scripts/deriveResolutions.py (#50).
+# source: earlySeptember_rocUL/37f710b13012 ttbar_SemiLeptonic, 6 files, 368325 events (368325 semileptonic with all partons)
+# kt = muon + 4 fitted jets + MET vs generator tt pT, per x/y component, sigma vs |kt_x|.
+met_resolution = 0.17630027,1.61180663,19.70654399

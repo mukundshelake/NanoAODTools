@@ -36,7 +36,8 @@ class TTbarSemilepReconstructor(Module):
     def __init__(self, era, cfg={}):
         self.mW = cfg.get("mW", 80.4)
         hitfit_cfg = cfg["hitfit"]
-        res = {k: self._resolve(v) for k, v in hitfit_cfg["resolutions"].items()}
+        # Resolution table paths may carry an {era} placeholder (per-era tables).
+        res = {k: self._resolve(v.format(era=era)) for k, v in hitfit_cfg["resolutions"].items()}
         self.fitter = make_fitter(hitfit_cfg["settings"], res["udsc"], res["b"],
                                   res["muon"], res["kt"], mw=self.mW)
 

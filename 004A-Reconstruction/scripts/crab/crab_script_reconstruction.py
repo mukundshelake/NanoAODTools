@@ -80,11 +80,12 @@ print(f"era={era}, isData={is_data}")
 # identically for MC and Data (ModuleList.MC == ModuleList.Data == [reconstruction]).
 mod_cfg = _config["Modules"]["reconstruction"]
 
-# config.yaml names the HitFit resolution tables by repo-relative path; in the
-# job they were shipped flat into the working directory.
+# config.yaml names the HitFit resolution tables by repo-relative path, with an
+# {era} placeholder; in the job this era's tables were shipped flat into the
+# working directory.
 _res = mod_cfg["hitfit"]["resolutions"]
 for _kind, _path in list(_res.items()):
-    _local = os.path.abspath(os.path.basename(_path))
+    _local = os.path.abspath(os.path.basename(_path.format(era=era)))
     if not os.path.isfile(_local):
         raise RuntimeError(f"HitFit resolution table {_path} was not shipped with the job")
     _res[_kind] = _local

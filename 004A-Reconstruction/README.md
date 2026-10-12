@@ -132,26 +132,64 @@ fit since 2026-10-12 (#49):
 Settings live in `config.yaml` under `Modules.reconstruction`:
 - `hitfit.settings`: HitFit's `Top_Fit`, `Constrained_Top` and `Chisq_Constrainer`
   parameters;
-- `hitfit.resolutions`: η-dependent resolution tables. Currently the **upstream tqaf
-  placeholders**, until #50.
+- `hitfit.resolutions`: the per-era resolution tables in `resolutions/` (`{era}` is filled in
+  at run time).
 
-**First check on real events** (2026-10-12). 2000 UL2016preVFP `ttbar_SemiLeptonic` events
-(selectionII hash `37f710b13012`, file `_0`), compared with the previous SLSQP fit on the same
-events, parton ΔR < 0.4:
+**Resolution tables** (#50, 2026-10-12). Made by `scripts/deriveResolutions.py` from
+`earlySeptember_rocUL` selectionII `ttbar_SemiLeptonic` MC (6 files per era, about 400k
+events):
+- **What is measured: reco object vs parton.** HitFit fits the decay partons, so its
+  resolutions include fragmentation and out-of-cone losses. This is how CMS derived HitFit's
+  tqaf tables. JER (reco jet vs gen jet) would be too narrow.
+- **Truth matching** (ΔR < 0.3):
+  - the top's direct b daughters to `leading/subleadingbJet`;
+  - the W's quark daughters to `leading/subleadingJet`;
+  - `SelMuon` to the prompt gen muon (ΔR < 0.1).
+- **Parameterisation**, per |η| bin, as HitFit evaluates it
+  (σ(x) = √(C²x² + R²x + N²), `/et`):
+  - jets: σ(pT) vs pT, separately for b and udsc;
+  - muons: σ(1/pT) vs 1/pT, HitFit's "inverse" form for curvature resolution;
+  - η and φ: σ vs 1/pT;
+  - recoil kt = μ + 4 jets + MET vs the generator tt̄ pT: per x/y component, from fully
+    matched events.
+- **Method.** Widths are the central-68% half-widths, binned in the true quantity, fitted as
+  non-negative linear least squares in (C², R², N²).
+- **Fit quality.** Within a few percent where the statistics are; up to about 20% at the
+  lowest pT. Only the sparsely populated 350–500 GeV jet bin is badly described (merged jets).
+- **Typical values.** σ(pT = 50 GeV) ≈ 8.4–10.3 GeV for udsc jets and 8.9–10.3 GeV for b
+  jets; 0.6 (barrel) to 2.3 GeV (|η| > 2.1) for muons; kt N ≈ 20–23 GeV per component.
+- **Jet response** (median reco/parton): b 0.93–0.94, udsc 1.01–1.05. It is **not
+  corrected** (§3, item 10).
+- **Data vs MC.** MC jets are already JER-smeared in 003-I, so the same tables are used for
+  data.
+- **Regenerating a table:**
+  `python scripts/deriveResolutions.py --era <era> --selectionIITag earlySeptember_rocUL --selectionIIHash 37f710b13012 --nFiles 6`.
+  `{era}_resolution_summary.json` keeps the binned widths and fits.
 
-| | previous SLSQP | HitFit | paper (§1.3) |
-|---|---|---|---|
-| σ_peak(m_t,had), correct assignment | 15.9 GeV | **10.8 GeV** | 13 GeV |
-| σ_peak, Pgof > 0.2 | 17.5 GeV | **16.0 GeV** | 16 GeV |
-| σ_peak, best permutation, all events | 22.3 GeV | 23.7 GeV | 21 GeV |
-| Pgof > 0.2 efficiency | 28.6% | **26.9%** | 27.4% |
-| correct assignment (correct / reconstructible) | 21.7% (78%) | 20.9% (75%) | — |
-| Pgof > 0.2 among correct events (calibrated: 80%) | 66% | 62% | — |
-| events with no converged fit | 0 (fallback) | 3 / 2000 | — |
-| speed (single process) | ~5 events/s | **~194 events/s** | — |
+**Check on real events** (2026-10-12). 2000 UL2016preVFP `ttbar_SemiLeptonic` events
+(selectionII hash `37f710b13012`, file `_0`), all on the same events, parton ΔR < 0.4 unless
+noted:
 
-Pgof among correct events is still below the calibrated 80%, as expected with placeholder
-resolutions (#50). The full validation is #51.
+| | previous SLSQP | HitFit, tqaf placeholders | **HitFit, UL tables** | paper (§1.3) |
+|---|---|---|---|---|
+| σ_peak(m_t,had), correct assignment | 15.9 GeV | 10.8 GeV | **12.3 GeV** | 13 GeV |
+| σ_peak, Pgof > 0.2 | 17.5 GeV | 16.0 GeV | **15.9 GeV** | 16 GeV |
+| σ_peak, best permutation, all events | 22.3 GeV | 23.7 GeV | 23.6 GeV | 21 GeV |
+| Pgof > 0.2 efficiency | 28.6% | 26.9% | **30.6%** | 27.4% |
+| correct assignment (correct / reconstructible) | 21.7% (78%) | 20.9% (75%) | 20.9% (75%) | — |
+| Pgof > 0.2 among correct (calibrated: 80%) | 66% | 62% | **68.5%** (ΔR < 0.3: 70.7%) | — |
+| events with no converged fit | 0 (fallback) | 3 / 2000 | 7 / 2000 | — |
+| speed (single process) | ~5 events/s | ~194 events/s | ~195 events/s | — |
+
+**Calibration with the UL tables.** For correctly matched events (ΔR < 0.3, 392 events), the
+χ² quartiles are 0.48 / **1.42** / 3.86 and the 90th percentile is 8.4. χ²(2) gives
+0.58 / 1.39 / 2.77 and 4.6.
+- The **core is calibrated**: the median agrees.
+- The upper **tail is heavier** than χ²(2): non-Gaussian jet response (semileptonic b decays,
+  radiation) that Gaussian resolutions cannot describe. That is why only about 70% of
+  correct events pass Pgof > 0.2 rather than 80%.
+
+The full validation, on more events and all eras, is #51.
 
 ---
 
@@ -165,23 +203,18 @@ Status 2026-10-12. Tracked in GitHub issue **#53** (tracker) and its children.
 | ~~2~~ | ~~Neutrino pz penalised as a measurement.~~ **Closed 2026-10-12**: HitFit treats pz as unmeasured. | #49 |
 | ~~3~~ | ~~Soft constraints.~~ **Closed 2026-10-12**: HitFit's hard constraints. | #49 |
 | ~~4~~ | ~~Unfitted fallback.~~ **Closed 2026-10-12**: no converged permutation now gives sentinel outputs (`chi2_status = 3`). | #49 |
-| 5 | **Resolutions.** The per-component percentage model is gone, but HitFit still runs on the upstream **tqaf placeholder** tables (old, not Run-2 UL). Per-era UL tables are still needed. | #50 |
-| 6 | **Pgof cut not yet validated.** 005's `pgof_min` was set to the reference 0.2 on 2026-10-12, but 005 has not been rerun, and until 5 is closed Pgof is not a calibrated probability. | #52 |
+| ~~5~~ | ~~Resolutions.~~ **Closed 2026-10-12**: per-era UL reco-vs-parton tables (§2). The χ² core is calibrated; the tail is heavier than χ²(2). | #50 |
+| 6 | **Pgof cut not yet validated.** 005's `pgof_min` was set to the reference 0.2 on 2026-10-12, but 005 has not been rerun. | #52 |
 | 8 | **pz seeding choice.** The paper does not say whether the two pz starting values come from the W mass (our setting) or from equal top masses (`solve_nu_tmass`, CMSSW example config). | #51 |
 | 9 | **CRAB path untested on the grid.** Fixed 2026-10-12: HitFit is built in the submitting CMSSW release and shipped with each job. The job was emulated locally in `CMSSW_13_3_0`, giving outputs identical to local running, but no real submission has been made yet. | #54 |
+| 10 | **No parton-level jet correction.** CMSSW's HitFit translator feeds jets corrected to parton level per flavour (`correctedJet(..., "BOTTOM"/"UDS")`). We feed plain jets, with measured responses b ≈ 0.93 and udsc ≈ 1.01–1.05. | #55 |
 | 7 | **Matching radius** in the diagnostics is ΔR < 0.4 (`--partonDR`); the reference uses 0.3. | #51 |
 
 **Next steps.**
-- **#50 resolution sources:**
-  - jet pT: UL JER `PtResolution` from the 003-I `jet_jerc.json` files, times the JER scale
-    factor in data;
-  - jet η/φ and muon: derived from MC;
-  - MET: the per-event `MET_covXX/XY/YY` already in the skims.
-
-  They are written as per-era HitFit `EtaDepResolution` tables and pointed to from
-  `config.yaml`.
+- **#55:** parton-level jet correction (b vs udsc), as CMSSW's translator does.
 - **#51:** validation against §1.3, the χ²(2) calibration check, and the comparison of the
   two pz seeding modes.
+- **#48:** exactly 2 b-tags among the four leading jets (003-I).
 - **#52:** Pgof > 0.2 in 005 and a full reprocessing under a new tag.
 
 ---
@@ -343,6 +376,15 @@ reference**, so they would have to be justified against it.
 
 Newest first. Add an entry for every change to this chapter: code, config, strategy or docs.
 
+- **2026-10-12** — **Per-era UL resolution tables** (#50) replace the tqaf placeholders:
+  - `scripts/deriveResolutions.py` derives them (reco vs parton, from `earlySeptember_rocUL`
+    tt̄ MC) into `resolutions/{era}_{udscJet,bJet,muon,kt}Resolution.txt`;
+  - `config.yaml` points to `resolutions/{era}_...` (config hash changes);
+  - RecoModule and the CRAB scripts fill in `{era}`, and each job ships only its era's tables.
+
+  On 2000 events the χ² median of correct events matches χ²(2), with a heavier tail, and the
+  efficiency and resolutions are close to the paper (§2). Opened #55 for the parton-level jet
+  correction.
 - **2026-10-12** — CRAB path repaired for HitFit:
   - `external/HitFit/build.sh` gained a CMSSW mode (release gcc and CLHEP) and writes
     `libHitFit.buildinfo`;

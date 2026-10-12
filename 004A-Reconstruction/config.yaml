@@ -24,14 +24,14 @@ Modules:
   reconstruction:
     mW: 80.4                 # both W constraints; the top mass is never fixed (equal masses)
     hitfit:
-      # PLACEHOLDER resolutions: the upstream CMSSW tqaf tables (old, not Run-2
-      # UL). To be replaced by per-era UL tables in #50; until then chi2/Pgof
-      # are not calibrated on real data.
+      # Per-era UL resolutions (reco vs parton), derived from ttbar_SemiLeptonic
+      # MC by scripts/deriveResolutions.py (#50); README §2. {era} is filled in
+      # at run time. The upstream tqaf tables stay in external/HitFit/data.
       resolutions:
-        udsc: external/HitFit/data/resolution/tqafUdscJetResolution.txt
-        b:    external/HitFit/data/resolution/tqafBJetResolution.txt
-        muon: external/HitFit/data/resolution/tqafMuonResolution.txt
-        kt:   external/HitFit/data/resolution/tqafKtResolution.txt
+        udsc: 004A-Reconstruction/resolutions/{era}_udscJetResolution.txt
+        b:    004A-Reconstruction/resolutions/{era}_bJetResolution.txt
+        muon: 004A-Reconstruction/resolutions/{era}_muonResolution.txt
+        kt:   004A-Reconstruction/resolutions/{era}_ktResolution.txt
       settings:
         # Top_Fit. Pre-fit mass cuts are disabled (wide open), as in CMSSW's
         # RunHitFitConfiguration.txt.

@@ -1,0 +1,36 @@
+# HitFit resolutions for UL2017, derived by 004A-Reconstruction/scripts/deriveResolutions.py (#50).
+# source: earlySeptember_rocUL/37f710b13012 ttbar_SemiLeptonic, 6 files, 336345 events (336344 semileptonic with all partons)
+# reco vs prompt gen muon (DeltaR < 0.1); sigma(pT) vs pT, eta/phi vs 1/pT (leading '-'); /et.
+# Muon: SelMuon vs prompt last-copy gen muon.
+
+etadep_etamin0 = -2.5000
+etadep_etamax0 = -2.1000
+etadep_vecres0 = -0.02005285,0.00428945,0.00043247/-0.00000000,0.00000000,0.00256963/-0.00000000,0.00000000,0.00147026/et
+
+etadep_etamin1 = -2.1000
+etadep_etamax1 = -1.2000
+etadep_vecres1 = -0.01728322,0.00181051,0.00011942/-0.00000000,0.00000000,0.00146139/-0.00000000,0.00000000,0.00146484/et
+
+etadep_etamin2 = -1.2000
+etadep_etamax2 = -0.9000
+etadep_vecres2 = -0.01414117,0.00152744,0.00010645/-0.00617488,0.00000000,0.00097820/-0.00000000,0.00000000,0.00146228/et
+
+etadep_etamin3 = -0.9000
+etadep_etamax3 = -0.0000
+etadep_vecres3 = -0.00915519,0.00080151,0.00009746/-0.00000000,0.00072286,0.00047405/-0.00000000,0.00000000,0.00146484/et
+
+etadep_etamin4 = 0.0000
+etadep_etamax4 = 0.9000
+etadep_vecres4 = -0.00915519,0.00080151,0.00009746/-0.00000000,0.00072286,0.00047405/-0.00000000,0.00000000,0.00146484/et
+
+etadep_etamin5 = 0.9000
+etadep_etamax5 = 1.2000
+etadep_vecres5 = -0.01414117,0.00152744,0.00010645/-0.00617488,0.00000000,0.00097820/-0.00000000,0.00000000,0.00146228/et
+
+etadep_etamin6 = 1.2000
+etadep_etamax6 = 2.1000
+etadep_vecres6 = -0.01728322,0.00181051,0.00011942/-0.00000000,0.00000000,0.00146139/-0.00000000,0.00000000,0.00146484/et
+
+etadep_etamin7 = 2.1000
+etadep_etamax7 = 2.5000
+etadep_vecres7 = -0.02005285,0.00428945,0.00043247/-0.00000000,0.00000000,0.00256963/-0.00000000,0.00000000,0.00147026/et

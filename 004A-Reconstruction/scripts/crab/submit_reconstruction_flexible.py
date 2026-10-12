@@ -67,20 +67,21 @@ HITFIT_INFO = HITFIT_DIR / "libHitFit.buildinfo"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def sandbox_files(config):
+def sandbox_files(config, era):
     """Every file a reconstruction job needs, shipped flat into its directory.
 
     RecoModule fits with the vendored HitFit, so besides the scripts and
     config.yaml each job carries the HitFit loader, the compiled library, the
     wrapper header and the resolution tables config.yaml names (repo-relative
-    paths; crab_script_reconstruction.py re-points them at the flat copies).
+    paths with an {era} placeholder -- only this era's tables are shipped;
+    crab_script_reconstruction.py re-points them at the flat copies).
     Basenames must be unique because the sandbox is flat.
     """
     files = [SCRIPT_PY, MODULE_PY, CONFIG_YAML,
              HITFIT_DIR / "hitfit_loader.py", HITFIT_LIB,
              HITFIT_DIR / "wrapper" / "HitFitWrapper.h"]
     for rel in config["Modules"]["reconstruction"]["hitfit"]["resolutions"].values():
-        files.append(REPO_DIR / rel)
+        files.append(REPO_DIR / rel.format(era=era))
     names = [Path(f).name for f in files]
     dupes = {n for n in names if names.count(n) > 1}
     if dupes:
@@ -199,7 +200,7 @@ def main():
 
     config = utils.load_config(CONFIG_YAML)
     try:
-        input_files = sandbox_files(config)
+        input_files = sandbox_files(config, args.era)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
