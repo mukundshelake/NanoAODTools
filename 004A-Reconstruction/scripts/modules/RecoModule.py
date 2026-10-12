@@ -85,8 +85,8 @@ class TTbarSemilepReconstructor(Module):
                     "prefit_chi2": chi2_jets + chi2_wlep + chi2_top,
                 })
 
-        # Doc prescription (Sec. 2.3.1): run the full kinematic fit for *all*
-        # permutations and rank by the post-fit chi2/Pgof -- not by the cheap
+        # Reference (CMS-TOP-23-003, Sec. 2.3.1; see README.md §1): run the
+        # full kinematic fit for *all* permutations and rank by the post-fit chi2/Pgof -- not by the cheap
         # pre-fit proxy above, which is kept only as a diagnostic (Chi2_prefit).
         best_fit = None
         best_fit_perm = None
@@ -202,7 +202,7 @@ class TTbarSemilepReconstructor(Module):
             chi2 += (((mu_vec + nu_vec).M() - self.mW) / self.sigmaW) ** 2
             chi2 += (((q1_vec + q2_vec).M() - self.mW) / self.sigmaW) ** 2
 
-            # Equal-top-mass constraint (Sec. 2.3.1): the two top candidates'
+            # Equal-top-mass constraint (TOP-23-003 Sec. 2.3.1): the two top candidates'
             # invariant masses must match each other -- the top mass itself is
             # a free parameter of the fit, not pinned to an external value
             # such as 172.5 GeV.

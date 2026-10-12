@@ -33,12 +33,15 @@ fitted ``Top_had`` direction against the two hypotheses ``b + lj + slj``; the
 fit rescales jet momenta but keeps their directions, so the hypothesis it
 actually used is far closer (median DeltaR 0.09, against 1.7 for the other).
 
-Deliberately *not* used: a window on ``|m_t^reco - m_t^gen|``. The fit pins
-m_t to the same 172.5 GeV the generator used, so a mass window partly selects
-on the very quantity it is meant to validate -- a wrong assignment that the
-constraint has pulled back onto the nominal mass still passes it. Defining
-signal this way instead makes it a strict subset of the reconstructible
-events, so efficiency against the ceiling cannot exceed 1.
+Deliberately *not* used: a window on ``|m_t^reco - m_t^gen|``. The fit's
+W-mass and equal-top-mass constraints pull any assignment toward a top-like
+mass, and the generator mass is narrow around 172.5 GeV, so a mass window
+partly selects on the very quantity it is meant to validate -- a wrong
+assignment that the constraints have pulled onto a top-like mass still passes
+it. The reference (CMS-TOP-23-003, Sec. 2.3.1) also classifies permutations by
+parton matching, at DeltaR < 0.3. Defining signal this way instead makes it
+a strict subset of the reconstructible events, so efficiency against the
+ceiling cannot exceed 1.
 """
 
 import argparse
@@ -396,11 +399,14 @@ def make_plot(values, output_path, title, color, bins, xmin, xmax):
 def make_pgof_plot(pgof, is_signal, output_path, bins, parton_dr):
     """Pgof distribution, split into correctly/incorrectly reconstructed.
 
-    Plotted linearly on [0, 1]: Pgof = exp(-Chi2/2) is a goodness-of-fit
-    probability, so correct fits populate the whole range while wrong jet
-    assignments pile up against zero. (Note Pgof underflows the float32 branch
-    to exactly 0 for Chi2 above ~175, which lands in the first bin -- harmless
-    here, but it is why this is not plotted in log(Pgof).)
+    Plotted linearly on [0, 1]: Pgof = exp(-Chi2/2) is the chi2 probability
+    for ndf = 2, the lepton+jets fit of the reference (CMS-TOP-23-003), so
+    correct fits should populate the whole range while wrong jet assignments
+    pile up against zero. It is only a calibrated probability once RecoModule
+    matches the reference (unmeasured neutrino pz, hard constraints, real
+    resolutions) -- see README.md §1 and §3. (Note Pgof underflows the
+    float32 branch to exactly 0 for Chi2 above ~175, which lands in the first
+    bin -- harmless here, but it is why this is not plotted in log(Pgof).)
     """
     values = np.asarray(pgof, dtype=float)
     title = f"Fit goodness-of-fit probability (parton #DeltaR < {parton_dr:g})"
