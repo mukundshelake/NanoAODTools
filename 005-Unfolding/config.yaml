@@ -74,15 +74,17 @@ binning:
 # scripts/selection.py. There is no second place to change it.
 # ---------------------------------------------------------------------------
 selection:
-  # Pgof = exp(-0.5*chi2) from 004A RecoModule, so it is never mathematically
-  # zero -- values of 0.0 are float32 underflow at chi2 >~ 180, i.e. genuinely
-  # catastrophic fits. This is "reject hopeless fits", not a p-value cut; the
-  # branch name is a misnomer (it is a likelihood ratio, not a probability).
-  pgof_min: 0.0
+  # Pgof = TMath::Prob(chi2, 2) from 004A's HitFit fit (ndf = 2, CMS-TOP-23-003).
+  # The reference lepton+jets quality cut is Pgof > 0.2 (chi2 < 3.22), about 27%
+  # efficient in the paper. Set 2026-10-12 (#52); was 0.0 ("reject only failed
+  # fits"). NOT yet validated in 005: needs 004A outputs reprocessed with HitFit
+  # and calibrated UL resolutions (#50, #51), and a sigma(A_C) comparison with
+  # and without the cut (#52). Failed fits carry Pgof = -1.
+  pgof_min: 0.2
 
-  # 004A writes chi2_status from the soft-constraint fit. Status 3 events fall
-  # back to the unfitted momenta and are written as if successful, so they are
-  # rejected here rather than silently degrading the resolution (issue #42).
+  # 004A chi2_status 3 = no permutation converged (HitFit since 2026-10-12:
+  # sentinel -1 outputs; before that, unfitted momenta written as if successful,
+  # issue #42). Rejected here either way.
   reject_chi2_status: [3]
 
   # Physical sanity window. The soft-constraint fit is unbounded and reaches

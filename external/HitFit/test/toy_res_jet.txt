@@ -1,0 +1,4 @@
+# Toy-test resolution: one eta bin, identical to the smearing in toy_test.py
+etadep_etamin0 = -5.0
+etadep_etamax0 = 5.0
+etadep_vecres0 = 0.08,1.0,2.0/0,0,0.03/0,0,0.03

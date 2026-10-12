@@ -88,39 +88,70 @@ From its source:
   a kt (recoil) resolution for the transverse imbalance. The shipped `tqaf*Resolution.txt` tables
   are old defaults.
 
-**Standalone build (tested 2026-10-12).** Apart from its CMS-object (PAT) adapters, HitFit
-depends only on CLHEP:
-- **Build:** the 28 non-PAT source files, copied unmodified, compile with the `latestcoffea`
-  conda compiler against conda-forge `clhep` 2.4.7.
-- **Toy test (C++):** on HitFit's own toy generator (`gentop`), fitting the correct jet
-  assignment and taking the better pz seed, 5000 events give mean χ² 2.11 and median 1.36
-  (χ²(2): 2, 1.39). 79.6% pass Pgof > 0.2, against 80% for a calibrated χ²(2).
-- **From Python:** loads in `latestcoffea`'s PyROOT (ROOT 6.36) through a small flat-number
-  C++ wrapper, giving the same behaviour (83% pass Pgof > 0.2). Speed is about **2400 fits/s on
-  one core**, against about 20 fits/s/core for the current SLSQP fit.
-- Calling HitFit's classes directly from PyROOT crashes on incomplete class info, so the
-  wrapper is required.
+**Vendored in this repo: `external/HitFit/`** (since 2026-10-12; see its README).
+- **What is copied:** the 26 core sources, unmodified, from `CMSSW_14_2_3`. They are built
+  against a private conda-forge CLHEP 2.4.7 prefix by `external/HitFit/build.sh`.
+- **How 004A calls it:** through a flat-number C++ wrapper (`hitfit_wrap::Fitter`) loaded
+  into `latestcoffea`'s PyROOT by `external/HitFit/hitfit_loader.py`. Calling HitFit's own
+  classes from cppyy crashes, so the wrapper is required.
+- **Toy calibration** (`external/HitFit/test/toy_test.py`, run by `build.sh`): with fit
+  resolutions equal to the smearing, χ² of the true assignment follows χ²(2). Median 1.378
+  (χ²(2): 1.386); 77.9% pass Pgof > 0.2 (χ²(2): 80%).
 
 ---
 
 ## 2. What the code does now
 
-`scripts/modules/RecoModule.py` (`TTbarSemilepReconstructor`), run via `runReco.py`:
+`scripts/modules/RecoModule.py` (`TTbarSemilepReconstructor`), run via `runReco.py`. HitFit
+fit since 2026-10-12 (#49):
 
-1. Solves the neutrino-pz quadratic from the leptonic-W mass constraint (1 or 2 roots; the real
-   part if the discriminant is negative).
-2. Builds the 4 permutations (2 b-jet assignments × pz roots) from `SelMuon`,
-   `leadingbJet`/`subleadingbJet`, `leadingJet`/`subleadingJet` and `MET`. These come from
-   003-ObjectSelectionI's `SelectedObjects`.
-3. Runs a `scipy.optimize.minimize` (SLSQP) χ² fit on all 18 momentum components for **each**
-   permutation. The W masses and the equal-top-mass condition enter as soft penalty terms
-   (`sigmaW = 10`, `sigmatt = 13` GeV, `config.yaml`). The lowest post-fit χ² wins.
-4. Writes `Top_lep_*`, `Top_had_*` (pt, eta, phi, mass), `Chi2`, `Chi2_prefit`,
-   `Pgof = exp(−χ²/2)` and `chi2_status`:
-   - `0`: fit converged;
-   - `1`: upstream selection sentinel (no muon or jets);
-   - `2`: degenerate pz quadratic;
-   - `3`: no permutation converged, so the unfitted momenta are written. 005 rejects these.
+1. Takes `SelMuon`, `leadingbJet`/`subleadingbJet`, `leadingJet`/`subleadingJet` and `MET`
+   from 003-ObjectSelectionI's `SelectedObjects`. The jet choice is deviation 1 in §3.
+2. Fits **4 permutations** with HitFit: 2 b-jet assignments × 2 neutrino-pz starting values.
+   - The pz seeds are the roots of the leptonic-W quadratic (`solve_nu_tmass: false`).
+   - When the discriminant is negative both roots collapse to the real part, so that seed is
+     fitted once.
+   - The neutrino pz is **unmeasured**.
+   - The constraints are **hard**: m(ℓν) = m(qq′) = `mW` = 80.4, and m(t_lep) = m(t_had).
+3. Ranks the converged permutations by χ² (ndf = 2) and keeps the best.
+4. Writes the following branches:
+   - `Top_lep_*`, `Top_had_*` (pt, eta, phi, mass of the fitted tops);
+   - `Chi2`, and `Pgof = TMath::Prob(Chi2, 2)`;
+   - `Nu_pz` (fitted neutrino pz), `Mt_fit` ± `Mt_fit_err` (HitFit's fitted top mass);
+   - `perm_index` (= 2·[b swapped] + [pz root]) and `n_converged` (0–4);
+   - `chi2_status`, with these codes:
+
+   | code | meaning |
+   |---|---|
+   | `0` | converged |
+   | `1` | upstream selection sentinel (no muon or jets) |
+   | `2` | retired (was the degenerate pz quadratic of the old fit) |
+   | `3` | no permutation converged; **sentinel −1 outputs**, the event is not reconstructed (005 rejects it) |
+   | `4` | an object's η is outside its resolution table |
+
+Settings live in `config.yaml` under `Modules.reconstruction`:
+- `hitfit.settings`: HitFit's `Top_Fit`, `Constrained_Top` and `Chisq_Constrainer`
+  parameters;
+- `hitfit.resolutions`: η-dependent resolution tables. Currently the **upstream tqaf
+  placeholders**, until #50.
+
+**First check on real events** (2026-10-12). 2000 UL2016preVFP `ttbar_SemiLeptonic` events
+(selectionII hash `37f710b13012`, file `_0`), compared with the previous SLSQP fit on the same
+events, parton ΔR < 0.4:
+
+| | previous SLSQP | HitFit | paper (§1.3) |
+|---|---|---|---|
+| σ_peak(m_t,had), correct assignment | 15.9 GeV | **10.8 GeV** | 13 GeV |
+| σ_peak, Pgof > 0.2 | 17.5 GeV | **16.0 GeV** | 16 GeV |
+| σ_peak, best permutation, all events | 22.3 GeV | 23.7 GeV | 21 GeV |
+| Pgof > 0.2 efficiency | 28.6% | **26.9%** | 27.4% |
+| correct assignment (correct / reconstructible) | 21.7% (78%) | 20.9% (75%) | — |
+| Pgof > 0.2 among correct events (calibrated: 80%) | 66% | 62% | — |
+| events with no converged fit | 0 (fallback) | 3 / 2000 | — |
+| speed (single process) | ~5 events/s | **~194 events/s** | — |
+
+Pgof among correct events is still below the calibrated 80%, as expected with placeholder
+resolutions (#50). The full validation is #51.
 
 ---
 
@@ -131,23 +162,27 @@ Status 2026-10-12. Tracked in GitHub issue **#53** (tracker) and its children.
 | # | deviation | issue |
 |---|---|---|
 | 1 | **Jet set.** 003-I takes the first 2 b-tagged jets from *all* jets (event cut ≥ 2 b-tags) plus the 2 leading remaining jets. The reference takes exactly 2 b-tags among the 4 leading jets. | #48 |
-| 2 | **Neutrino pz is penalised as a measurement**: `((pz − pz_root)/(0.10·|pz_root|))²`. It must be unmeasured. | #49 |
-| 3 | **Soft constraints** (SLSQP penalties with 10/13 GeV widths) instead of exact Lagrange-multiplier constraints. | #49 |
-| 4 | **Unfitted fallback** (`chi2_status = 3`) has no counterpart in the reference. | #49 |
-| 5 | **Resolution model.** Each Cartesian component gets a fixed fraction of itself (μ 5%, ν 10%, jets 15%, floor 1e-3 GeV). Near-zero components are frozen, the model is not rotation invariant, and the neutrino px/py uncertainty is far below the real `pT^miss` resolution. The reference uses per-object resolutions. | #50 |
-| 6 | **Pgof cut not applied.** 005 uses `pgof_min: 0.0`; the reference applies Pgof > 0.2. Because of 2, 3 and 5, today's Pgof is not a calibrated probability. | #52 |
+| ~~2~~ | ~~Neutrino pz penalised as a measurement.~~ **Closed 2026-10-12**: HitFit treats pz as unmeasured. | #49 |
+| ~~3~~ | ~~Soft constraints.~~ **Closed 2026-10-12**: HitFit's hard constraints. | #49 |
+| ~~4~~ | ~~Unfitted fallback.~~ **Closed 2026-10-12**: no converged permutation now gives sentinel outputs (`chi2_status = 3`). | #49 |
+| 5 | **Resolutions.** The per-component percentage model is gone, but HitFit still runs on the upstream **tqaf placeholder** tables (old, not Run-2 UL). Per-era UL tables are still needed. | #50 |
+| 6 | **Pgof cut not yet validated.** 005's `pgof_min` was set to the reference 0.2 on 2026-10-12, but 005 has not been rerun, and until 5 is closed Pgof is not a calibrated probability. | #52 |
+| 8 | **pz seeding choice.** The paper does not say whether the two pz starting values come from the W mass (our setting) or from equal top masses (`solve_nu_tmass`, CMSSW example config). | #51 |
+| 9 | **CRAB path untested on the grid.** Fixed 2026-10-12: HitFit is built in the submitting CMSSW release and shipped with each job. The job was emulated locally in `CMSSW_13_3_0`, giving outputs identical to local running, but no real submission has been made yet. | #54 |
 | 7 | **Matching radius** in the diagnostics is ΔR < 0.4 (`--partonDR`); the reference uses 0.3. | #51 |
 
-**Planned implementation** (#49): vendor the HitFit core under `external/HitFit/` (as was done
-for TUnfold, #30) with a flat-number C++ wrapper called from RecoModule (see §1.4). Resolution
-sources (#50):
-- **Jet pT:** UL JER `PtResolution` from the 003-I `jet_jerc.json` files, times the JER scale
-  factor in data.
-- **Jet η/φ and muon:** derived from MC.
-- **MET:** the per-event `MET_covXX/XY/YY` already present in the skims.
+**Next steps.**
+- **#50 resolution sources:**
+  - jet pT: UL JER `PtResolution` from the 003-I `jet_jerc.json` files, times the JER scale
+    factor in data;
+  - jet η/φ and muon: derived from MC;
+  - MET: the per-event `MET_covXX/XY/YY` already in the skims.
 
-Validation (#51) against §1.3 plus a χ²(2) calibration check. Then Pgof > 0.2 in 005 and a
-full reprocessing under a new tag (#52).
+  They are written as per-era HitFit `EtaDepResolution` tables and pointed to from
+  `config.yaml`.
+- **#51:** validation against §1.3, the χ²(2) calibration check, and the comparison of the
+  two pz seeding modes.
+- **#52:** Pgof > 0.2 in 005 and a full reprocessing under a new tag.
 
 ---
 
@@ -173,10 +208,15 @@ scripts/run_all_{tag}.sh
 run_all.py --generateDatasetJSON
 ```
 
-`--filter`, `--force`, `--sample` and `--workers` work as in the other chapters.
-Reconstruction is CPU-heavy (one SLSQP minimisation per permutation per event). Budget about
-75 Hz aggregate at `--workers 15`, i.e. about 31 h per era. Do not extrapolate from a
-single-file timing.
+**Build HitFit once per machine** before running:
+`conda activate latestcoffea && external/HitFit/build.sh`. `run_004A_workflow.sh` stops if
+`external/HitFit/libHitFit.so` is missing; a direct `runReco.py` run would instead fail every
+file.
+
+`--filter`, `--force`, `--sample` and `--workers` work as in the other chapters. With HitFit, a
+single process reconstructs about 194 events/s, against about 5 for the old SLSQP fit. The
+old fit's era budget (~31 h at `--workers 15`) no longer applies. Measure a full-era rate
+under contention before planning; do not extrapolate from a single-file timing.
 
 A code change to `RecoModule.py` does not change the config hash, so rerunning under the same
 tag silently keeps the stale outputs. Use a new tag or `--force`.
@@ -184,20 +224,38 @@ tag silently keeps the stale outputs. Use a new tag or `--force`.
 **CRAB (lxplus only).** Same pattern as 003-ObjectSelectionI/II:
 
 ```
-source scripts/crab/getcrabReady.sh
+source scripts/crab/getcrabReady.sh        # cmsenv (CMSSW_13_3_0), builds HitFit for it if needed, CRAB, proxy
 run_all.py --submitReconstructionJobs [--sample]
 run_all.py --checkCrabStatus [--resubmitFailedCrabJobs] [--removeSubmitFailedCrabJobs]
 run_all.py --generateDatasetJSON
 ```
 
-- `scripts/crab/submit_reconstruction_flexible.py` builds `Data.userInputFiles` from
-  `selectionII_{tag}_{era}_datasets.json`; the selectionII output is not DBS-registered.
-- `scripts/crab/crab_script_reconstruction.py` resolves each LFN to
-  `root://eosuser.cern.ch/...` directly.
+- **HitFit in the jobs.** CRAB jobs run in the submitting CMSSW release, so `libHitFit.so`
+  must be built there (`cmsenv && external/HitFit/build.sh`; CMSSW mode uses the release's
+  gcc and CLHEP).
+  - `getcrabReady.sh` rebuilds it automatically unless `libHitFit.buildinfo` already records
+    this `CMSSW_VERSION`/`SCRAM_ARCH`.
+  - `submit_reconstruction_flexible.py --submit` refuses a library built anywhere else, such
+    as the local conda build.
+  - Rebuild with conda before running locally again.
+- **What each job ships.** `submit_reconstruction_flexible.py::sandbox_files()` sends, flat:
+  - `crab_script_reconstruction.py`, `RecoModule.py`, `config.yaml`;
+  - `hitfit_loader.py`, `libHitFit.so`, `HitFitWrapper.h`;
+  - the resolution tables named in `config.yaml`.
+
+  The job script re-points the resolution paths at the shipped copies. CLHEP is found through
+  the library's RPATH on CVMFS.
+- **Job Python.** It needs only numpy, PyYAML and PyROOT from the release. The old scipy fit
+  needed the LCG `sys.path` workaround; that has been removed.
+- **Inputs.** `submit_reconstruction_flexible.py` builds `Data.userInputFiles` from
+  `selectionII_{tag}_{era}_datasets.json`; the selectionII output is not DBS-registered. The
+  job script resolves each LFN to `root://eosuser.cern.ch/...` directly, and uses a PSet
+  entry as-is if it is an existing local file (for local tests).
 - No golden JSON is shipped.
-- `scipy` is not in the stock CMSSW python, so the CRAB script prepends the CVMFS LCG
-  site-packages to `sys.path`, as 003-II does. The HitFit migration will need the HitFit and
-  CLHEP libraries shipped with the job instead.
+- **Local emulation, 2026-10-12.** A flat job directory assembled from `sandbox_files()` ran
+  `crab_reconstruction.sh` in a `CMSSW_13_3_0` (el9) area from CVMFS: 126 events/s, and
+  `tree.root` was identical, event by event, to the local conda run. **A real lxplus/grid
+  submission is still to be tested (#54).**
 
 **Storage.** `STORAGE` in `config.yaml` is keyed by machine (substring of
 `socket.gethostname()`) and resolved in `utils.resolve_storage_path()`.
@@ -285,6 +343,31 @@ reference**, so they would have to be justified against it.
 
 Newest first. Add an entry for every change to this chapter: code, config, strategy or docs.
 
+- **2026-10-12** — CRAB path repaired for HitFit:
+  - `external/HitFit/build.sh` gained a CMSSW mode (release gcc and CLHEP) and writes
+    `libHitFit.buildinfo`;
+  - `getcrabReady.sh` builds HitFit for the release;
+  - `submit_reconstruction_flexible.py` ships HitFit and the resolution tables
+    (`sandbox_files()`) and checks the library's build environment;
+  - `crab_script_reconstruction.py` drops the scipy/LCG workaround, re-points resolution
+    paths at the shipped copies, and accepts local files.
+
+  Emulated locally in `CMSSW_13_3_0`, with outputs identical to the local run. Grid test
+  pending (#54). In 005, `pgof_min` was set to the reference 0.2 (#52; not yet run there).
+- **2026-10-12** — **RecoModule now fits with HitFit** (#49), replacing the SLSQP
+  soft-constraint fit:
+  - the neutrino pz is unmeasured and the constraints are hard;
+  - permutations are ranked by χ², with `Pgof = TMath::Prob(χ², 2)`;
+  - no permutation converged now gives `chi2_status = 3` with sentinel outputs, where before
+    the unfitted momenta were written.
+
+  Branches: `Chi2_prefit` removed (unused downstream); added `Nu_pz`, `Mt_fit`, `Mt_fit_err`,
+  `perm_index` and `n_converged`.
+  `config.yaml`: `mt`, `sigmaW` and `sigmatt` removed; `hitfit.settings` and
+  `hitfit.resolutions` added (tqaf placeholders until #50). This changes the config hash.
+  HitFit is vendored in `external/HitFit/` (build with `build.sh`), and
+  `run_004A_workflow.sh` checks the library is built. The first comparison on 2000 tt̄
+  events is in §2. The CRAB path is broken until HitFit is shipped with the jobs.
 - **2026-10-12** — Documentation consolidated into this README. Removed
   `leptonJets_kinFit_prescription.md` and `ISSUE_jet_assignment_purity.md`; their content is in
   §1–§3 and §6. Added `References/` with the TOP-23-003 paper.

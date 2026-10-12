@@ -43,6 +43,7 @@ Options
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -57,17 +58,67 @@ PSET        = SCRIPT_DIR / "PSet.py"
 SCRIPT_SH   = SCRIPT_DIR / "crab_reconstruction.sh"
 SCRIPT_PY   = SCRIPT_DIR / "crab_script_reconstruction.py"
 MODULE_PY   = CHAPTER_DIR / "scripts" / "modules" / "RecoModule.py"
+REPO_DIR    = CHAPTER_DIR.parent
+HITFIT_DIR  = REPO_DIR / "external" / "HitFit"
+HITFIT_LIB  = HITFIT_DIR / "libHitFit.so"
+HITFIT_INFO = HITFIT_DIR / "libHitFit.buildinfo"
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def sandbox_files(config):
+    """Every file a reconstruction job needs, shipped flat into its directory.
+
+    RecoModule fits with the vendored HitFit, so besides the scripts and
+    config.yaml each job carries the HitFit loader, the compiled library, the
+    wrapper header and the resolution tables config.yaml names (repo-relative
+    paths; crab_script_reconstruction.py re-points them at the flat copies).
+    Basenames must be unique because the sandbox is flat.
+    """
+    files = [SCRIPT_PY, MODULE_PY, CONFIG_YAML,
+             HITFIT_DIR / "hitfit_loader.py", HITFIT_LIB,
+             HITFIT_DIR / "wrapper" / "HitFitWrapper.h"]
+    for rel in config["Modules"]["reconstruction"]["hitfit"]["resolutions"].values():
+        files.append(REPO_DIR / rel)
+    names = [Path(f).name for f in files]
+    dupes = {n for n in names if names.count(n) > 1}
+    if dupes:
+        raise ValueError(f"sandbox basenames collide: {sorted(dupes)}")
+    return [Path(f) for f in files]
+
+
+def check_hitfit_build(require_cmssw):
+    """Make sure libHitFit.so was built for the CMSSW release jobs will run in.
+
+    A library built in the conda environment links a conda CLHEP and libstdc++
+    and will not load in the CMSSW job. Returns a list of problems (empty = ok).
+    """
+    if not HITFIT_LIB.is_file() or not HITFIT_INFO.is_file():
+        return [f"{HITFIT_LIB} (and its .buildinfo) not found -- run `cmsenv && {HITFIT_DIR}/build.sh`"]
+    info = dict(line.split("=", 1) for line in HITFIT_INFO.read_text().splitlines() if "=" in line)
+    if not require_cmssw:
+        return []
+    problems = []
+    env_release, env_arch = os.environ.get("CMSSW_VERSION", ""), os.environ.get("SCRAM_ARCH", "")
+    if info.get("mode") != "cmssw":
+        problems.append(f"libHitFit.so was built in mode={info.get('mode')!r}, not inside cmsenv")
+    if not env_release:
+        problems.append("CMSSW_VERSION is not set -- submit from inside cmsenv")
+    elif (info.get("cmssw_version"), info.get("scram_arch")) != (env_release, env_arch):
+        problems.append(f"libHitFit.so was built for {info.get('cmssw_version')}/{info.get('scram_arch')}, "
+                        f"but jobs will run in {env_release}/{env_arch}")
+    if problems:
+        problems.append(f"rebuild with: cmsenv && {HITFIT_DIR}/build.sh")
+    return problems
 
 def safe_name(s: str) -> str:
     """Replace non-alphanumeric characters with underscores."""
     return re.sub(r"[^A-Za-z0-9_]", "_", s)
 
 
-def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, work_area=None):
+def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, input_files,
+                     work_area=None):
     from WMCore.Configuration import Configuration  # noqa: PLC0415
     cfg = Configuration()
     request_name = f"reco_{safe_name(era)}_{safe_name(group)}_{safe_name(key)}"[:100]
@@ -80,7 +131,7 @@ def make_crab_config(era, DataMC, group, key, lfn_files, is_data, output_lfn, wo
     cfg.JobType.pluginName = "Analysis"
     cfg.JobType.psetName   = str(PSET)
     cfg.JobType.scriptExe  = str(SCRIPT_SH)
-    cfg.JobType.inputFiles = [str(SCRIPT_PY), str(MODULE_PY), str(CONFIG_YAML)]
+    cfg.JobType.inputFiles = [str(f) for f in input_files]
     cfg.JobType.scriptArgs = [f"era={era}", f"isData={is_data}"]
     cfg.section_("Data")
     cfg.Data.userInputFiles       = lfn_files
@@ -147,6 +198,23 @@ def main():
             sys.exit(1)
 
     config = utils.load_config(CONFIG_YAML)
+    try:
+        input_files = sandbox_files(config)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+    missing = [str(f) for f in input_files if not f.is_file() and f != HITFIT_LIB]
+    if missing:
+        print("ERROR: files to ship with the jobs not found:\n  " + "\n  ".join(missing), file=sys.stderr)
+        sys.exit(1)
+    problems = check_hitfit_build(require_cmssw=args.submit)
+    if problems:
+        print(("ERROR" if args.submit else "WARNING") + ": HitFit library not ready for CRAB:\n  "
+              + "\n  ".join(problems), file=sys.stderr)
+        if args.submit:
+            sys.exit(1)
+    print("Shipping with each job:\n  " + "\n  ".join(str(f) for f in input_files))
+
     storage_base = utils.resolve_storage_path(config)
     lfn_base = config["LFN_Base"].rstrip("/")
 
@@ -210,7 +278,7 @@ def main():
         label = f"{DataMC}/{group}/{key}"
         try:
             cfg = make_crab_config(args.era, DataMC, group, key, lfn_files, is_data,
-                                    output_lfn, args.work_area)
+                                    output_lfn, input_files, args.work_area)
             crabCommand("submit", config=cfg)
             print(f"  Submitted: {label}")
             submitted += 1

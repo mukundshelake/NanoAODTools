@@ -6,9 +6,15 @@ JSON (both already applied upstream in selectionII) -- just runs RecoModule
 over the selectionII skim.
 
 This script is sent to the grid worker node as an inputFile and executed by
-crab_reconstruction.sh. RecoModule.py is shipped alongside it (flat, no
-modules/ subpackage) since it isn't part of the installed NanoAODTools
-package.
+crab_reconstruction.sh. Shipped alongside it, flat in the job directory (see
+submit_reconstruction_flexible.py's sandbox_files()):
+  * RecoModule.py -- not part of the installed NanoAODTools package;
+  * config.yaml;
+  * HitFit: hitfit_loader.py, libHitFit.so, HitFitWrapper.h and the resolution
+    tables named in config.yaml. libHitFit.so must have been built with
+    `cmsenv && external/HitFit/build.sh` in the CMSSW area the jobs are
+    submitted from: the job runs in that same release, whose CLHEP the library
+    links against (via RPATH on CVMFS).
 
 NOTE on input file resolution: same as crab_script_selection.py in
 003-ObjectSelectionI -- the /store/... LFN CRAB assigns us is translated
@@ -16,24 +22,18 @@ directly to its CERNBox xrootd door (root://eosuser.cern.ch/) using this
 chapter's own LFN_Base, bypassing crabhelper.inputFiles() (which assumes
 /store/... resolves to /eos/cms/..., not CERNBox).
 
-NOTE on scipy: RecoModule's chi2 fit uses scipy.optimize.minimize, which is
-NOT part of the stock CMSSW release's python environment -- same situation as
-correctionlib/coffea/awkward in 003-ObjectSelectionII's CRAB worker script
-(only available on lxplus via the user's own AFS pip install, which a grid
-worker node cannot see). Reuse the same fix: prepend the CVMFS-hosted LCG
-software stack's site-packages to sys.path (not a full `source .../setup.sh`,
-which would risk swapping out CMSSW's own ROOT build).
+RecoModule needs only numpy, PyYAML and PyROOT, all in the CMSSW release's
+python (checked in CMSSW_13_3_0: numpy 1.24, PyYAML 6.0, ROOT 6.26). The
+earlier scipy-based fit needed the CVMFS LCG site-packages on sys.path; that
+workaround is gone with it.
+
+A PSet entry that is an existing local path is used as-is (local testing with
+the fake PSet.py); everything else is treated as an LFN.
 """
 
 import os
 import sys
 import yaml
-
-_LCG_VIEW = "/cvmfs/sft.cern.ch/lcg/views/LCG_105/x86_64-el9-gcc12-opt"
-for _lib in ("lib64", "lib"):
-    _p = f"{_LCG_VIEW}/{_lib}/python3.9/site-packages"
-    if os.path.isdir(_p) and _p not in sys.path:
-        sys.path.insert(0, _p)
 
 import PSet
 from PhysicsTools.NanoAODTools.postprocessing.framework.postprocessor import PostProcessor
@@ -57,7 +57,8 @@ def lfn_to_eosuser_xrootd(lfn, lfn_base):
 
 
 raw_lfns = list(PSet.process.source.fileNames)
-files = [lfn_to_eosuser_xrootd(lfn, _config["LFN_Base"]) for lfn in raw_lfns]
+files = [lfn if os.path.isfile(lfn) else lfn_to_eosuser_xrootd(lfn, _config["LFN_Base"])
+         for lfn in raw_lfns]
 print("INPUT FILES (raw LFNs):", raw_lfns)
 print("INPUT FILES (resolved):", files)
 
@@ -78,6 +79,15 @@ print(f"era={era}, isData={is_data}")
 # Same module config the local process-list JSON carries. reconstruction runs
 # identically for MC and Data (ModuleList.MC == ModuleList.Data == [reconstruction]).
 mod_cfg = _config["Modules"]["reconstruction"]
+
+# config.yaml names the HitFit resolution tables by repo-relative path; in the
+# job they were shipped flat into the working directory.
+_res = mod_cfg["hitfit"]["resolutions"]
+for _kind, _path in list(_res.items()):
+    _local = os.path.abspath(os.path.basename(_path))
+    if not os.path.isfile(_local):
+        raise RuntimeError(f"HitFit resolution table {_path} was not shipped with the job")
+    _res[_kind] = _local
 
 p = PostProcessor(
     ".",

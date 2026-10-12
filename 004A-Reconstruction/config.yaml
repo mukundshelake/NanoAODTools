@@ -16,14 +16,53 @@ ModuleList:
 
 # ---------------------------------------------------------------------------
 # Per-module configuration.
-# RecoModule only requires the era string (passed at runtime); no config dict.
+# reconstruction = HitFit kinematic fit (CMS-TOP-23-003 lepton+jets; README §1-§2).
+# Paths are relative to the repository root. Build HitFit first:
+#   conda activate latestcoffea && external/HitFit/build.sh
 # ---------------------------------------------------------------------------
 Modules:
   reconstruction:
-    mW: 80.4
-    mt: 172.5
-    sigmaW: 10.0
-    sigmatt: 13.0
+    mW: 80.4                 # both W constraints; the top mass is never fixed (equal masses)
+    hitfit:
+      # PLACEHOLDER resolutions: the upstream CMSSW tqaf tables (old, not Run-2
+      # UL). To be replaced by per-era UL tables in #50; until then chi2/Pgof
+      # are not calibrated on real data.
+      resolutions:
+        udsc: external/HitFit/data/resolution/tqafUdscJetResolution.txt
+        b:    external/HitFit/data/resolution/tqafBJetResolution.txt
+        muon: external/HitFit/data/resolution/tqafMuonResolution.txt
+        kt:   external/HitFit/data/resolution/tqafKtResolution.txt
+      settings:
+        # Top_Fit. Pre-fit mass cuts are disabled (wide open), as in CMSSW's
+        # RunHitFitConfiguration.txt.
+        mwhad_min_cut: 0
+        mwhad_max_cut: 10000
+        mtdiff_max_cut: 10000
+        jet_mass_cut: 10000
+        nkeep: 1680
+        solve_nu_tmass: false  # pz seeds from m(l nu) = mW; true = from equal top masses (CMSSW example). Compare in #51.
+        do_higgs_flag: false
+        print_event_flag: false
+        # Constrained_Top
+        bmass: 4.7
+        equal_side: true       # m(t_lep) = m(t_had)
+        # Fourvec_Constrainer
+        use_e: true
+        e_com: 13000
+        ignore_met: false
+        # Chisq_Constrainer / Base_Constrainer (CMSSW example values)
+        printfit: false
+        use_G: false
+        constraint_sum_eps: 0.01
+        chisq_diff_eps: 0.01
+        maxit: 10000
+        maxcut: 20
+        cutsize: 0.5
+        min_tot_cutsize: 1.0e-10
+        chisq_test_eps: 1.0e-5
+        test_gradient: false
+        test_step: 0.002
+        test_eps: 0.035
 
 DataLumiInfo:
   UL2016preVFP:

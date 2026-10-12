@@ -1,0 +1,2 @@
+# Toy-test kt (recoil) resolution, identical to the smearing in toy_test.py
+met_resolution = 0,0,12

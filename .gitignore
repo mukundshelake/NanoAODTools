@@ -20,6 +20,9 @@ envs/
 
 # CMSSW build artifacts (if CMSSW inside repo)
 src/
+# ...but the vendored HitFit sources are real code (external/HitFit, #49)
+!external/HitFit/src/
+external/HitFit/libHitFit.buildinfo
 lib/
 tmp/
 

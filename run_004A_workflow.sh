@@ -155,6 +155,14 @@ source "$REPO/standalone/env_standalone.sh" >/dev/null 2>&1
 cd "$CHAPTER"
 
 # --- pre-flight -------------------------------------------------------------
+# RecoModule fits with the vendored HitFit. Without the library every worker
+# fails at module construction and the run produces no output, so stop here.
+if [[ ! -f "$REPO/external/HitFit/libHitFit.so" ]]; then
+    echo "Error: $REPO/external/HitFit/libHitFit.so not found."
+    echo "Build it first: conda activate latestcoffea && $REPO/external/HitFit/build.sh"
+    exit 1
+fi
+
 # One --printHash probe gives us both the config hash and the machine-resolved
 # STORAGE path, rather than duplicating utils.resolve_storage_path()'s
 # hostname matching here. (It also creates outputs/{tag}/{hash} and snapshots
