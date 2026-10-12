@@ -1,0 +1,6 @@
+drop *
+keep run
+keep luminosityBlock
+keep event
+keep nGenPart
+keep GenPart_*

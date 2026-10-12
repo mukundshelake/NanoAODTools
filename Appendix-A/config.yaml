@@ -1,0 +1,41 @@
+STORAGE:
+  cms2:      "/mnt/disk3/nfs/mukund/DataFiles"
+  localhost: "/nfs/disk3/mukund/DataFiles"
+  lxplus:    "/eos/user/m/mshelake/DataFiles/"
+
+# ---------------------------------------------------------------------------
+# Appendix-A: generator-level A_FB study on the selectionII (003-ObjectSelectionII)
+# ttbar semileptonic events. Everything here is gen level; no event weights are
+# applied (every event of the single ttbar_SemiLeptonic sample counts equally).
+# ---------------------------------------------------------------------------
+
+# Eras this chapter knows about (iterated by every run_all.py step, narrowed by --filter).
+Eras: [UL2016preVFP, UL2016postVFP, UL2017, UL2018]
+
+# Only these DataMC/group/dataset entries of the selectionII dataset JSON are processed.
+TargetDatasets:
+  - "MC_mu/SemiLeptonic/ttbar_SemiLeptonic"
+
+ModuleList:
+  MC:   [genAsymmetry]
+
+# ---------------------------------------------------------------------------
+# Per-module configuration.
+# genAsymmetry has no tunable parameters; its conventions are fixed in
+# scripts/modules/GenAsymmetryModule.py:
+#   - tops:      last-copy GenPart with pdgId +-6
+#   - partons:   GenPart[0], GenPart[1] (status 21, mother -1)
+#   - reference: qqbar -> the quark; qg -> the (anti)quark, flipped for an antiquark;
+#                gg -> the ttbar boost direction along z
+# ---------------------------------------------------------------------------
+Modules:
+  genAsymmetry: {}
+
+# ---------------------------------------------------------------------------
+# A_FB = (N(cos theta* > 0) - N(cos theta* < 0)) / (N(>0) + N(<0)), per Mtt bin [GeV].
+# Events outside [first, last] edge enter only the inclusive number.
+# ---------------------------------------------------------------------------
+AFB:
+  MttBins: [300, 500, 700, 900, 1100]
+  # Computed separately for each; "all" = every selectionII ttbar_SemiLeptonic event.
+  Categories: [all, qqbar, qg, gg]

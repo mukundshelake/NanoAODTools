@@ -58,3 +58,13 @@ SEGFAULT_FIX_GUIDE.md
 **/Inputs/*
 **/SFs/*
 **/Outputs/*
+# Processing logs (large, machine-specific; kept locally only)
+run_logs/
+
+# Appendix-B (qq̄ vs gg/qg ML study) is kept out of the repository entirely
+Appendix-B-qqvsgg/
+
+# Appendix-A (gen-level A_FB study): track config, README and scripts only
+Appendix-A/outputs/
+Appendix-A/inputs/
+Appendix-A/**/__pycache__/
