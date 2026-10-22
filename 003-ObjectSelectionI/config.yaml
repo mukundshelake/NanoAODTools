@@ -395,14 +395,20 @@ NgenandXsec:
           Ngen: 4932000
           Xsec: 10.48
         WZTo2Q2L:
-          Ngen: 13526954
+          Ngen: 8434516
           Xsec: 6.565
         ZZTo2L2Nu:
           Ngen: 15928000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 13740600
+          Ngen: 8901074
           Xsec: 3.676
+        WWTo1L1Nu2Q:
+          Ngen: 12025723
+          Xsec: 50.65
+        WZTo1L1Nu2Q:
+          Ngen: 2127797
+          Xsec: 9.17
       DrellYan:
         DYJetsToLL:
           Ngen: 82448537
@@ -454,7 +460,7 @@ NgenandXsec:
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 5471000
+          Ngen: 3562866
           Xsec: 2.215836
         Tbarchannel:
           Ngen: 30609000
@@ -470,13 +476,13 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 159756701
+          Ngen: 128151815
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 167715035
+          Ngen: 81410855
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 85825681
+          Ngen: 26797999
           Xsec: 3276.0
   UL2016preVFP:
     Data_mu:
@@ -570,14 +576,20 @@ NgenandXsec:
           Ngen: 4932000
           Xsec: 10.48
         WZTo2Q2L:
-          Ngen: 15678816
+          Ngen: 9780392
           Xsec: 6.565
         ZZTo2L2Nu:
           Ngen: 16862000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 16060738
+          Ngen: 10406942
           Xsec: 3.676
+        WWTo1L1Nu2Q:
+          Ngen: 12074822
+          Xsec: 50.65
+        WZTo1L1Nu2Q:
+          Ngen: 2131873
+          Xsec: 9.17
       DrellYan:
         DYJetsToLL:
           Ngen: 95170542
@@ -629,7 +641,7 @@ NgenandXsec:
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 5518000
+          Ngen: 3592772
           Xsec: 2.215836
         Tbarchannel:
           Ngen: 31024000
@@ -645,13 +657,13 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 151109845
+          Ngen: 121208463
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 173468850
+          Ngen: 84198206
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 87929021
+          Ngen: 27463753
           Xsec: 3276.0
   UL2017:
     Data_mu:
@@ -745,17 +757,23 @@ NgenandXsec:
           Ngen: 4760000
           Xsec: 10.79
         WZTo2Q2L:
-          Ngen: 29091996
-          Xsec: 5.595
+          Ngen: 18136498
+          Xsec: 6.565
         ZZTo2L2Nu:
           Ngen: 40839000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 29521496
+          Ngen: 19134840
           Xsec: 3.676
+        WWTo1L1Nu2Q:
+          Ngen: 24023365
+          Xsec: 50.65
+        WZTo1L1Nu2Q:
+          Ngen: 4232528
+          Xsec: 9.17
       DrellYan:
         DYJetsToLL:
-          Ngen: 195529774
+          Ngen: 131552424
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
@@ -804,7 +822,7 @@ NgenandXsec:
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 13620000
+          Ngen: 8866570
           Xsec: 2.215836
         Tbarchannel:
           Ngen: 69793000
@@ -820,13 +838,13 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 46000306
+          Ngen: 36904760
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 177102579
+          Ngen: 85950221
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 96032711
+          Ngen: 29987299
           Xsec: 3276.0
   UL2018:
     Data_mu:
@@ -920,17 +938,23 @@ NgenandXsec:
           Ngen: 4946000
           Xsec: 2.206
         WZTo2Q2L:
-          Ngen: 28576996
+          Ngen: 17820214
           Xsec: 6.565
         ZZTo2L2Nu:
           Ngen: 56886000
           Xsec: 0.974
         ZZTo2Q2L:
-          Ngen: 29357938
+          Ngen: 19020772
           Xsec: 3.676
+        WWTo1L1Nu2Q:
+          Ngen: 24232603
+          Xsec: 50.65
+        WZTo1L1Nu2Q:
+          Ngen: 4262213
+          Xsec: 9.17
       DrellYan:
         DYJetsToLL:
-          Ngen: 195510810
+          Ngen: 131572454
           Xsec: 6424.0
       FullyLeptonic:
         ttbar_FullyLeptonic:
@@ -979,7 +1003,7 @@ NgenandXsec:
           Xsec: 366.3
       SingleTop:
         Schannel:
-          Ngen: 19365999
+          Ngen: 12607741
           Xsec: 2.215836
         Tbarchannel:
           Ngen: 95627000
@@ -995,13 +1019,13 @@ NgenandXsec:
           Xsec: 39.65
       WJets:
         WJetsToLNu_0J:
-          Ngen: 172138190
+          Ngen: 138080546
           Xsec: 52780.0
         WJetsToLNu_1J:
-          Ngen: 183483106
+          Ngen: 89044378
           Xsec: 8832.0
         WJetsToLNu_2J:
-          Ngen: 94925903
+          Ngen: 29631923
           Xsec: 3276.0
 
 # ---------------------------------------------------------------------------
