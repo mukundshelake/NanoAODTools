@@ -211,3 +211,19 @@ adding a `key: path` entry.
 
 `SFSource` works the same way (`utils.resolve_sf_source_path()`), for `--fetchSFFiles` —
 see "Fetching the correctionlib SF files" above.
+
+## Changelog
+
+- **2026-10-24 — earlySeptember_rocUL moved to the net-Ngen hashes.** ef58e7b changed only
+  `NgenandXsec` (aMC@NLO samples normalised to net event counts N(+)-N(-); new
+  `WWTo1L1Nu2Q`/`WZTo1L1Nu2Q`; UL2017 `WZTo2Q2L` xsec 5.595 -> 6.565 pb), but the config hash is
+  the raw `config.yaml` bytes, so 003-I/II/III moved from `9f3bc832d268`/`37f710b13012`/`aaf38cf077ed`
+  to `56e1170feb60`/`1883383068e0`/`0ed415a7e727`. 003-I/II never use Ngen/Xsec per event and no 003
+  code changed since the original rocUL production, so the existing per-event outputs were
+  **hard-linked** (`cp -al`, originals untouched, inode-verified 21,498/21,498) into the new hash dirs:
+  `preSelectionCorrected` and `selectionI` `9f3bc832d268 -> 56e1170feb60`, `selectionII`
+  `37f710b13012 -> 1883383068e0`. Only the two new datasets were then run through 003-I/II
+  (with their own b-tag efficiency maps). Everything normalisation-dependent was redone for all
+  datasets: the ABCD transfer factor R, 003-III regions A and B, the QCD template and the plots.
+  Driver: `run_earlySeptember_rocUL_netNgen_lnu2q.sh`; logs in `run_logs/earlySeptember_rocUL_netNgen_*`.
+  The old hash dirs are kept as they are.
